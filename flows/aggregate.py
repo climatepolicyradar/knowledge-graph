@@ -530,6 +530,7 @@ async def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     return list(set(document_stems))
 
 
+# TODO: This flow needs to be markd as failed should some process_doucument runs fail.
 @flow(  # pyright: ignore[reportCallIssue]
     timeout_seconds=None,
     task_runner=ThreadPoolTaskRunner(
@@ -874,6 +875,8 @@ async def _document_stems_from_parameters(
             )
 
 
+# TODO: This flow needs to be markd as failed should some batches has full or partial
+# failures.
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
