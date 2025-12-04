@@ -122,7 +122,7 @@ class GitCliOps:
     def commit(self, message: str) -> None:
         """Commit staged changes with a message."""
         _run_subprocess_with_error_logging(
-            ["git", "commit", "-m", message],
+            ["git", "commit", "--no-verify", "-m", message],
             cwd=self.repo_path,
         )
 
@@ -194,7 +194,7 @@ class GitPyOps:
 
     def commit(self, message: str) -> None:
         """Commit staged changes with a message."""
-        self.repo.index.commit(message)
+        self.repo.index.commit(message, skip_hooks=True)
 
     def push(self, branch_name: str, remote: str = "origin") -> None:
         """Push a branch to remote."""
@@ -231,7 +231,8 @@ async def commit_and_create_pr(
     git.config("user.email", "tech@climatepolicyradar.org")
     git.config("user.name", "cpr-tech-admin")
 
-    git.enable_sparse_checkout(file_path)
+    # removing sparse_checkout, throws git index version error
+    # git.enable_sparse_checkout(file_path)
     # Some files that are not copied in the docker build may
     # show as D (deleted) however only specified file_path will
     # be committed
