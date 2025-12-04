@@ -142,20 +142,20 @@ def write_failed_doc_ids(flow_run_name):
 
     dir_path = dir_path.format(flow_run_name)
 
-    failed_doc_ids = []
+    failed_doc_ids = set()
     with open(dir_path + "batch_inference_summary.json", "r") as file:
         data = json.load(file)
 
         for doc in data:
             if doc["Status"] == "✗":
-                failed_doc_ids.append(doc["Document stem"])
+                failed_doc_ids.add(doc["Document stem"])
 
     print(f"{len(failed_doc_ids)} Failed documents")
 
     report_output_file_path = dir_path + "failed_docs.json"
     print(f"Written report to: {report_output_file_path}")
     with open(report_output_file_path, "w") as file:
-        json.dump(failed_doc_ids, file)
+        json.dump(list(failed_doc_ids), file)
 
 
 async def run(
