@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 import subprocess
 import time
 from datetime import datetime, timedelta
@@ -213,6 +212,7 @@ async def commit_and_create_pr(
     pr_title: str,
     pr_body: str,
     git: GitOps,
+    github_token: SecretStr,
     repo: str = "climatepolicyradar/knowledge-graph",
     base_branch: str = "main",
     repo_path: Path = Path("/app"),
@@ -247,10 +247,23 @@ async def commit_and_create_pr(
     git.add(file_path)
     git.commit(commit_message)
 
+    # Authenticate credentials
+    token = github_token.get_secret_value()
+    subprocess.run(
+        ["gh", "auth", "login", "--with-token"], input=token, text=True, check=True
+    )
+
     # Ensure gh is configured as git credential helper
     logger.info("Setting up gh as git credential helper")
     _ = _run_subprocess_with_error_logging(
         ["gh", "auth", "setup-git"],
+        cwd=repo_path,
+    )
+
+    # convert ssh to https to use github token
+    logger.info("Configure remote with https")
+    _ = _run_subprocess_with_error_logging(
+        ["git", "remote", "set-url", "origin", f"https://github.com/{repo}.git"],
         cwd=repo_path,
     )
 
@@ -456,16 +469,16 @@ async def create_and_merge_pr(
     """
     logger = get_logger()
 
-    try:
-        os.environ["GITHUB_TOKEN"] = github_token.get_secret_value()
-    except Exception as e:
-        logger.error(f"Failed to set GitHub token environment var: {e}")
-        return Err(
-            Error(
-                msg="Failed to set GitHub token environment var.",
-                metadata={"exception": e, "aws_env": aws_env},
-            )
-        )
+    # try:
+    #     os.environ["GITHUB_TOKEN"] = github_token.get_secret_value()
+    # except Exception as e:
+    #     logger.error(f"Failed to set GitHub token environment var: {e}")
+    #     return Err(
+    #         Error(
+    #             msg="Failed to set GitHub token environment var.",
+    #             metadata={"exception": e, "aws_env": aws_env},
+    #         )
+    #     )
 
     try:
         repo_path = Path("./")
@@ -477,6 +490,7 @@ async def create_and_merge_pr(
             pr_title=f"Update classifier specs for {aws_env} (automated)",
             pr_body=f"Sync to Classifier Profiles updates to classifier specs YAML files. During Flow Run {flow_run_name}, see {flow_run_url}",
             git=git_ops,
+            github_token=github_token,
             repo="climatepolicyradar/knowledge-graph",
             base_branch="main",
             repo_path=repo_path,
