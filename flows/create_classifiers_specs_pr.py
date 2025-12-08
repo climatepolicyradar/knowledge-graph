@@ -504,7 +504,7 @@ async def create_and_merge_pr(
 
     try:
         repo_path = Path("./")
-        git_ops = GitPyOps(repo_path)
+        git_ops = GitCliOps(repo_path)
 
         pr_no = await commit_and_create_pr(
             file_path=spec_file,
