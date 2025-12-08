@@ -247,6 +247,13 @@ async def commit_and_create_pr(
     git.add(file_path)
     git.commit(commit_message)
 
+    # convert ssh to https to use github token
+    logger.info("Configure remote with https")
+    _ = _run_subprocess_with_error_logging(
+        ["git", "remote", "set-url", "origin", f"https://github.com/{repo}.git"],
+        cwd=repo_path,
+    )
+
     # Authenticate credentials
     logger.info("Authenticating gh credentials")
     token = github_token.get_secret_value()
@@ -261,23 +268,24 @@ async def commit_and_create_pr(
         cwd=repo_path,
     )
 
-    # convert ssh to https to use github token
-    logger.info("Configure remote with https")
-    _ = _run_subprocess_with_error_logging(
-        ["git", "remote", "set-url", "origin", f"https://github.com/{repo}.git"],
-        cwd=repo_path,
+    logger.info("Set credential helper in config")
+    _run_subprocess_with_error_logging(
+        ["git", "config", "credential.helper", "!gh auth git-credential"], cwd=repo_path
+    )
+
+    logger.info("Check credential helper in config")
+    _run_subprocess_with_error_logging(
+        ["git", "config", "--get", "credential.helper"], cwd=repo_path
     )
 
     logger.info("Logging repo details")
-    _ = _run_subprocess_with_error_logging(["git", "remote", "-v"], cwd=repo_path)
+    _run_subprocess_with_error_logging(["git", "remote", "-v"], cwd=repo_path)
 
     logger.info("Logging remote origin")
-    _ = _run_subprocess_with_error_logging(
-        ["git", "ls-remote", "origin"], cwd=repo_path
-    )
+    _run_subprocess_with_error_logging(["git", "ls-remote", "origin"], cwd=repo_path)
 
     logger.info("Logging current branch")
-    _ = _run_subprocess_with_error_logging(
+    _run_subprocess_with_error_logging(
         ["git", "branch", "--show-current"], cwd=repo_path
     )
 
