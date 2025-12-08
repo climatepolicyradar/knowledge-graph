@@ -269,25 +269,25 @@ async def commit_and_create_pr(
     )
 
     logger.info("Set credential helper in config")
-    _run_subprocess_with_error_logging(
+    _ = _run_subprocess_with_error_logging(
         ["git", "config", "credential.helper", "!gh auth git-credential"], cwd=repo_path
     )
 
     logger.info("Check credential helper in config")
-    _run_subprocess_with_error_logging(
+    helper = _run_subprocess_with_error_logging(
         ["git", "config", "--get", "credential.helper"], cwd=repo_path
     )
+    logger.info(helper)
 
     logger.info("Logging repo details")
-    _run_subprocess_with_error_logging(["git", "remote", "-v"], cwd=repo_path)
-
-    logger.info("Logging remote origin")
-    _run_subprocess_with_error_logging(["git", "ls-remote", "origin"], cwd=repo_path)
-
-    logger.info("Logging current branch")
-    _run_subprocess_with_error_logging(
-        ["git", "branch", "--show-current"], cwd=repo_path
+    repo_details = _run_subprocess_with_error_logging(
+        ["git", "remote", "-v"], cwd=repo_path
     )
+    logger.info(repo_details)
+
+    # logger.info("Logging remote origin")
+    # remote_details = _run_subprocess_with_error_logging(["git", "ls-remote", "origin"], cwd=repo_path)
+    # logger.info(remote_details)
 
     # Push branch to remote
     # logger.info(f"Pushing branch {branch_name} to remote")
