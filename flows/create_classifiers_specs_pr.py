@@ -290,8 +290,8 @@ async def commit_and_create_pr(
     # logger.info(remote_details)
 
     # Push branch to remote
-    # logger.info(f"Pushing branch {branch_name} to remote")
-    # git.push(branch_name)
+    logger.info(f"Pushing branch {branch_name} to remote")
+    git.push(branch_name)
 
     # Create PR using gh CLI
     logger.info(f"Creating pull request: {pr_title}")
