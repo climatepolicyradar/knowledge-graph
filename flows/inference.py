@@ -8,7 +8,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, Literal, NamedTuple, Optional, TypeAlias, overload
 
-import boto3
 import wandb
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
@@ -314,19 +313,39 @@ async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     return file_stems
 
 
-def get_s3_obj_last_modified(bucket: str, key: str, region: str) -> datetime | None:
-    """Retrieve the last modified datetime for an s3 object."""
+async def get_s3_prefix_last_modified_dates(
+    config: Config,
+    prefix: str,
+) -> dict[str, datetime]:
+    """
+    Retrieve the last modified datetime for all objects in an S3 prefix.
 
-    s3_client = boto3.client("s3", region_name=region)
+    Args:
+        config: Config object containing bucket information
+        prefix: S3 prefix to list objects under
 
-    try:
-        response = s3_client.head_object(Bucket=bucket, Key=key)
-        return response["LastModified"]
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "404":  # pyright: ignore[reportTypedDictNotRequiredAccess]
-            return None
-        else:
-            raise
+    Returns:
+        Dictionary mapping S3 keys to their last modified datetime.
+    """
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
+    async with session.client("s3") as s3_client:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        page_iterator = paginator.paginate(
+            Bucket=config.cache_bucket_str,
+            Prefix=prefix,
+        )
+
+        result: dict[str, datetime] = {}
+        async for page in page_iterator:
+            if "Contents" in page:
+                for obj in page["Contents"]:
+                    key = obj["Key"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                    last_modified = obj["LastModified"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                    result[key] = last_modified
+    return result
 
 
 async def filter_existing_inference_results(
@@ -345,6 +364,13 @@ async def filter_existing_inference_results(
         classifier_spec=classifier_spec,
     )
 
+    text_extraction_dates: dict[
+        str, datetime
+    ] = await get_s3_prefix_last_modified_dates(
+        config=config,
+        prefix=config.inference_document_source_prefix,
+    )
+
     # Filter out documents that already have results and were produced from the latest
     # version of text for a document.
     documents_to_process: list[DocumentStem] = []
@@ -355,18 +381,14 @@ async def filter_existing_inference_results(
 
         inference_date: datetime = existing_results[stem]
         key: str = os.path.join(
-            config.inference_document_target_prefix,
-            classifier_spec.wikibase_id,
-            classifier_spec.classifier_id,
+            config.inference_document_source_prefix,
             f"{stem}.json",
         )
-        text_extraction_date: datetime | None = get_s3_obj_last_modified(
-            bucket=config.cache_bucket_str, key=key, region=config.bucket_region
-        )
+        text_extraction_date: datetime | None = text_extraction_dates.get(key)
 
         if not text_extraction_date:
             logger.warning(
-                f"Failed to get latestModified date for: {config.cache_bucket_str}, {key}"
+                f"No latestModified date for: {config.cache_bucket_str}, {key}"
             )
 
         if not text_extraction_date or inference_date < text_extraction_date:
