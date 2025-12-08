@@ -8,6 +8,7 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any, Final, Literal, NamedTuple, Optional, TypeAlias, overload
 
+import boto3
 import wandb
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
@@ -313,6 +314,21 @@ async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     return file_stems
 
 
+def get_s3_obj_last_modified(bucket: str, key: str, region: str) -> datetime | None:
+    """Retrieve the last modified datetime for an s3 object."""
+
+    s3_client = boto3.client("s3", region_name=region)
+
+    try:
+        response = s3_client.head_object(Bucket=bucket, Key=key)
+        return response["LastModified"]
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "404":  # pyright: ignore[reportTypedDictNotRequiredAccess]
+            return None
+        else:
+            raise
+
+
 async def filter_existing_inference_results(
     config: Config,
     classifier_spec: ClassifierSpec,
@@ -329,10 +345,32 @@ async def filter_existing_inference_results(
         classifier_spec=classifier_spec,
     )
 
-    # Filter out documents that already have results
-    documents_to_process = [
-        stem for stem in filter_result.accepted if stem not in existing_results
-    ]
+    # Filter out documents that already have results and were produced from the latest
+    # version of text for a document.
+    documents_to_process: list[DocumentStem] = []
+    for stem in filter_result.accepted:
+        if stem not in existing_results:
+            documents_to_process.append(stem)
+            continue
+
+        inference_date: datetime = existing_results[stem]
+        key: str = os.path.join(
+            config.inference_document_target_prefix,
+            classifier_spec.wikibase_id,
+            classifier_spec.classifier_id,
+            f"{stem}.json",
+        )
+        text_extraction_date: datetime | None = get_s3_obj_last_modified(
+            bucket=config.cache_bucket_str, key=key, region=config.bucket_region
+        )
+
+        if not text_extraction_date:
+            logger.warning(
+                f"Failed to get latestModified date for: {config.cache_bucket_str}, {key}"
+            )
+
+        if not text_extraction_date or inference_date < text_extraction_date:
+            documents_to_process.append(stem)
 
     # Track which documents were skipped
     skipped_stems = set(filter_result.accepted) - set(documents_to_process)
@@ -347,7 +385,7 @@ async def filter_existing_inference_results(
 async def get_existing_inference_results(
     config: Config,
     classifier_spec: ClassifierSpec,
-) -> set[DocumentStem]:
+) -> dict[DocumentStem, datetime]:
     """Get document stems that have inference results for a classifier."""
     logger = get_logger()
 
@@ -375,13 +413,15 @@ async def get_existing_inference_results(
             Prefix=prefix,
         )
 
-        existing_stems: set[DocumentStem] = set()
+        existing_stems: dict[DocumentStem, datetime] = dict()
         async for page in page_iterator:
             if "Contents" in page:
                 for obj in page["Contents"]:  # pyright: ignore[reportUnknownVariableType]
-                    key = obj["Key"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+                    key: str = obj["Key"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+                    last_modified: datetime = obj["LastModified"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+
                     filename = Path(key).stem
-                    existing_stems.add(DocumentStem(filename))
+                    existing_stems[DocumentStem(filename)] = last_modified
 
     logger.debug(f"found {len(existing_stems)} existing results for {classifier_spec}")
 
