@@ -239,7 +239,7 @@ async def test_commit_and_create_pr__with_changes():
         mock_git.checkout_new_branch.assert_called_once()
         mock_git.add.assert_called_once_with("testfile")
         mock_git.commit.assert_called_once_with("Update testfile")
-        # mock_git.push.assert_called_once()
+        mock_git.push.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -824,7 +824,7 @@ async def test_commit_and_create_pr_only_stages_and_commits_specified_file(
                 "flows.create_classifiers_specs_pr._run_subprocess_with_error_logging"
             ) as mock_run_subprocess,
             patch("subprocess.run") as mock_run,
-            # patch.object(git_ops, "push", autospec=True) as mock_push,
+            patch.object(git_ops, "push", autospec=True) as mock_push,
         ):
             mock_run_subprocess.side_effect = [
                 Mock(stdout=""),  # gh auth setup-git
@@ -853,7 +853,7 @@ async def test_commit_and_create_pr_only_stages_and_commits_specified_file(
             )
 
         assert pr_number == 123
-        # mock_push.assert_called_once()
+        mock_push.assert_called_once()
 
         # Check git status: only testfile.yaml should be committed
         result = git_ops.status_porcelain(str(file_path.relative_to(temp_git_repo)))
