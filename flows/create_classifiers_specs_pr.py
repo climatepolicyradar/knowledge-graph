@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import subprocess
 import time
 from datetime import datetime, timedelta
@@ -294,6 +295,10 @@ async def commit_and_create_pr(
     # logger.info("Logging remote origin")
     # remote_details = _run_subprocess_with_error_logging(["git", "ls-remote", "origin"], cwd=repo_path)
     # logger.info(remote_details)
+
+    logger.info("Setting GITHUB_TOKEN")
+    env = os.environ.copy()
+    env["GITHUB_TOKEN"] = token
 
     # Push branch to remote
     logger.info(f"Pushing branch {branch_name} to remote")
