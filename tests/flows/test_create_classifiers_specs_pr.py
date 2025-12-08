@@ -212,8 +212,6 @@ async def test_commit_and_create_pr__with_changes():
             git_success,
             git_success,
             git_success,
-            git_success,
-            git_success,
             gh_pr_result,  # gh pr create
         ]
 
@@ -832,8 +830,6 @@ async def test_commit_and_create_pr_only_stages_and_commits_specified_file(
                 Mock(stdout=""),  # gh auth setup-git
                 Mock(stdout=""),  # git remote set url
                 # test logging
-                Mock(stdout=""),
-                Mock(stdout=""),
                 Mock(stdout=""),
                 Mock(stdout=""),
                 Mock(stdout=""),
