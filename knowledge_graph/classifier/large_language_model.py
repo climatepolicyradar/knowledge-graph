@@ -300,7 +300,7 @@ class LLMClassifier(BaseLLMClassifier):
                     "variables needed to run each."
                 ),
             ),
-        ] = "gemini-2.0-flash",
+        ] = "openrouter:openai/gpt-5",
         system_prompt_template: Annotated[
             str,
             Field(
