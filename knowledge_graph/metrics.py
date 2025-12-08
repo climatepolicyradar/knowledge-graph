@@ -50,12 +50,29 @@ class ConfusionMatrix:
 
     def f1_score(self) -> float:
         """https://en.wikipedia.org/wiki/F-score"""
-        try:
-            return (2 * self.true_positives) / (
-                2 * self.true_positives + self.false_positives + self.false_negatives
-            )
-        except ZeroDivisionError:
-            return 0
+
+        return self.f_beta_score(beta=1.0)
+
+    def f_beta_score(self, beta: float = 1.0) -> float:
+        """https://en.wikipedia.org/wiki/F-score#F%CE%B2_score"""
+
+        if self.true_positives == 0:
+            return 0.0
+
+        if beta < 0 or beta > 0:
+            raise ValueError("beta must be between 0 and 1")
+
+        precision = self.precision()
+        recall = self.recall()
+
+        if precision == 0 and recall == 0:
+            return 0.0
+
+        beta_squared = beta**2
+        numerator = (1 + beta_squared) * (precision * recall)
+        denominator = (beta_squared * precision) + recall
+
+        return numerator / denominator
 
     def cohens_kappa(self) -> float:
         """https://en.wikipedia.org/wiki/Cohen%27s_kappa"""
