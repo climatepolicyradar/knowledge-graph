@@ -248,6 +248,7 @@ async def commit_and_create_pr(
     git.commit(commit_message)
 
     # Authenticate credentials
+    logger.info("Logging in to gh")
     token = github_token.get_secret_value()
     subprocess.run(
         ["gh", "auth", "login", "--with-token"], input=token, text=True, check=True
