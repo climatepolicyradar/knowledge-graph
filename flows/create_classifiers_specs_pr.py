@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import shutil
 import subprocess
 import time
 from datetime import datetime, timedelta
@@ -221,6 +222,17 @@ async def commit_and_create_pr(
     """Commits changes and creates a GitHub PR using gh CLI."""
     logger = get_logger()
 
+    # git clone
+    logger.info("Cloning repo")
+    _ = _run_subprocess_with_error_logging(
+        ["git", "clone", f"https://github.com/{repo}.git"],
+        cwd=repo_path,
+    )
+
+    shutil.copy(file_path, f"knowledge-graph/{file_path}")
+    os.chdir("knowledge-graph")
+    logger.info(f"Current dir {os.getcwd()}")
+
     # Check if there are changes
     status_output = git.status_porcelain(file_path)
 
@@ -296,9 +308,9 @@ async def commit_and_create_pr(
     # remote_details = _run_subprocess_with_error_logging(["git", "ls-remote", "origin"], cwd=repo_path)
     # logger.info(remote_details)
 
-    logger.info("Setting GITHUB_TOKEN")
-    env = os.environ.copy()
-    env["GITHUB_TOKEN"] = token
+    # logger.info("Setting GITHUB_TOKEN")
+    # env = os.environ.copy()
+    # env["GITHUB_TOKEN"] = token
 
     # Push branch to remote
     logger.info(f"Pushing branch {branch_name} to remote")
