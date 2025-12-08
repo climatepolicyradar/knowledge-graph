@@ -268,6 +268,12 @@ async def commit_and_create_pr(
         cwd=repo_path,
     )
 
+    logger.info("Get auth status")
+    auth_status = _run_subprocess_with_error_logging(
+        ["git", "auth", "status"], cwd=repo_path
+    )
+    logger.info(f"auth status {auth_status}")
+
     logger.info("Set credential helper in config")
     _ = _run_subprocess_with_error_logging(
         ["git", "config", "credential.helper", "!gh auth git-credential"], cwd=repo_path
