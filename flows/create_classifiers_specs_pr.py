@@ -270,7 +270,7 @@ async def commit_and_create_pr(
 
     logger.info("Get auth status")
     auth_status = _run_subprocess_with_error_logging(
-        ["git", "auth", "status"], cwd=repo_path
+        ["gh", "auth", "status"], cwd=repo_path
     )
     logger.info(f"auth status {auth_status}")
 
