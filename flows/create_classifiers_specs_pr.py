@@ -268,9 +268,22 @@ async def commit_and_create_pr(
         cwd=repo_path,
     )
 
+    logger.info("Logging repo details")
+    _ = _run_subprocess_with_error_logging(["git", "remote", "-v"], cwd=repo_path)
+
+    logger.info("Logging remote origin")
+    _ = _run_subprocess_with_error_logging(
+        ["git", "ls-remote", "origin"], cwd=repo_path
+    )
+
+    logger.info("Logging current branch")
+    _ = _run_subprocess_with_error_logging(
+        ["git", "branch", "--show-current"], cwd=repo_path
+    )
+
     # Push branch to remote
-    logger.info(f"Pushing branch {branch_name} to remote")
-    git.push(branch_name)
+    # logger.info(f"Pushing branch {branch_name} to remote")
+    # git.push(branch_name)
 
     # Create PR using gh CLI
     logger.info(f"Creating pull request: {pr_title}")
