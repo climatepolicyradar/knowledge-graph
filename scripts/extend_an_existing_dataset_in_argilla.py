@@ -67,6 +67,24 @@ def main(
         f"✅ Found existing dataset '{dataset.name}' with {len(list(dataset.records))} records"
     )
 
+    # Deduplicate local dataset based on text in Argilla
+    with console.status(
+        "Deduplicating text in input labelled passages based on records in Argilla..."
+    ):
+        argilla_records = list(dataset.records)
+        text_in_argilla: set[str] = set(
+            [record.fields.get("text", "") for record in argilla_records]
+        )
+
+        lp_length_before = len(labelled_passages)
+        labelled_passages = [
+            lp for lp in labelled_passages if lp.text not in text_in_argilla
+        ]
+
+    console.print(
+        f"{len(labelled_passages)}/{lp_length_before} input passages remaining after deduplication"
+    )
+
     # Push labelled passages to the dataset
     with console.status(f"Adding {len(labelled_passages)} passages to dataset..."):
         argilla.add_labelled_passages(
