@@ -8,6 +8,7 @@ from uuid import UUID
 from argilla import (
     Argilla,
     Dataset,
+    Record,
     ResponseStatus,
     Settings,
     SpanQuestion,
@@ -232,6 +233,7 @@ class ArgillaSession:
                 )
             ],
             distribution=TaskDistribution(min_submitted=2),
+            allow_extra_metadata=True,
         )
         dataset = Dataset(
             name=str(concept.wikibase_id),
@@ -499,14 +501,13 @@ class ArgillaSession:
         records = []
         for passage in labelled_passages:
             records.append(
-                {
-                    "external_id": str(uuid.uuid4()),
-                    "text": passage.text,
-                    "metadata": self._format_metadata_keys_for_argilla(
-                        passage.metadata
-                    ),
-                }
+                Record(
+                    id=str(uuid.uuid4()),
+                    fields={"text": passage.text},
+                    metadata=self._format_metadata_keys_for_argilla(passage.metadata),
+                )
             )
+
         logger.debug("Formatted %d records for Argilla ingestion", len(records))
         dataset.records.log(records)
         logger.info(
