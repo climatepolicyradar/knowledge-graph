@@ -1964,7 +1964,7 @@ async def test_get_existing_inference_results_empty(
         classifier_spec=classifier_spec,
     )
 
-    assert existing == set()
+    assert existing == dict()
 
 
 @pytest.mark.asyncio
@@ -1999,7 +1999,8 @@ async def test_get_existing_inference_results_with_results(
         classifier_spec=classifier_spec,
     )
 
-    assert existing == set(documents)
+    assert set(existing.keys()) == set(documents)
+    assert all([isinstance(i, datetime) for i in existing.values()])
 
 
 @pytest.mark.asyncio
@@ -2045,8 +2046,8 @@ async def test_get_existing_inference_results_different_classifiers(
         classifier_spec=classifier_spec_2,
     )
 
-    assert existing_1 == {doc1}
-    assert existing_2 == {doc2}
+    assert set(existing_1.keys()) == {doc1}
+    assert set(existing_2.keys()) == {doc2}
 
 
 @pytest.mark.asyncio
