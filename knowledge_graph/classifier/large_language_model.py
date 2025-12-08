@@ -10,6 +10,7 @@ import nest_asyncio
 from pydantic import BaseModel, Field, ValidationError
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
@@ -39,7 +40,7 @@ class LLMResponse(BaseModel):
 
 
 DEFAULT_SYSTEM_PROMPT = """
-You are a specialist analyst, tasked with identifying mentions of concepts in policy documents. 
+You are a specialist analyst, tasked with identifying mentions of concepts in policy documents.
 These documents are mostly drawn from a climate and development context.
 You will mark up references to concepts with XML tags.
 
@@ -202,10 +203,17 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 
         self._check_and_nest_event_loop()
 
-        response: AgentRunResult[LLMResponse] = self.agent.run_sync(  # type: ignore[assignment]
-            text,
-            model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
-        )
+        try:
+            response: AgentRunResult[LLMResponse] = self.agent.run_sync(  # type: ignore[assignment]
+                text,
+                model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
+            )
+        except UnexpectedModelBehavior as e:
+            logger.warning(
+                f"LLM failed to produce valid response after retries: {e}. "
+                f"Text (truncated): {text[:100]}..."
+            )
+            return []
 
         try:
             return Span.from_xml(
@@ -225,8 +233,13 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
     def _predict_batch(
         self, texts: Sequence[str], threshold: float | None = None
     ) -> list[list[Span]]:
-        """Predict whether the supplied texts contain instances of the concept."""
+        """
+        Predict whether the supplied texts contain instances of the concept.
 
+        :param Sequence[str] texts: The texts to predict on
+        :param float | None threshold: Optional prediction threshold
+        :return list[list[Span]]: A list of span lists identified in each text
+        """
         self._check_and_nest_event_loop()
 
         async def run_predictions():
@@ -237,7 +250,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 )
                 for text in texts
             ]
-            return await asyncio.gather(*async_responses)
+            return await asyncio.gather(*async_responses, return_exceptions=True)
 
         # Create a single event loop for all batches
         try:
@@ -248,8 +261,10 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 
         try:
             # Run all predictions in the batch in parallel
-            responses: list[AgentRunResult[LLMResponse]] = loop.run_until_complete(  # type: ignore[assignment]
-                run_predictions()
+            responses: list[AgentRunResult[LLMResponse] | Exception] = (
+                loop.run_until_complete(  # type: ignore[assignment]
+                    run_predictions()
+                )
             )
         finally:
             # Only close the loop if we created it
@@ -259,6 +274,21 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         batch_spans: list[list[Span]] = []
 
         for text, response in zip(texts, responses):
+            # Handle exceptions that occurred during async execution
+            if isinstance(response, Exception):
+                if isinstance(response, UnexpectedModelBehavior):
+                    logger.warning(
+                        f"LLM failed to produce valid response after retries: {response}. "
+                        f"Text (truncated): {text[:100]}..."
+                    )
+                else:
+                    logger.warning(
+                        f"Prediction failed with exception: {response}. "
+                        f"Text (truncated): {text[:100]}..."
+                    )
+                batch_spans.append([])
+                continue
+
             try:
                 spans = Span.from_xml(
                     xml=response.output.marked_up_text,
