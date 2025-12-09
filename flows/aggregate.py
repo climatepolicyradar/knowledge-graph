@@ -208,7 +208,8 @@ async def get_all_labelled_passages_for_one_document(
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code")
             if error_code == "NoSuchKey":
-                yield spec, []
+                # TODO: Log or let us know of error!
+                continue
             else:
                 e.add_note(
                     f"Failed to load labelled passages for {document_stem} with "
