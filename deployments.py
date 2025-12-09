@@ -303,8 +303,6 @@ if __name__ == "__main__":
     create_deployment(
         flow=sync_classifiers_profiles,
         description="Compare Wikibase classifiers profiles with classifiers specs",
-        # Temporarily disabled while testing
-        # Schedule 2x daily during working week days
         env_schedules={
             AwsEnv.staging: "0 10 * * MON-THU",  # staging run 1x per day
             AwsEnv.production: "0 10,17 * * MON-THU",
@@ -331,6 +329,7 @@ if __name__ == "__main__":
         },
         concurrency_limit=ConcurrencyLimitConfig(
             limit=1,
+            tag="sync-classifiers-profiles",  # Unique tag for this flow
             collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
         ),
     )
