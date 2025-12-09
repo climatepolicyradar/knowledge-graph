@@ -260,11 +260,11 @@ async def commit_and_create_pr(
     git.commit(commit_message)
 
     # convert ssh to https to use github token
-    logger.info("Configure remote with https")
-    _ = _run_subprocess_with_error_logging(
-        ["git", "remote", "set-url", "origin", f"https://github.com/{repo}.git"],
-        cwd=repo_path,
-    )
+    # logger.info("Configure remote with https")
+    # _ = _run_subprocess_with_error_logging(
+    #     ["git", "remote", "set-url", "origin", f"https://github.com/{repo}.git"],
+    #     cwd=repo_path,
+    # )
 
     # Authenticate credentials
     logger.info("Authenticating gh credentials")
@@ -280,22 +280,22 @@ async def commit_and_create_pr(
         cwd=repo_path,
     )
 
-    logger.info("Set credential helper in config")
-    _ = _run_subprocess_with_error_logging(
-        ["git", "config", "credential.helper", "!gh auth git-credential"], cwd=repo_path
-    )
+    # logger.info("Set credential helper in config")
+    # _ = _run_subprocess_with_error_logging(
+    #     ["git", "config", "credential.helper", "!gh auth git-credential"], cwd=repo_path
+    # )
 
-    logger.info("Check credential helper in config")
-    helper = _run_subprocess_with_error_logging(
-        ["git", "config", "--get", "credential.helper"], cwd=repo_path
-    )
-    logger.info(helper)
+    # logger.info("Check credential helper in config")
+    # helper = _run_subprocess_with_error_logging(
+    #     ["git", "config", "--get", "credential.helper"], cwd=repo_path
+    # )
+    # logger.info(helper)
 
-    logger.info("Logging repo details")
-    repo_details = _run_subprocess_with_error_logging(
-        ["git", "remote", "-v"], cwd=repo_path
-    )
-    logger.info(repo_details)
+    # logger.info("Logging repo details")
+    # repo_details = _run_subprocess_with_error_logging(
+    #     ["git", "remote", "-v"], cwd=repo_path
+    # )
+    # logger.info(repo_details)
 
     # Push branch to remote
     logger.info(f"Pushing branch {branch_name} to remote")
@@ -499,20 +499,9 @@ async def create_and_merge_pr(
     """
     logger = get_logger()
 
-    # try:
-    #     os.environ["GITHUB_TOKEN"] = github_token.get_secret_value()
-    # except Exception as e:
-    #     logger.error(f"Failed to set GitHub token environment var: {e}")
-    #     return Err(
-    #         Error(
-    #             msg="Failed to set GitHub token environment var.",
-    #             metadata={"exception": e, "aws_env": aws_env},
-    #         )
-    #     )
-
     try:
         repo_path = Path("./")
-        git_ops = GitPyOps(repo_path)
+        git_ops = GitCliOps(repo_path)
 
         pr_no = await commit_and_create_pr(
             file_path=spec_file,
