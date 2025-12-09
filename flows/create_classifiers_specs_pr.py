@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import shutil
 import subprocess
 import time
 from datetime import datetime, timedelta
@@ -16,7 +17,7 @@ from knowledge_graph.cloud import AwsEnv
 
 
 def _run_subprocess_with_error_logging(
-    cmd: list[str], cwd: Path, check: bool = True
+    cmd: list[str], cwd: Path, check: bool = True, input: str | None = None
 ) -> subprocess.CompletedProcess[str]:
     """Run a subprocess command, capturing output and logging error."""
     logger = get_logger()
@@ -27,6 +28,7 @@ def _run_subprocess_with_error_logging(
             capture_output=True,
             text=True,
             check=check,
+            input=input,
         )
         return result
     except subprocess.CalledProcessError as e:
@@ -213,12 +215,23 @@ async def commit_and_create_pr(
     pr_title: str,
     pr_body: str,
     git: GitOps,
+    github_token: SecretStr,
     repo: str = "climatepolicyradar/knowledge-graph",
     base_branch: str = "main",
     repo_path: Path = Path("/app"),
 ) -> int | None:
     """Commits changes and creates a GitHub PR using gh CLI."""
     logger = get_logger()
+
+    # Clone repo and copy updated specs file across
+    logger.info("Cloning repo")
+    _ = _run_subprocess_with_error_logging(
+        ["git", "clone", f"https://github.com/{repo}.git"],
+        cwd=repo_path,
+    )
+    shutil.copy(file_path, f"knowledge-graph/{file_path}")
+    os.chdir("knowledge-graph")
+    logger.info(f"Current dir {os.getcwd()}")
 
     # Check if there are changes
     status_output = git.status_porcelain(file_path)
@@ -246,6 +259,15 @@ async def commit_and_create_pr(
     # Add and commit changes
     git.add(file_path)
     git.commit(commit_message)
+
+    # Authenticate credentials
+    logger.info("Authenticating gh credentials")
+    token = github_token.get_secret_value()
+    _ = _run_subprocess_with_error_logging(
+        ["gh", "auth", "login", "--with-token"],
+        cwd=repo_path,
+        input=token,
+    )
 
     # Ensure gh is configured as git credential helper
     logger.info("Setting up gh as git credential helper")
@@ -457,19 +479,8 @@ async def create_and_merge_pr(
     logger = get_logger()
 
     try:
-        os.environ["GITHUB_TOKEN"] = github_token.get_secret_value()
-    except Exception as e:
-        logger.error(f"Failed to set GitHub token environment var: {e}")
-        return Err(
-            Error(
-                msg="Failed to set GitHub token environment var.",
-                metadata={"exception": e, "aws_env": aws_env},
-            )
-        )
-
-    try:
         repo_path = Path("./")
-        git_ops = GitPyOps(repo_path)
+        git_ops = GitCliOps(repo_path)
 
         pr_no = await commit_and_create_pr(
             file_path=spec_file,
@@ -477,6 +488,7 @@ async def create_and_merge_pr(
             pr_title=f"Update classifier specs for {aws_env} (automated)",
             pr_body=f"Sync to Classifier Profiles updates to classifier specs YAML files. During Flow Run {flow_run_name}, see {flow_run_url}",
             git=git_ops,
+            github_token=github_token,
             repo="climatepolicyradar/knowledge-graph",
             base_branch="main",
             repo_path=repo_path,
