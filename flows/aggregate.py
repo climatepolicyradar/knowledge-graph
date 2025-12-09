@@ -599,6 +599,7 @@ async def aggregate_batch_of_documents(
 
     if failures:
         message = f"Saw {len(failures)} failures when aggregating inference results"
+        logger.error(message)
         aggregate_result.errors = message
         raise Fault(msg=message, metadata={}, data=aggregate_result)
 
