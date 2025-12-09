@@ -191,11 +191,20 @@ def test_run_subprocess_with_error_logging__check_false():
 @pytest.mark.asyncio
 async def test_commit_and_create_pr__with_changes():
     """Test commit_and_create_pr when there are changes to commit."""
-    with patch("subprocess.run") as mock_run:
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("shutil.copy") as mock_copy,
+        patch("os.chdir") as mock_chdir,
+    ):
         # Create mock result objects with proper stdout attributes
         git_success = Mock()
         git_success.stdout = ""
         git_success.returncode = 0
+
+        # Mock shutil.copy to do nothing
+        mock_copy.return_value = None
+        # Mock os.chdir to do nothing
+        mock_chdir.return_value = None
 
         gh_pr_result = Mock()
         gh_pr_result.stdout = (
@@ -205,13 +214,9 @@ async def test_commit_and_create_pr__with_changes():
 
         # Mock subprocess.run for gh commands only
         mock_run.side_effect = [
+            git_success,  # git clone
             git_success,  # git auth login
             git_success,  # gh auth setup-git
-            git_success,  # git remote set-url
-            # test logging
-            git_success,
-            git_success,
-            git_success,
             gh_pr_result,  # gh pr create
         ]
 
@@ -243,23 +248,40 @@ async def test_commit_and_create_pr__with_changes():
 
 
 @pytest.mark.asyncio
-async def test_commit_and_create_pr__no_changes():
+async def test_commit_and_create_pr__no_changes(temp_git_repo):
     """Test commit_and_create_pr when there are no changes."""
-    repo_path_mock = Mock()
-    mock_git = Mock()
-    mock_git.status_porcelain.return_value = ""
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("shutil.copy") as mock_copy,
+        patch("os.chdir") as mock_chdir,
+    ):
+        # Mock subprocess.run for git clone, gh auth login, gh auth setup-git, gh pr create
+        git_success = Mock()
+        git_success.stdout = ""
+        git_success.returncode = 0
 
-    pr_number = await commit_and_create_pr(
-        file_path="testfile",
-        commit_message="Update testfile",
-        pr_title="Update testfile",
-        pr_body="Automated update",
-        git=mock_git,
-        github_token=SecretStr("mock-token"),
-        repo="climatepolicyradar/knowledge-graph",
-        base_branch="main",
-        repo_path=repo_path_mock,
-    )
+        # Mock shutil.copy to do nothing
+        mock_copy.return_value = None
+        # Mock os.chdir to do nothing
+        mock_chdir.return_value = None
+
+        mock_run.return_value = git_success
+
+        repo_path_mock = Mock()
+        mock_git = Mock()
+        mock_git.status_porcelain.return_value = ""
+
+        pr_number = await commit_and_create_pr(
+            file_path="testfile",
+            commit_message="Update testfile",
+            pr_title="Update testfile",
+            pr_body="Automated update",
+            git=mock_git,
+            github_token=SecretStr("mock-token"),
+            repo="climatepolicyradar/knowledge-graph",
+            base_branch="main",
+            repo_path=repo_path_mock,
+        )
 
     assert pr_number is None
     # Verify status was checked but no other git operations happened
@@ -598,35 +620,12 @@ def test_extract_pr_details_empty_string():
         extract_pr_details(result_str)
 
 
-# @pytest.mark.asyncio
-# async def test_create_and_merge_pr__github_token_exception():
-#     """Test the workflow when setting GitHub token raises an exception."""
-#     with patch("flows.create_classifiers_specs_pr.commit_and_create_pr") as mock_commit:
-#         # Call the main function with a SecretStr that raises an exception
-#         github_token_mock = Mock(SecretStr("mock-token"))
-#         github_token_mock.get_secret_value.side_effect = Exception("Token error")
-
-#         results = await create_and_merge_pr(
-#             spec_file="testfile",
-#             aws_env=AwsEnv.staging,
-#             flow_run_name="Test Run",
-#             flow_run_url="http://example.com",
-#             github_token=github_token_mock,
-#             auto_merge=True,
-#         )
-
-#         mock_commit.assert_not_called()
-
-#         errors = unwrap_err(results)
-#         assert is_err(results)
-#         assert "Failed to set GitHub token environment var." in errors.msg
-
-
 @pytest.fixture
 def temp_git_repo():
     """Create a temporary git repository for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
+        repo_path = Path(tmpdir) / "knowledge-graph"
+        repo_path.mkdir(parents=True, exist_ok=True)
 
         # Initialise git repo
         subprocess.run(
@@ -818,27 +817,34 @@ async def test_commit_and_create_pr_only_stages_and_commits_specified_file(
 
     # Only run for GitPyOps to avoid subprocess patching
     if isinstance(git_ops, GitPyOps):
-        # GitPyOps only patch setup and push
+        # change to temp git directory above knowledge-graph and don't mock chdir in function
+        import os
+
+        os.chdir(Path(temp_git_repo).parent)
+
         with (
-            patch(
-                "flows.create_classifiers_specs_pr._run_subprocess_with_error_logging"
-            ) as mock_run_subprocess,
+            patch("shutil.copy") as mock_copy,
             patch("subprocess.run") as mock_run,
             patch.object(git_ops, "push", autospec=True) as mock_push,
         ):
-            mock_run_subprocess.side_effect = [
-                Mock(stdout=""),  # gh auth setup-git
-                Mock(stdout=""),  # git remote set url
-                # test logging
-                Mock(stdout=""),
-                Mock(stdout=""),
-                Mock(stdout=""),
-                Mock(
-                    stdout="https://github.com/climatepolicyradar/knowledge-graph/pull/123"
-                ),  # gh pr create
+            git_success = Mock()
+            git_success.stdout = ""
+            git_success.returncode = 0
+
+            gh_pr_result = Mock()
+            gh_pr_result.stdout = (
+                "https://github.com/climatepolicyradar/knowledge-graph/pull/123"
+            )
+            gh_pr_result.returncode = 0
+
+            mock_run.side_effect = [
+                git_success,  # git clone
+                git_success,  # gh auth login
+                git_success,  # gh auth setup-git
+                gh_pr_result,  # gh pr create
             ]
 
-            mock_run.return_value = Mock(stdout="")
+            mock_copy.return_value = None
 
             pr_number = await commit_and_create_pr(
                 file_path=str(file_path.relative_to(temp_git_repo)),
