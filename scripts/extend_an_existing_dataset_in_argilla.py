@@ -1,5 +1,3 @@
-from typing import Annotated
-
 import typer
 from rich.console import Console
 
@@ -15,21 +13,15 @@ console = Console()
 
 @app.command()
 def main(
-    wikibase_id: Annotated[
-        WikibaseID,
-        typer.Option(
-            ...,
-            help="The Wikibase ID of the concept to add passages for",
-            parser=WikibaseID,
-        ),
-    ],
-    workspace_name: Annotated[
-        str,
-        typer.Option(
-            ...,
-            help="The name of the workspace containing the existing dataset",
-        ),
-    ],
+    wikibase_id: WikibaseID = typer.Option(
+        ...,
+        help="The Wikibase ID of the concept to add passages for",
+        parser=WikibaseID,
+    ),
+    workspace_name: str = typer.Option(
+        "knowledge-graph",
+        help="The name of the workspace containing the existing dataset",
+    ),
 ):
     with console.status("Connecting to Argilla..."):
         argilla = ArgillaSession()
@@ -65,6 +57,24 @@ def main(
         dataset = argilla.get_dataset(wikibase_id, workspace=workspace_name)
     console.log(
         f"✅ Found existing dataset '{dataset.name}' with {len(list(dataset.records))} records"
+    )
+
+    # Deduplicate local dataset based on text in Argilla
+    with console.status(
+        "Deduplicating text in input labelled passages based on records in Argilla..."
+    ):
+        argilla_records = list(dataset.records)
+        text_in_argilla: set[str] = set(
+            [record.fields.get("text", "") for record in argilla_records]
+        )
+
+        lp_length_before = len(labelled_passages)
+        labelled_passages = [
+            lp for lp in labelled_passages if lp.text not in text_in_argilla
+        ]
+
+    console.print(
+        f"{len(labelled_passages)}/{lp_length_before} input passages remaining after deduplication"
     )
 
     # Push labelled passages to the dataset
