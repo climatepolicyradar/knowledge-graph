@@ -17,7 +17,7 @@ from knowledge_graph.cloud import AwsEnv
 
 
 def _run_subprocess_with_error_logging(
-    cmd: list[str], cwd: Path, check: bool = True
+    cmd: list[str], cwd: Path, check: bool = True, input: str | None = None
 ) -> subprocess.CompletedProcess[str]:
     """Run a subprocess command, capturing output and logging error."""
     logger = get_logger()
@@ -28,6 +28,7 @@ def _run_subprocess_with_error_logging(
             capture_output=True,
             text=True,
             check=check,
+            input=input,
         )
         return result
     except subprocess.CalledProcessError as e:
@@ -262,8 +263,10 @@ async def commit_and_create_pr(
     # Authenticate credentials
     logger.info("Authenticating gh credentials")
     token = github_token.get_secret_value()
-    subprocess.run(
-        ["gh", "auth", "login", "--with-token"], input=token, text=True, check=True
+    _ = _run_subprocess_with_error_logging(
+        ["gh", "auth", "login", "--with-token"],
+        cwd=repo_path,
+        input=token,
     )
 
     # Ensure gh is configured as git credential helper

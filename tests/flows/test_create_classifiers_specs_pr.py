@@ -38,6 +38,7 @@ def test_run_subprocess_with_error_logging__success():
             capture_output=True,
             text=True,
             check=True,
+            input=None,
         )
 
 
@@ -185,6 +186,28 @@ def test_run_subprocess_with_error_logging__check_false():
             capture_output=True,
             text=True,
             check=False,
+            input=None,
+        )
+
+
+def test_run_subprocess_with_error_logging__success_with_input():
+    """Test _run_subprocess_with_error_logging with check=False doesn't raise."""
+    with patch("subprocess.run") as mock_run:
+        mock_result = Mock(returncode=0, stdout="output", stderr="")
+        mock_run.return_value = mock_result
+
+        result = _run_subprocess_with_error_logging(
+            cmd=["grep", "hello"], cwd=Path("/tmp"), input="testing hello world"
+        )
+
+        assert result == mock_result
+        mock_run.assert_called_once_with(
+            ["grep", "hello"],
+            cwd=Path("/tmp"),
+            capture_output=True,
+            text=True,
+            check=True,
+            input="testing hello world",
         )
 
 
@@ -322,6 +345,7 @@ async def test_enable_auto_merge():
             capture_output=True,
             text=True,
             check=True,
+            input=None,
         )
         assert result == Ok(pr_number)
 
@@ -355,6 +379,7 @@ async def test_enable_auto_merge__exception():
             capture_output=True,
             text=True,
             check=True,
+            input=None,
         )
         assert is_err(result)
         error = unwrap_err(result)
