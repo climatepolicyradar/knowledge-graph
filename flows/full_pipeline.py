@@ -179,7 +179,7 @@ async def full_pipeline(
         case _:
             raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
-    aggregation_result: State = await aggregate(
+    aggregation_run: State = await aggregate(
         run_output_identifier=run_output_identifier,
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
@@ -191,19 +191,20 @@ async def full_pipeline(
         else None,
     )
 
-    if isinstance(aggregation_result, Exception):
-        logger.error("Aggregation failed.")
-        raise aggregation_result
+    aggregation_result_raw: (
+        AggregateResult | Fault | Exception
+    ) = await aggregation_run.result(raise_on_failure=False)
 
-    agg_result = AggregateResult(run_output_identifier=run_output_identifier)
-
-    if isinstance(aggregation_result, State):
-        agg_result: AggregateResult = await aggregation_result.result(
-            raise_on_failure=False
-        )
-        run_output_identifier = agg_result.run_output_identifier
-        if agg_result.errors is not None:
-            logger.error(f"Aggregation errors occurred: {agg_result.errors}")
+    match aggregation_result_raw:
+        case Exception() if not isinstance(aggregation_result_raw, Fault):
+            logger.error("Aggregation failed.")
+            raise aggregation_result_raw
+        case Fault():
+            pass  # Raise at the end of the process.
+        case AggregateResult():
+            pass
+        case _:
+            raise ValueError(f"unexpected result {type(aggregation_result_raw)}")
 
     logger.info(
         f"Aggregation complete. Run output identifier is: {run_output_identifier}"
@@ -222,7 +223,6 @@ async def full_pipeline(
     indexing_result: None | Exception = await indexing_run.result(
         raise_on_failure=False
     )
-
     if isinstance(indexing_result, Exception):
         logger.error("Indexing failed.")
         raise indexing_result
@@ -232,8 +232,11 @@ async def full_pipeline(
         successful_document_stems=successful_document_stems,
     )
 
-    logger.info("Full pipeline run completed!")
+    if isinstance(inference_result_raw, Fault):
+        logger.error("Inference failed.")
+        raise inference_result_raw
+    if isinstance(aggregation_result_raw, Fault):
+        logger.error("Aggregation failed.")
+        raise aggregation_result_raw
 
-    # mark full run as failed if aggregation errors occurred
-    if agg_result.errors is not None:
-        raise ValueError(agg_result)
+    logger.info("Full pipeline run completed successfully!")

@@ -36,6 +36,7 @@ from flows.inference import (
 )
 from flows.utils import (
     DocumentStem,
+    Fault,
     ParameterisedFlow,
     RunOutputIdentifier,
     S3Uri,
@@ -531,7 +532,6 @@ async def collect_stems_by_specs(config: Config) -> list[DocumentStem]:
     return list(set(document_stems))
 
 
-# TODO: This flow needs to be markd as failed should some process_doucument runs fail.
 @flow(  # pyright: ignore[reportCallIssue]
     timeout_seconds=None,
     task_runner=ThreadPoolTaskRunner(
@@ -546,7 +546,7 @@ async def aggregate_batch_of_documents(
     config_json: dict[str, Any],
     classifier_specs: Sequence[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
-) -> AggregateResult:
+) -> AggregateResult | Fault:
     """
     Aggregate the inference results for the given document ids.
 
@@ -603,9 +603,9 @@ async def aggregate_batch_of_documents(
     aggregate_result = AggregateResult(run_output_identifier=run_output_identifier)
 
     if failures:
-        aggregate_result.errors = (
-            f"Saw {len(failures)} failures when aggregating inference results"
-        )
+        message = f"Saw {len(failures)} failures when aggregating inference results"
+        aggregate_result.errors = message
+        raise Fault(msg=message, metadata={}, data=aggregate_result)
 
     return aggregate_result
 
@@ -876,8 +876,6 @@ async def _document_stems_from_parameters(
             )
 
 
-# TODO: This flow needs to be markd as failed should some batches has full or partial
-# failures.
 @flow(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
@@ -890,7 +888,7 @@ async def aggregate(
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
     classifier_specs: Sequence[ClassifierSpec] | None = None,
-) -> AggregateResult:
+) -> AggregateResult | Fault:
     """
     Aggregate the inference results for the given document ids.
 
@@ -974,8 +972,8 @@ async def aggregate(
     aggregate_result = AggregateResult(run_output_identifier=run_output_identifier)
 
     if failures:
-        aggregate_result.errors = (
-            f"{len(failures)}/{len(failures) + len(successes)} failed"
-        )
+        message = f"{len(failures)}/{len(failures) + len(successes)} failed"
+        aggregate_result.errors = message
+        raise Fault(msg=message, metadata={}, data=aggregate_result)
 
     return aggregate_result
