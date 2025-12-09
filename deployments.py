@@ -320,11 +320,11 @@ if __name__ == "__main__":
                 }
             ),
             AwsEnv.production: JsonDict(
-                {  # dry run: no changes to external services
-                    "upload_to_wandb": False,
-                    "upload_to_vespa": False,
-                    "automerge_classifier_specs_pr": False,
-                    "auto_train": False,
+                {
+                    "upload_to_wandb": True,
+                    "upload_to_vespa": True,
+                    "automerge_classifier_specs_pr": True,
+                    "auto_train": True,
                     "enable_slack_notifications": True,
                 }
             ),
