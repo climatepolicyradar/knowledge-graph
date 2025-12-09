@@ -1,4 +1,3 @@
-import os
 import subprocess
 import tempfile
 from datetime import timedelta
@@ -39,6 +38,7 @@ def test_run_subprocess_with_error_logging__success():
             capture_output=True,
             text=True,
             check=True,
+            input=None,
         )
 
 
@@ -186,17 +186,48 @@ def test_run_subprocess_with_error_logging__check_false():
             capture_output=True,
             text=True,
             check=False,
+            input=None,
+        )
+
+
+def test_run_subprocess_with_error_logging__success_with_input():
+    """Test _run_subprocess_with_error_logging with check=False doesn't raise."""
+    with patch("subprocess.run") as mock_run:
+        mock_result = Mock(returncode=0, stdout="output", stderr="")
+        mock_run.return_value = mock_result
+
+        result = _run_subprocess_with_error_logging(
+            cmd=["grep", "hello"], cwd=Path("/tmp"), input="testing hello world"
+        )
+
+        assert result == mock_result
+        mock_run.assert_called_once_with(
+            ["grep", "hello"],
+            cwd=Path("/tmp"),
+            capture_output=True,
+            text=True,
+            check=True,
+            input="testing hello world",
         )
 
 
 @pytest.mark.asyncio
 async def test_commit_and_create_pr__with_changes():
     """Test commit_and_create_pr when there are changes to commit."""
-    with patch("subprocess.run") as mock_run:
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("shutil.copy") as mock_copy,
+        patch("os.chdir") as mock_chdir,
+    ):
         # Create mock result objects with proper stdout attributes
-        gh_auth_result = Mock()
-        gh_auth_result.stdout = ""
-        gh_auth_result.returncode = 0
+        git_success = Mock()
+        git_success.stdout = ""
+        git_success.returncode = 0
+
+        # Mock shutil.copy to do nothing
+        mock_copy.return_value = None
+        # Mock os.chdir to do nothing
+        mock_chdir.return_value = None
 
         gh_pr_result = Mock()
         gh_pr_result.stdout = (
@@ -206,7 +237,9 @@ async def test_commit_and_create_pr__with_changes():
 
         # Mock subprocess.run for gh commands only
         mock_run.side_effect = [
-            gh_auth_result,  # gh auth setup-git
+            git_success,  # git clone
+            git_success,  # git auth login
+            git_success,  # gh auth setup-git
             gh_pr_result,  # gh pr create
         ]
 
@@ -220,6 +253,7 @@ async def test_commit_and_create_pr__with_changes():
             pr_title="Update testfile",
             pr_body="Automated update",
             git=mock_git,
+            github_token=SecretStr("mock-token"),
             repo="climatepolicyradar/knowledge-graph",
             base_branch="main",
             repo_path=repo_path_mock,
@@ -237,22 +271,40 @@ async def test_commit_and_create_pr__with_changes():
 
 
 @pytest.mark.asyncio
-async def test_commit_and_create_pr__no_changes():
+async def test_commit_and_create_pr__no_changes(temp_git_repo):
     """Test commit_and_create_pr when there are no changes."""
-    repo_path_mock = Mock()
-    mock_git = Mock()
-    mock_git.status_porcelain.return_value = ""
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("shutil.copy") as mock_copy,
+        patch("os.chdir") as mock_chdir,
+    ):
+        # Mock subprocess.run for git clone, gh auth login, gh auth setup-git, gh pr create
+        git_success = Mock()
+        git_success.stdout = ""
+        git_success.returncode = 0
 
-    pr_number = await commit_and_create_pr(
-        file_path="testfile",
-        commit_message="Update testfile",
-        pr_title="Update testfile",
-        pr_body="Automated update",
-        git=mock_git,
-        repo="climatepolicyradar/knowledge-graph",
-        base_branch="main",
-        repo_path=repo_path_mock,
-    )
+        # Mock shutil.copy to do nothing
+        mock_copy.return_value = None
+        # Mock os.chdir to do nothing
+        mock_chdir.return_value = None
+
+        mock_run.return_value = git_success
+
+        repo_path_mock = Mock()
+        mock_git = Mock()
+        mock_git.status_porcelain.return_value = ""
+
+        pr_number = await commit_and_create_pr(
+            file_path="testfile",
+            commit_message="Update testfile",
+            pr_title="Update testfile",
+            pr_body="Automated update",
+            git=mock_git,
+            github_token=SecretStr("mock-token"),
+            repo="climatepolicyradar/knowledge-graph",
+            base_branch="main",
+            repo_path=repo_path_mock,
+        )
 
     assert pr_number is None
     # Verify status was checked but no other git operations happened
@@ -293,6 +345,7 @@ async def test_enable_auto_merge():
             capture_output=True,
             text=True,
             check=True,
+            input=None,
         )
         assert result == Ok(pr_number)
 
@@ -326,6 +379,7 @@ async def test_enable_auto_merge__exception():
             capture_output=True,
             text=True,
             check=True,
+            input=None,
         )
         assert is_err(result)
         error = unwrap_err(result)
@@ -487,7 +541,6 @@ async def test_create_and_merge_pr():
             timeout=timedelta(minutes=30),
             poll_interval=timedelta(seconds=30),
         )
-        assert os.environ["GITHUB_TOKEN"] == "mock-token"
         assert is_ok(results)
 
 
@@ -591,35 +644,12 @@ def test_extract_pr_details_empty_string():
         extract_pr_details(result_str)
 
 
-@pytest.mark.asyncio
-async def test_create_and_merge_pr__github_token_exception():
-    """Test the workflow when setting GitHub token raises an exception."""
-    with patch("flows.create_classifiers_specs_pr.commit_and_create_pr") as mock_commit:
-        # Call the main function with a SecretStr that raises an exception
-        github_token_mock = Mock(SecretStr("mock-token"))
-        github_token_mock.get_secret_value.side_effect = Exception("Token error")
-
-        results = await create_and_merge_pr(
-            spec_file="testfile",
-            aws_env=AwsEnv.staging,
-            flow_run_name="Test Run",
-            flow_run_url="http://example.com",
-            github_token=github_token_mock,
-            auto_merge=True,
-        )
-
-        mock_commit.assert_not_called()
-
-        errors = unwrap_err(results)
-        assert is_err(results)
-        assert "Failed to set GitHub token environment var." in errors.msg
-
-
 @pytest.fixture
 def temp_git_repo():
     """Create a temporary git repository for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
+        repo_path = Path(tmpdir) / "knowledge-graph"
+        repo_path.mkdir(parents=True, exist_ok=True)
 
         # Initialise git repo
         subprocess.run(
@@ -794,68 +824,3 @@ def test_cli_gitops_succeeds_when_git_installed(temp_git_repo):
     # This should not raise any exception. Assumes git is installed.
     git_ops = GitCliOps(temp_git_repo)
     assert git_ops.repo_path == temp_git_repo
-
-
-@pytest.mark.asyncio
-async def test_commit_and_create_pr_only_stages_and_commits_specified_file(
-    git_ops, temp_git_repo
-):
-    """Test that only the specified file is staged and committed in a temp git repo."""
-
-    # Create two files in the repo
-    file_path = temp_git_repo / "subdir" / "testfile.yaml"
-    file_path.parent.mkdir(parents=True, exist_ok=True)
-    other_file = temp_git_repo / "otherfile.yaml"
-    file_path.write_text("new content")
-    other_file.write_text("untouched content")
-
-    # Only run for GitPyOps to avoid subprocess patching
-    if isinstance(git_ops, GitPyOps):
-        # GitPyOps only patch setup and push
-        with (
-            patch(
-                "flows.create_classifiers_specs_pr._run_subprocess_with_error_logging"
-            ) as mock_run_subprocess,
-            patch.object(git_ops, "push", autospec=True) as mock_push,
-        ):
-            mock_run_subprocess.side_effect = [
-                Mock(stdout=""),  # gh auth setup-git
-                Mock(
-                    stdout="https://github.com/climatepolicyradar/knowledge-graph/pull/123"
-                ),  # gh pr create
-            ]
-
-            pr_number = await commit_and_create_pr(
-                file_path=str(file_path.relative_to(temp_git_repo)),
-                commit_message="Update testfile",
-                pr_title="Update testfile",
-                pr_body="Automated update",
-                git=git_ops,
-                repo="test_repo",
-                base_branch="main",
-                repo_path=temp_git_repo,
-            )
-
-        assert pr_number == 123
-        mock_push.assert_called_once()
-
-        # Check git status: only testfile.yaml should be committed
-        result = git_ops.status_porcelain(str(file_path.relative_to(temp_git_repo)))
-        assert result.strip() == ""  # No changes left for testfile.yaml
-
-        # Check that otherfile.yaml is still unstaged
-        other_status = git_ops.status_porcelain(
-            str(other_file.relative_to(temp_git_repo))
-        )
-        assert other_status.strip() == "?? otherfile.yaml"
-
-        # Check git log to confirm only testfile.yaml was committed
-        log_result = subprocess.run(
-            ["git", "log", "--name-only", "--pretty=oneline"],
-            cwd=temp_git_repo,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        assert "subdir/testfile.yaml" in log_result.stdout
-        assert "otherfile.yaml" not in log_result.stdout

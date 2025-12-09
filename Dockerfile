@@ -23,9 +23,19 @@ FROM python:3.13-slim-bookworm@sha256:9b8102b7b3a61db24fe58f335b526173e5aeaaf7d1
 
 WORKDIR /app
 
-# Install git and git-lfs for GitPython operations within knowledge graph
+# Install git, git-lfs and github cli for git operations within knowledge graph
 # Required in runtime image as it does not copy from builder image
-RUN apt-get update && apt-get install -y git && apt-get install -y git-lfs && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y git git-lfs wget \
+    && mkdir -p -m 755 /etc/apt/keyrings \
+    && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    && cat $out > /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+    && mkdir -p -m 755 /etc/apt/sources.list.d \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update \
+    && apt-get install -y gh \
+    && rm -rf /var/lib/apt/lists/*
 RUN git lfs install
 
 # Copy Python packages from builder stage
@@ -39,7 +49,6 @@ COPY flows ./flows/
 COPY scripts ./scripts/
 COPY static_sites ./static_sites/
 COPY vibe-checker ./vibe-checker/
-COPY .git ./.git/
 
 # Install the project
 RUN uv pip install --system -e .
