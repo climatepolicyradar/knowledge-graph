@@ -92,11 +92,11 @@ sample id:
 
 # extend an existing dataset in argilla with additional passages for a specific wikibase ID
 extend-dataset id workspace:
-    uv run python scripts/extend_an_existing_dataset_in_argilla.py --wikibase-id {{id}} --workspace-name {{workspace}}
+    uv run python scripts/argilla/extend_existing_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
 
 # push a sampled set of passages to argilla for a specific wikibase ID
 push-to-argilla id workspace:
-    uv run python scripts/push_a_fresh_dataset_to_argilla.py --wikibase-id {{id}} --workspace-name {{workspace}}
+    uv run python scripts/push_new_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
 
 # generate an HTML report of classifier performance
 generate-report wikibase-ids:
