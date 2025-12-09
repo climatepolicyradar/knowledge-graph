@@ -66,7 +66,7 @@ def train_financial_flow() -> None:
         aws_env=AwsEnv.labs,
         classifier_type="LLMClassifier",
         classifier_override=[
-            "model_name=gpt-5",
+            "model_name=openrouter:openai/gpt-5",
             f"system_prompt_template={system_prompt_template}",
         ],
         concept_override=[f"definition={concept_definition}"],
