@@ -272,6 +272,7 @@ async def commit_and_create_pr(
         ["gh", "auth", "setup-git"],
         cwd=repo_path,
     )
+
     # Push branch to remote
     logger.info(f"Pushing branch {branch_name} to remote")
     git.push(branch_name)
