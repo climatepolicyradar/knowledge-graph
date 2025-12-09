@@ -222,13 +222,12 @@ async def commit_and_create_pr(
     """Commits changes and creates a GitHub PR using gh CLI."""
     logger = get_logger()
 
-    # git clone
+    # Clone repo and copy updated specs file across
     logger.info("Cloning repo")
     _ = _run_subprocess_with_error_logging(
         ["git", "clone", f"https://github.com/{repo}.git"],
         cwd=repo_path,
     )
-
     shutil.copy(file_path, f"knowledge-graph/{file_path}")
     os.chdir("knowledge-graph")
     logger.info(f"Current dir {os.getcwd()}")
@@ -281,12 +280,6 @@ async def commit_and_create_pr(
         cwd=repo_path,
     )
 
-    logger.info("Get auth status")
-    auth_status = _run_subprocess_with_error_logging(
-        ["gh", "auth", "status"], cwd=repo_path
-    )
-    logger.info(f"auth status {auth_status}")
-
     logger.info("Set credential helper in config")
     _ = _run_subprocess_with_error_logging(
         ["git", "config", "credential.helper", "!gh auth git-credential"], cwd=repo_path
@@ -303,14 +296,6 @@ async def commit_and_create_pr(
         ["git", "remote", "-v"], cwd=repo_path
     )
     logger.info(repo_details)
-
-    # logger.info("Logging remote origin")
-    # remote_details = _run_subprocess_with_error_logging(["git", "ls-remote", "origin"], cwd=repo_path)
-    # logger.info(remote_details)
-
-    # logger.info("Setting GITHUB_TOKEN")
-    # env = os.environ.copy()
-    # env["GITHUB_TOKEN"] = token
 
     # Push branch to remote
     logger.info(f"Pushing branch {branch_name} to remote")
@@ -527,7 +512,7 @@ async def create_and_merge_pr(
 
     try:
         repo_path = Path("./")
-        git_ops = GitCliOps(repo_path)
+        git_ops = GitPyOps(repo_path)
 
         pr_no = await commit_and_create_pr(
             file_path=spec_file,
