@@ -1,5 +1,3 @@
-from typing import Annotated
-
 import typer
 from rich.console import Console
 
@@ -15,21 +13,15 @@ console = Console()
 
 @app.command()
 def main(
-    wikibase_id: Annotated[
-        WikibaseID,
-        typer.Option(
-            ...,
-            help="The Wikibase ID of the concept to create a dataset for",
-            parser=WikibaseID,
-        ),
-    ],
-    workspace_name: Annotated[
-        str,
-        typer.Option(
-            ...,
-            help="The name of the existing workspace in Argilla",
-        ),
-    ],
+    wikibase_id: WikibaseID = typer.Option(
+        ...,
+        help="The Wikibase ID of the concept to create a dataset for",
+        parser=WikibaseID,
+    ),
+    workspace_name: str = typer.Option(
+        "knowledge-graph",
+        help="The name of the existing workspace in Argilla",
+    ),
 ):
     with console.status("Connecting to Argilla..."):
         argilla = ArgillaSession()
