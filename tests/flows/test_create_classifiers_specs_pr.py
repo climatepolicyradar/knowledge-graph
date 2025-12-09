@@ -516,7 +516,6 @@ async def test_create_and_merge_pr():
             timeout=timedelta(minutes=30),
             poll_interval=timedelta(seconds=30),
         )
-        # assert os.environ["GITHUB_TOKEN"] == "mock-token"
         assert is_ok(results)
 
 
