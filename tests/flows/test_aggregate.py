@@ -10,9 +10,9 @@ from unittest.mock import MagicMock, patch
 import pydantic
 import pytest
 from cpr_sdk.models.search import Passage as VespaPassage
-from prefect import flow
+from prefect import State, flow
 from prefect.artifacts import Artifact
-from prefect.client.schemas.objects import FlowRun
+from prefect.client.schemas.objects import FlowRun, StateType
 from prefect.context import FlowRunContext
 from prefect.states import Running
 
@@ -37,7 +37,7 @@ from flows.aggregate import (
 )
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.config import Config
-from flows.utils import DocumentStem, build_inference_result_s3_uri
+from flows.utils import DocumentStem, Fault, build_inference_result_s3_uri
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
@@ -229,11 +229,12 @@ async def test_aggregate_batch_of_documents__with_failures(
     with (
         patch("flows.aggregate.get_run_context", return_value=mock_context),
     ):
-        aggregate_result = await aggregate_batch_of_documents(
+        aggregate_run: State = await aggregate_batch_of_documents(
             document_stems=document_stems,
             config_json=test_config.model_dump(),
             classifier_specs=classifier_specs,
             run_output_identifier="test-run",
+            return_state=True,  # type: ignore[reportArgumentType]
         )
 
     summary_artifact = await Artifact.get("batch-aggregate-sandbox-test-flow-run")
@@ -244,10 +245,18 @@ async def test_aggregate_batch_of_documents__with_failures(
     assert "NoSuchKey" in artifact_data[0]["Exception"]
     assert "NoSuchKey" in artifact_data[1]["Exception"]
 
-    assert aggregate_result is not None
-    assert aggregate_result.run_output_identifier == "test-run"
+    assert aggregate_run is not None
+    assert isinstance(aggregate_run, State)
+    assert aggregate_run.type == StateType.FAILED
+    aggregate_result: AggregateResult | Fault | Exception = await aggregate_run.result(
+        raise_on_failure=False
+    )
+    assert isinstance(aggregate_result, Fault)
+    assert isinstance(aggregate_result.data, AggregateResult)
+    assert aggregate_result.data.run_output_identifier == "test-run"
     assert (
-        aggregate_result.errors == "Saw 2 failures when aggregating inference results"
+        aggregate_result.data.errors
+        == "Saw 2 failures when aggregating inference results"
     )
 
 
@@ -272,22 +281,29 @@ async def test_aggregate_batch_of_documents__returns_aggregate_result_containing
     mock_context = MagicMock(spec=FlowRunContext)
     mock_context.flow_run = flow_run
 
-    aggregate_result = None
-
     with (
         patch("flows.aggregate.get_run_context", return_value=mock_context),
     ):
-        aggregate_result = await aggregate_batch_of_documents(
+        aggregate_run: State = await aggregate_batch_of_documents(
             document_stems=document_stems,
             config_json=test_config.model_dump(),
             classifier_specs=classifier_specs,
             run_output_identifier="test-run",
+            return_state=True,  # type: ignore[reportArgumentType]
         )
 
-    assert aggregate_result is not None
-    assert aggregate_result.run_output_identifier == "test-run"
+    assert aggregate_run is not None
+    assert isinstance(aggregate_run, State)
+    assert aggregate_run.type == StateType.FAILED
+    aggregate_result: AggregateResult | Fault | Exception = await aggregate_run.result(
+        raise_on_failure=False
+    )
+    assert isinstance(aggregate_result, Fault)
+    assert isinstance(aggregate_result.data, AggregateResult)
+    assert aggregate_result.data.run_output_identifier == "test-run"
     assert (
-        aggregate_result.errors == "Saw 2 failures when aggregating inference results"
+        aggregate_result.data.errors
+        == "Saw 2 failures when aggregating inference results"
     )
 
 
