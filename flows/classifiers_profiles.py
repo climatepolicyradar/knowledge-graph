@@ -246,7 +246,7 @@ def handle_classifier_profile_action(
 def promote_classifier_profile(
     wikibase_id: WikibaseID,
     classifier_id: ClassifierID,
-    classifiers_profile: Profile,
+    classifiers_profile: list,
     aws_env: AwsEnv,
     upload_to_wandb: bool,
 ):
@@ -273,7 +273,7 @@ def promote_classifier_profile(
             wikibase_id=wikibase_id,
             classifier_id=classifier_id,
             aws_env=aws_env,
-            add_classifiers_profiles=[classifiers_profile.value],
+            add_classifiers_profiles=classifiers_profile,
         )
 
 
