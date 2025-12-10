@@ -1180,7 +1180,7 @@ async def test_send_classifiers_profile_slack_alert_success():
         )
 
         mock_slack_client.chat_postMessage.assert_any_call(
-            channel="alerts-platform-staging",
+            channel="alerts-concept-store",
             thread_ts="12345",
             text=f"Data Quality Issues: {len(validation_errors)} issues found",
             blocks=ANY,
@@ -1242,7 +1242,7 @@ async def test_send_classifiers_profile_slack_alert__slack_failure():
         )
 
         mock_slack_client.chat_postMessage.assert_called_once_with(
-            channel="alerts-platform-staging",
+            channel="alerts-concept-store",
             text="Classifiers Profile Sync Summary: uploading to wandb uploading to vespa",
             attachments=ANY,
         )
@@ -1380,7 +1380,7 @@ async def test_sync_classifiers_profiles(
         # check slack messages sent, only validation errors so: 1 main, 1 thread
         assert mock_slack_client.chat_postMessage.call_count == 2
         mock_slack_client.chat_postMessage.assert_any_call(
-            channel="alerts-platform-sandbox",
+            channel="alerts-concept-store",  # validation errors only
             text="Classifiers Profile Sync Summary: (dry run, not uploading to wandb) (dry run, not uploading to vespa)",
             attachments=ANY,
         )

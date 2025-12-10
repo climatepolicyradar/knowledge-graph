@@ -634,11 +634,10 @@ async def send_classifiers_profile_slack_alert(
 
     other_errors = wandb_errors + vespa_errors + event_errors + pr_errors
     try:
-        channel = f"alerts-platform-{aws_env}"
-        # TODO: change channel once CP data populated
-        # channel = "alerts-concept-store"
         if len(validation_errors) > 0:
-            channel = channel
+            # validation errors sent to policy team channel
+            channel = "alerts-concept-store"
+
             main_response = await _post_errors_main(
                 slack_client=slack_client,
                 channel=channel,
@@ -665,7 +664,6 @@ async def send_classifiers_profile_slack_alert(
                 if validation_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
-                        # channel = "alerts-concept-store"
                         channel=channel,
                         thread_ts=thread_ts,
                         errors=validation_errors,
@@ -677,6 +675,7 @@ async def send_classifiers_profile_slack_alert(
                 )
 
         if len(other_errors) > 0:
+            # system errors sent to platform team channel
             channel = f"alerts-platform-{aws_env}"
 
             main_response = await _post_errors_main(
@@ -704,7 +703,7 @@ async def send_classifiers_profile_slack_alert(
                 if wandb_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
-                        channel="alerts-platform-staging",
+                        channel=channel,
                         thread_ts=thread_ts,
                         errors=wandb_errors,
                         error_type="WandB Errors",
@@ -712,7 +711,7 @@ async def send_classifiers_profile_slack_alert(
                 if vespa_errors:
                     await _post_errors_thread(
                         slack_client=slack_client,
-                        channel="alerts-platform-staging",
+                        channel=channel,
                         thread_ts=thread_ts,
                         errors=vespa_errors,
                         error_type="Vespa Errors",

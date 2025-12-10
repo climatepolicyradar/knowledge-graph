@@ -22,33 +22,43 @@ def main(
         "knowledge-graph",
         help="The name of the existing workspace in Argilla",
     ),
+    limit: int | None = typer.Option(
+        130, help="Limit the number of passages loaded to Argilla."
+    ),
 ):
+    """
+    Push a new dataset for a concept to Argilla.
+
+    Requires that the `sample` script has been run first.
+    """
     with console.status("Connecting to Argilla..."):
         argilla = ArgillaSession()
     console.log("✅ Connected to Argilla")
+
     sampled_passages_dir = processed_data_dir / "sampled_passages"
     sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.jsonl"
+
+    if not sampled_passages_path.exists():
+        raise FileNotFoundError(
+            f"Sampled passages not found for {wikibase_id}. Run the sample script (scripts/sample.py) first."
+        )
 
     wikibase = WikibaseSession()
     concept = wikibase.get_concept(wikibase_id)
     console.log(f"✅ Loaded metadata for {concept}")
 
     console.log(f"Loading sampled passages for {wikibase_id}")
-    try:
-        with open(sampled_passages_path, "r", encoding="utf-8") as f:
-            labelled_passages = [
-                LabelledPassage.model_validate_json(line) for line in f
-            ]
-        n_annotations = sum([len(entry.spans) for entry in labelled_passages])
-        console.log(
-            f"Loaded {len(labelled_passages)} labelled passages "
-            f"with {n_annotations} individual annotations"
-        )
-    except FileNotFoundError as e:
-        raise FileNotFoundError(
-            f"No sampled passages found for {wikibase_id}. Please run"
-            f"  just sample {wikibase_id}"
-        ) from e
+    with open(sampled_passages_path, "r", encoding="utf-8") as f:
+        labelled_passages = [LabelledPassage.model_validate_json(line) for line in f]
+    n_annotations = sum([len(entry.spans) for entry in labelled_passages])
+    console.log(
+        f"Loaded {len(labelled_passages)} labelled passages "
+        f"with {n_annotations} individual annotations"
+    )
+
+    if limit is not None:
+        console.log(f"Limiting number of labelled passages to {limit}")
+        labelled_passages = labelled_passages[:limit]
 
     # Create dataset for the concept
     with console.status(f"Creating dataset in workspace '{workspace_name}'..."):
