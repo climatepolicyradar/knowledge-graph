@@ -67,10 +67,6 @@ class GitOps(Protocol):
         """Push a branch to remote."""
         ...
 
-    def enable_sparse_checkout(self, file_path: str) -> None:
-        """Enable a sparse checkout of a specific directory path."""
-        ...
-
 
 class GitCliOps:
     """Git operations implemented using CLI subprocess commands."""
@@ -135,14 +131,6 @@ class GitCliOps:
             cwd=self.repo_path,
         )
 
-    def enable_sparse_checkout(self, file_path: str) -> None:
-        """Enable a sparse checkout of a specific directory path."""
-        dir_path = str(Path(file_path).parent)
-        _run_subprocess_with_error_logging(
-            ["git", "sparse-checkout", "set", dir_path],
-            cwd=self.repo_path,
-        )
-
 
 class GitPyOps:
     """Git operations implemented using GitPython library."""
@@ -203,11 +191,6 @@ class GitPyOps:
         origin = self.repo.remote(name=remote)
         origin.push(refspec=f"{branch_name}:{branch_name}", set_upstream=True)
 
-    def enable_sparse_checkout(self, file_path: str) -> None:
-        """Enable a sparse checkout of a specific directory path."""
-        dir_path = str(Path(file_path).parent)
-        self.repo.git.sparse_checkout("set", dir_path)
-
 
 async def commit_and_create_pr(
     file_path: str,
@@ -243,12 +226,6 @@ async def commit_and_create_pr(
     # Configure git (in case not set)
     git.config("user.email", "tech@climatepolicyradar.org")
     git.config("user.name", "cpr-tech-admin")
-
-    # removing sparse_checkout, throws git index version error
-    # git.enable_sparse_checkout(file_path)
-    # Some files that are not copied in the docker build may
-    # show as D (deleted) however only specified file_path will
-    # be committed
 
     # Create and checkout new branch
     timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
