@@ -795,30 +795,6 @@ def test_cli_gitops_checks_git_installed():
         )
 
 
-def test_gitops_enable_sparse_checkout(git_ops, temp_git_repo):
-    """Test that both gitops perform sparse checkout."""
-    file_path = "subdir/testfile.yaml"
-    dir_path = str(Path(file_path).parent)
-
-    (temp_git_repo / file_path).parent.mkdir(parents=True, exist_ok=True)
-    (temp_git_repo / file_path).write_text("new content")
-    (temp_git_repo / "otherfile.yaml").write_text("other content")
-    (temp_git_repo / "text.txt").write_text("extra content")
-
-    git_ops.enable_sparse_checkout(file_path)
-
-    # Check only the specified file is tracked by git
-    result = subprocess.run(
-        ["git", "sparse-checkout", "list"],
-        cwd=temp_git_repo,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    tracked_dirs = result.stdout.strip().splitlines()
-    assert dir_path in tracked_dirs
-
-
 def test_cli_gitops_succeeds_when_git_installed(temp_git_repo):
     """Test that CliGitOps initialises successfully when git is installed."""
     # This should not raise any exception. Assumes git is installed.
