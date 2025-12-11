@@ -327,7 +327,7 @@ def test_promote_classifiers_profiles(mock_profile_mapping):
         promote_classifier_profile(
             wikibase_id=mock_profile_mapping.wikibase_id,
             classifier_id=mock_profile_mapping.classifier_id,
-            classifiers_profile=mock_profile_mapping.classifiers_profile,
+            classifiers_profile=[str(mock_profile_mapping.classifiers_profile)],
             aws_env=AwsEnv.staging,
             upload_to_wandb=True,
         )
@@ -351,7 +351,7 @@ def test_promote_classifiers_profiles__dry_run(mock_profile_mapping):
         promote_classifier_profile(
             wikibase_id=mock_profile_mapping.wikibase_id,
             classifier_id=mock_profile_mapping.classifier_id,
-            classifiers_profile=mock_profile_mapping.classifiers_profile,
+            classifiers_profile=[str(mock_profile_mapping.classifiers_profile)],
             aws_env=AwsEnv.staging,
             upload_to_wandb=False,
         )
