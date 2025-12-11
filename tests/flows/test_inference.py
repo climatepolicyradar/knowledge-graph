@@ -3,6 +3,7 @@ import os
 import random
 import string
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from io import BytesIO
@@ -25,6 +26,7 @@ from prefect.states import Completed, Running
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
     BatchInferenceResult,
+    FilterResult,
     Metadata,
     ParameterisedFlow,
     SingleDocumentInferenceResult,
@@ -34,6 +36,7 @@ from flows.inference import (
     did_inference_fail,
     document_passages,
     filter_document_batch,
+    filter_existing_inference_results,
     gather_successful_document_stems,
     get_existing_inference_results,
     get_inference_fault_metadata,
@@ -1938,6 +1941,137 @@ def test_process_single_document_inference():
 
 
 @pytest.mark.asyncio
+async def test_filter_existing_inference_results_no_existing_results(
+    mock_async_bucket,
+    mock_s3_async_client,
+    test_config,
+) -> None:
+    """
+    Test that documents are processed when no inference results exist.
+
+    When a document has no existing inference results, it should be marked
+    for processing regardless of the source document's timestamp.
+    """
+    document_stem = DocumentStem("CCLW.executive.1.1")
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+    source_key = f"{test_config.inference_document_source_prefix}{document_stem}.json"
+
+    # Create source document
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=source_key,
+        Body=b'{"test": "data"}',
+    )
+
+    result = await filter_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec,
+        filter_result=FilterResult(accepted=[document_stem], removed=[]),
+    )
+
+    assert result == ([document_stem], set(), 0)
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_inference_results_up_to_date(
+    mock_async_bucket,
+    mock_s3_async_client,
+    test_config,
+) -> None:
+    """
+    Test that documents are skipped when inference results are up-to-date.
+
+    When inference results exist and are newer than the source document,
+    the document should be skipped from processing.
+    """
+    document_stem = DocumentStem("CCLW.executive.1.1")
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+    source_key = f"{test_config.inference_document_source_prefix}{document_stem}.json"
+    result_key = (
+        f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/"
+        f"{classifier_spec.classifier_id}/{document_stem}.json"
+    )
+
+    # Create source document first
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=source_key,
+        Body=b'{"test": "data"}',
+    )
+
+    # Create inference result after source (result is newer, so up-to-date)
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=result_key,
+        Body=b'{"test": "data"}',
+    )
+
+    result = await filter_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec,
+        filter_result=FilterResult(accepted=[document_stem], removed=[]),
+    )
+
+    assert result == ([], {document_stem}, 1)
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_inference_results_out_of_date(
+    mock_async_bucket,
+    mock_s3_async_client,
+    test_config,
+) -> None:
+    """
+    Test that documents are reprocessed when inference results are out-of-date.
+
+    When the source document is newer than existing inference results,
+    the document should be marked for reprocessing.
+    """
+    document_stem = DocumentStem("CCLW.executive.1.1")
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+    source_key = f"{test_config.inference_document_source_prefix}{document_stem}.json"
+    result_key = (
+        f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/"
+        f"{classifier_spec.classifier_id}/{document_stem}.json"
+    )
+
+    # Create inference result first (older)
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=result_key,
+        Body=b'{"test": "data"}',
+    )
+
+    # Wait to ensure timestamp difference, then create source document (newer)
+    time.sleep(2)
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=source_key,
+        Body=b'{"test": "data"}',
+    )
+
+    result = await filter_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec,
+        filter_result=FilterResult(accepted=[document_stem], removed=[]),
+    )
+
+    assert result == ([document_stem], set(), 1)
+
+
+@pytest.mark.asyncio
 async def test_get_existing_inference_results_empty(
     test_config,
     mock_async_bucket,
@@ -1964,7 +2098,7 @@ async def test_get_existing_inference_results_empty(
         classifier_spec=classifier_spec,
     )
 
-    assert existing == set()
+    assert existing == dict()
 
 
 @pytest.mark.asyncio
@@ -1999,7 +2133,8 @@ async def test_get_existing_inference_results_with_results(
         classifier_spec=classifier_spec,
     )
 
-    assert existing == set(documents)
+    assert set(existing.keys()) == set(documents)
+    assert all([isinstance(i, datetime) for i in existing.values()])
 
 
 @pytest.mark.asyncio
@@ -2045,8 +2180,8 @@ async def test_get_existing_inference_results_different_classifiers(
         classifier_spec=classifier_spec_2,
     )
 
-    assert existing_1 == {doc1}
-    assert existing_2 == {doc2}
+    assert set(existing_1.keys()) == {doc1}
+    assert set(existing_2.keys()) == {doc2}
 
 
 @pytest.mark.asyncio
