@@ -246,7 +246,7 @@ def handle_classifier_profile_action(
 def promote_classifier_profile(
     wikibase_id: WikibaseID,
     classifier_id: ClassifierID,
-    classifiers_profile: list,
+    classifiers_profile: list[str],  # Profile as str
     aws_env: AwsEnv,
     upload_to_wandb: bool,
 ):
