@@ -676,7 +676,8 @@ async def send_classifiers_profile_slack_alert(
 
         if len(other_errors) > 0:
             # system errors sent to platform team channel
-            channel = f"alerts-platform-{aws_env}"
+            channel_env = "production" if aws_env.value == "prod" else aws_env
+            channel = f"alerts-platform-{channel_env}"
 
             main_response = await _post_errors_main(
                 slack_client=slack_client,
