@@ -1,4 +1,9 @@
 ---
+- wikibase_id: Q47
+  concept_id: hdgvd2ju
+  classifier_id: rfvhzrck
+  classifiers_profile: primary
+  wandb_registry_version: v0
 - wikibase_id: Q53
   concept_id: kgtd77zy
   classifier_id: r4xsb4ff
@@ -12,6 +17,7 @@
 - wikibase_id: Q68
   concept_id: ad7tcbph
   classifier_id: kk8dqcrj
+  classifiers_profile: primary
   wandb_registry_version: v2
 - wikibase_id: Q69
   concept_id: 7gzqkcyc
@@ -21,18 +27,27 @@
 - wikibase_id: Q218
   concept_id: ygjab2d5
   classifier_id: 3p7eyng3
+  classifiers_profile: primary
   wandb_registry_version: v23
+- wikibase_id: Q221
+  concept_id: s9rbcnjc
+  classifier_id: zahr3y3c
+  classifiers_profile: experimental
+  wandb_registry_version: v14
 - wikibase_id: Q223
   concept_id: fxx6vsts
   classifier_id: dntrzvg4
+  classifiers_profile: primary
   wandb_registry_version: v16
 - wikibase_id: Q226
   concept_id: fmp2rf6u
   classifier_id: epdr39n7
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q368
   concept_id: wfcb6jdf
   classifier_id: mfe6wvbv
+  classifiers_profile: primary
   wandb_registry_version: v27
 - wikibase_id: Q374
   concept_id: 2nf7bhjg
@@ -42,11 +57,18 @@
 - wikibase_id: Q404
   concept_id: ybg68eaw
   classifier_id: fd5t9bhw
+  classifiers_profile: primary
   wandb_registry_version: v26
 - wikibase_id: Q412
   concept_id: 6muuvqpm
   classifier_id: 9cfzu8vh
+  classifiers_profile: primary
   wandb_registry_version: v30
+- wikibase_id: Q557
+  concept_id: yd3rpeuh
+  classifier_id: nnv2ma7z
+  classifiers_profile: primary
+  wandb_registry_version: v0
 - wikibase_id: Q567
   concept_id: 596hws3c
   classifier_id: 534fxa9d
@@ -55,26 +77,32 @@
 - wikibase_id: Q572
   concept_id: jfzuzpcy
   classifier_id: 9x5fdgft
+  classifiers_profile: primary
   wandb_registry_version: v2
 - wikibase_id: Q601
   concept_id: c5289g25
   classifier_id: 76fhnpae
+  classifiers_profile: primary
   wandb_registry_version: v2
 - wikibase_id: Q606
   concept_id: antdeacg
   classifier_id: pun2by55
+  classifiers_profile: primary
   wandb_registry_version: v2
 - wikibase_id: Q615
   concept_id: 8f9ejwsu
   classifier_id: 3wkwmd2t
+  classifiers_profile: primary
   wandb_registry_version: v2
 - wikibase_id: Q618
   concept_id: j4gcmr7q
   classifier_id: qp7pt7vc
+  classifiers_profile: primary
   wandb_registry_version: v2
 - wikibase_id: Q622
   concept_id: gaghy24b
   classifier_id: gxgdn95e
+  classifiers_profile: primary
   wandb_registry_version: v2
 - wikibase_id: Q638
   concept_id: f6etym28
@@ -84,158 +112,192 @@
 - wikibase_id: Q639
   concept_id: 9a3aj2vs
   classifier_id: zp9e66p9
+  classifiers_profile: primary
   wandb_registry_version: v14
 - wikibase_id: Q650
   concept_id: tyyhf95y
   classifier_id: 274gekg9
+  classifiers_profile: primary
   wandb_registry_version: v13
 - wikibase_id: Q661
   concept_id: 5j6qb6ve
   classifier_id: ty2jvjmp
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q676
   concept_id: mc8gvrpj
   classifier_id: y3vcj3dm
+  classifiers_profile: primary
   wandb_registry_version: v17
 - wikibase_id: Q684
   concept_id: z6atmpr5
   classifier_id: 9adt36v3
+  classifiers_profile: primary
   wandb_registry_version: v20
 - wikibase_id: Q690
   concept_id: 3mrsd5tt
   classifier_id: eq9x9wsr
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q695
   concept_id: yhrxbe6y
   classifier_id: am4npkr4
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q701
   concept_id: ckeffgxk
   classifier_id: nyutpxgp
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q704
   concept_id: m6xpbysp
   classifier_id: y5npmjhs
+  classifiers_profile: primary
   wandb_registry_version: v17
 - wikibase_id: Q708
   concept_id: s5f84ek7
   classifier_id: x9kfsd8s
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q715
   concept_id: 2wcgurff
   classifier_id: hqv67qyk
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q757
   concept_id: 9tyjwej6
   classifier_id: n4t9ec5y
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q760
   concept_id: cc2jt9kj
   classifier_id: fvdwz7cn
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q761
   concept_id: 7z86eraa
   classifier_id: grw5x8ee
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q762
   concept_id: qmjg8zym
   classifier_id: qa22cf6s
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q763
   concept_id: hdndzxpg
   classifier_id: s3cc4cdt
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q764
   concept_id: jud4rkgs
   classifier_id: nxt8v557
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q765
   concept_id: bh2ju2dy
   classifier_id: mqmq7qz7
+  classifiers_profile: primary
   wandb_registry_version: v26
 - wikibase_id: Q766
   concept_id: rdnsrw5k
   classifier_id: auwqx2qx
+  classifiers_profile: primary
   wandb_registry_version: v26
 - wikibase_id: Q767
   concept_id: uyekkhgv
   classifier_id: dfk2cka7
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q768
   concept_id: jv274crg
   classifier_id: pgqzewd7
+  classifiers_profile: primary
   wandb_registry_version: v24
 - wikibase_id: Q769
   concept_id: 3sgfhs46
   classifier_id: 7cgtdjf8
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q774
   concept_id: mqnudzra
   classifier_id: qxa74qvw
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q775
   concept_id: zt7e7p5z
   classifier_id: tphrygrm
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q777
   concept_id: qembqy8s
   classifier_id: 8fj9pk8h
+  classifiers_profile: experimental
   wandb_registry_version: v21
 - wikibase_id: Q778
   concept_id: eum2twbb
   classifier_id: bgrd72hx
+  classifiers_profile: experimental
   wandb_registry_version: v21
 - wikibase_id: Q779
   concept_id: eemkkb45
   classifier_id: y5d5v37k
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q786
   concept_id: yxgms8vv
   classifier_id: 76acyeg6
+  classifiers_profile: primary
   wandb_registry_version: v23
 - wikibase_id: Q787
   concept_id: cggp45vj
   classifier_id: esv3cdac
+  classifiers_profile: primary
   wandb_registry_version: v28
 - wikibase_id: Q788
   concept_id: dvrpbf8t
   classifier_id: 9pexe8zd
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q818
   concept_id: n5nctjxa
   classifier_id: xtpdyp7t
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q856
   concept_id: gf4rs7ya
   classifier_id: rqtk7h47
+  classifiers_profile: primary
   wandb_registry_version: v15
-- wikibase_id: Q857
-  concept_id: em6j2zn8
-  classifier_id: 9hmkcj6h
-  wandb_registry_version: v25
 - wikibase_id: Q954
   concept_id: eaupne6f
   classifier_id: fyhqe7b6
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q955
   concept_id: tcczd5sy
   classifier_id: hx47bkk6
+  classifiers_profile: primary
   wandb_registry_version: v26
 - wikibase_id: Q956
   concept_id: w6nrbsmk
   classifier_id: 7dcdxgfj
+  classifiers_profile: primary
   wandb_registry_version: v28
 - wikibase_id: Q973
   concept_id: vjsuh5wk
   classifier_id: 2nwj5fwh
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q983
   concept_id: yfycqcfb
   classifier_id: dsxc3m8e
+  classifiers_profile: primary
   wandb_registry_version: v25
 - wikibase_id: Q986
   concept_id: qjz8mphv
   classifier_id: mjaupkch
+  classifiers_profile: primary
   wandb_registry_version: v26
 - wikibase_id: Q1016
   concept_id: 4uqjca5b
@@ -245,100 +307,124 @@
 - wikibase_id: Q1167
   concept_id: rhs8xgsy
   classifier_id: jp8e4k7h
+  classifiers_profile: primary
   wandb_registry_version: v17
 - wikibase_id: Q1269
   concept_id: fxmy2gbs
   classifier_id: ruzvuy9d
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1273
   concept_id: rw38g2q8
   classifier_id: 9aezptyn
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1274
   concept_id: bjgcfphm
   classifier_id: 8ya34btw
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1275
   concept_id: 68w3shve
   classifier_id: bb55gpzc
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1276
   concept_id: tqgezuej
   classifier_id: dp92w33k
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1277
   concept_id: ns3mswx8
   classifier_id: smhdpm2v
+  classifiers_profile: primary
   wandb_registry_version: v17
   dont_run_on:
   - sabin
 - wikibase_id: Q1278
   concept_id: ak3eprz2
   classifier_id: 5b3ndxc3
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1279
   concept_id: 6bfaxrjh
   classifier_id: 2he9rkha
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1280
   concept_id: hrd8qz7c
   classifier_id: bhf4p2mt
+  classifiers_profile: primary
   wandb_registry_version: v16
 - wikibase_id: Q1281
   concept_id: sfrb8bcr
   classifier_id: yvzajyqf
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1282
   concept_id: 8rmuwu8c
   classifier_id: z7cnc9cz
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1284
   concept_id: p7g5wn8t
   classifier_id: mxfwgjr7
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1285
   concept_id: 75spmz5a
   classifier_id: 6pm6a6nd
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1286
   concept_id: rzpp5768
   classifier_id: 5rjgvetv
+  classifiers_profile: primary
   wandb_registry_version: v15
 - wikibase_id: Q1343
   concept_id: nrdhw2ad
   classifier_id: vax7e3n7
+  classifiers_profile: experimental
   wandb_registry_version: v14
 - wikibase_id: Q1344
   concept_id: f3jxb2er
   classifier_id: g8veubg3
+  classifiers_profile: primary
   wandb_registry_version: v14
 - wikibase_id: Q1345
   concept_id: 3b635c3d
   classifier_id: wy3a2h5x
+  classifiers_profile: primary
   wandb_registry_version: v14
 - wikibase_id: Q1346
   concept_id: 8m9nendg
   classifier_id: aqrcdtxx
+  classifiers_profile: primary
   wandb_registry_version: v14
 - wikibase_id: Q1362
   concept_id: ghurfdkk
   classifier_id: bugd7dbt
+  classifiers_profile: primary
   wandb_registry_version: v14
 - wikibase_id: Q1368
   concept_id: 6bbq9thx
   classifier_id: 9n9xsymu
+  classifiers_profile: primary
   wandb_registry_version: v14
 - wikibase_id: Q1369
   concept_id: xbfj5vfj
   classifier_id: wyaugrjm
+  classifiers_profile: primary
   wandb_registry_version: v14
 - wikibase_id: Q1370
   concept_id: qf5rwhnf
   classifier_id: 6dxvusb9
+  classifiers_profile: primary
   wandb_registry_version: v14
 - wikibase_id: Q1371
   concept_id: u9sz78pv
   classifier_id: v76y24qd
+  classifiers_profile: primary
   wandb_registry_version: v14
 - wikibase_id: Q1651
   concept_id: anhcmh9a
@@ -371,3 +457,33 @@
   classifier_id: 6y38j2hv
   classifiers_profile: primary
   wandb_registry_version: v3
+- wikibase_id: Q1830
+  concept_id: p8hgdgwd
+  classifier_id: v32gpea3
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1831
+  concept_id: ewzessvq
+  classifier_id: syxb9y5d
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1832
+  concept_id: tbhqkjzf
+  classifier_id: ggks7e8w
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1833
+  concept_id: sdkqfbce
+  classifier_id: xwnp7asb
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1834
+  concept_id: 8j78jey7
+  classifier_id: 7zt2v5xg
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1835
+  concept_id: xk8b47d2
+  classifier_id: p7jtajcb
+  classifiers_profile: primary
+  wandb_registry_version: v0
