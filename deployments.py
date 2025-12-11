@@ -327,11 +327,6 @@ if __name__ == "__main__":
                 }
             ),
         },
-        concurrency_limit=ConcurrencyLimitConfig(
-            limit=1,
-            tag="sync-classifiers-profiles",  # Unique tag for this flow
-            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
-        ),
     )
 
     # Sync Neo4j with Wikibase
