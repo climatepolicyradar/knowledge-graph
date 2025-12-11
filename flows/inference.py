@@ -388,7 +388,7 @@ async def filter_existing_inference_results(
 
         if not text_extraction_date:
             logger.warning(
-                f"No latestModified date for: {config.cache_bucket_str}, {key}"
+                f"No latestModified date for: s3://{config.cache_bucket_str}/{key}"
             )
 
         if not text_extraction_date or inference_date < text_extraction_date:
