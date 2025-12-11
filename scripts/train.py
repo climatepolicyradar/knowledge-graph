@@ -390,7 +390,7 @@ def main(
             ...,
             help="AWS environment to use for S3 uploads",
         ),
-    ] = AwsEnv.labs,
+    ] = AwsEnv.production,
     use_coiled_gpu: Annotated[
         bool,
         typer.Option(
