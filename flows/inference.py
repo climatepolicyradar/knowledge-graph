@@ -340,11 +340,10 @@ async def get_s3_prefix_last_modified_dates(
 
         result: dict[str, datetime] = {}
         async for page in page_iterator:
-            if "Contents" in page:
-                for obj in page["Contents"]:
-                    key = obj["Key"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                    last_modified = obj["LastModified"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                    result[key] = last_modified
+            for obj in page.get("Contents", []):
+                key = obj["Key"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                last_modified = obj["LastModified"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                result[key] = last_modified
     return result
 
 
@@ -435,7 +434,7 @@ async def get_existing_inference_results(
             Prefix=prefix,
         )
 
-        existing_stems: dict[DocumentStem, datetime] = dict()
+        existing_inference_results_stems: dict[DocumentStem, datetime] = dict()
         async for page in page_iterator:
             if "Contents" in page:
                 for obj in page["Contents"]:  # pyright: ignore[reportUnknownVariableType]
@@ -443,11 +442,15 @@ async def get_existing_inference_results(
                     last_modified: datetime = obj["LastModified"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
 
                     filename = Path(key).stem
-                    existing_stems[DocumentStem(filename)] = last_modified
+                    existing_inference_results_stems[DocumentStem(filename)] = (
+                        last_modified
+                    )
 
-    logger.debug(f"found {len(existing_stems)} existing results for {classifier_spec}")
+    logger.debug(
+        f"found {len(existing_inference_results_stems)} existing results for {classifier_spec}"
+    )
 
-    return existing_stems
+    return existing_inference_results_stems
 
 
 async def get_document_ids_from_file(
