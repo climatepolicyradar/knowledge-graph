@@ -73,7 +73,7 @@ cd static_sites/concept_librarian
 export BUCKET_NAME=$(cd infra && pulumi stack output bucket_name --stack labs)
 
 # Sync the dist directory to S3, removing any old files
-aws s3 sync dist "s3://$BUCKET_NAME" --profile=labs --delete
+aws s3 sync dist "s3://$BUCKET_NAME/dist" --profile=labs --delete
 
 # The site will be available at the CloudFront URL, which you can get with:
 cd infra && pulumi stack output cloudfront_url --stack labs
