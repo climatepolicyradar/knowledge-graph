@@ -287,7 +287,7 @@ def _reconstruct_metadata(df_row: pd.Series) -> dict:
 def dataframe_to_labelled_passages(
     df: pd.DataFrame,
     concept_id: WikibaseID,
-    labeller_names: list[str],
+    labeller_names: list[str] = [],
     human_label_column: str | None = None,
     skip_unlabelled: bool = True,
 ) -> list[LabelledPassage]:

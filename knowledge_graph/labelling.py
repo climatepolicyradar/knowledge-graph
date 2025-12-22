@@ -1,4 +1,5 @@
 import os
+import uuid
 from collections import defaultdict
 from functools import lru_cache
 from logging import getLogger
@@ -639,10 +640,10 @@ class ArgillaSession:
             )
 
             record = Record(
-               id=str(uuid.uuid4()),
-               fields=fields, 
-               responses=responses,
-               metadata=self._format_metadata_keys_for_argilla(passage.metadata),
+                id=str(uuid.uuid4()),
+                fields=fields,  # type: ignore
+                responses=responses,
+                metadata=self._format_metadata_keys_for_argilla(passage.metadata),
             )
             records.append(record)
 
