@@ -14,6 +14,25 @@ get-concept id wikibase_config="":
 train id +OPTS="":
     uv run train --wikibase-id {{id}} {{OPTS}}
 
+# train multiple models and export their performance tables to CSV
+train-with-output-csv ids combined_name="" +OPTS="":
+    #!/bin/bash
+    set -e
+
+    # Train each model
+    for id in {{ids}}; do
+        echo "Training model for $id..."
+        uv run train --wikibase-id $id {{OPTS}}
+    done
+
+    # Fetch performance tables
+    echo "Fetching performance tables..."
+    if [ -n "{{combined_name}}" ]; then
+        uv run python scripts/fetch_performance_tables.py {{ids}} --combined-name {{combined_name}}
+    else
+        uv run python scripts/fetch_performance_tables.py {{ids}}
+    fi
+
 # evaluate a model for a specific wikibase ID
 evaluate id +OPTS="":
     uv run evaluate --wikibase-id {{id}} {{OPTS}}
@@ -73,11 +92,11 @@ sample id:
 
 # extend an existing dataset in argilla with additional passages for a specific wikibase ID
 extend-dataset id workspace:
-    uv run python scripts/extend_an_existing_dataset_in_argilla.py --wikibase-id {{id}} --workspace-name {{workspace}}
+    uv run python scripts/argilla/extend_existing_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
 
 # push a sampled set of passages to argilla for a specific wikibase ID
 push-to-argilla id workspace:
-    uv run python scripts/push_a_fresh_dataset_to_argilla.py --wikibase-id {{id}} --workspace-name {{workspace}}
+    uv run python scripts/push_new_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
 
 # generate an HTML report of classifier performance
 generate-report wikibase-ids:

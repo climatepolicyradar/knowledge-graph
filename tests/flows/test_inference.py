@@ -3,6 +3,7 @@ import os
 import random
 import string
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from io import BytesIO
@@ -25,6 +26,7 @@ from prefect.states import Completed, Running
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
     BatchInferenceResult,
+    FilterResult,
     Metadata,
     ParameterisedFlow,
     SingleDocumentInferenceResult,
@@ -34,10 +36,10 @@ from flows.inference import (
     did_inference_fail,
     document_passages,
     filter_document_batch,
+    filter_existing_inference_results,
     gather_successful_document_stems,
     get_existing_inference_results,
     get_inference_fault_metadata,
-    get_latest_ingest_documents,
     inference,
     inference_batch_of_documents_cpu,
     list_bucket_file_stems,
@@ -135,7 +137,6 @@ async def test_determine_file_stems(
 ):
     got = await determine_file_stems(
         config=test_config,
-        use_new_and_updated=False,
         requested_document_ids=doc_ids,
         current_bucket_file_stems=bucket_ids,
     )
@@ -149,7 +150,6 @@ async def test_determine_file_stems__error(
     with pytest.raises(ValueError):
         _ = await determine_file_stems(
             config=test_config,
-            use_new_and_updated=False,
             requested_document_ids=[
                 DocumentImportId("AF.document.002MMUCR.n0000"),
                 DocumentImportId("AF.document.AFRDG00038.n00002"),
@@ -158,6 +158,174 @@ async def test_determine_file_stems__error(
                 DocumentStem("CCLW.document.i00001313.n0000"),
                 DocumentStem("AF.document.002MMUCR.n0000"),
             ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_inference_with_document_ids_s3_path(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_async_bucket,
+    mock_async_bucket_multiple_sources,
+    mock_deployment,
+    mock_s3_async_client,
+):
+    """Test inference flow with document_ids_s3_path parameter."""
+    input_doc_ids = [
+        DocumentImportId(Path(doc).stem) for doc in mock_async_bucket_multiple_sources
+    ]
+    gef_doc_id, cpr_doc_id, sabin_doc_id = input_doc_ids
+
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="bvaw9xxm",
+        wandb_registry_version="v13",
+    )
+
+    s3_key: str = "test-document-ids.txt"
+    s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
+
+    file_content: str = json.dumps(input_doc_ids)
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=s3_key,
+        Body=file_content.encode("utf-8"),
+    )
+
+    batch_stems = [
+        DocumentStem(str(doc_id)) for doc_id in [gef_doc_id, cpr_doc_id, sabin_doc_id]
+    ]
+    state = Completed(
+        data=BatchInferenceResult(
+            batch_document_stems=batch_stems,
+            successful_document_stems=batch_stems,
+            classifier_spec=spec,
+        ),
+    )
+    with mock_deployment(state) as mock_inference_run_deployment:
+        # Run the inference flow with document_ids_s3_path
+        result = await inference(
+            classifier_specs=[spec],
+            document_ids_s3_path=s3_path,
+            config=test_config,
+        )
+
+        assert isinstance(result, set)
+        assert len(result) > 0
+        assert mock_inference_run_deployment.called
+
+
+@pytest.mark.asyncio
+async def test_inference_with_document_ids_s3_path_and_document_ids_error(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    """
+    Test that providing both document_ids and document_ids_s3_path raises an error.
+
+    Users must pick one input method - either provide document_ids directly or
+    provide a file path containing document IDs, but not both.
+    """
+    input_doc_ids = [
+        DocumentImportId("AF.document.002MMUCR.n0000"),
+        DocumentImportId("AF.document.AFRDG00038.n00002"),
+    ]
+
+    s3_key: str = "test-document-ids.txt"
+    s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
+
+    file_content: str = json.dumps(input_doc_ids)
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=s3_key,
+        Body=file_content.encode("utf-8"),
+    )
+
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="bvaw9xxm",
+        wandb_registry_version="v13",
+    )
+
+    # Verify that providing both parameters raises a ValueError
+    with pytest.raises(
+        ValueError,
+        match="`document_ids` and `document_ids_s3_path` are mutually exclusive.",
+    ) as exc_info:
+        await inference(
+            classifier_specs=[spec],
+            document_ids=input_doc_ids,
+            document_ids_s3_path=s3_path,
+            config=test_config,
+        )
+
+    # Verify the error message is clear about the conflict
+    error_message = str(exc_info.value).lower()
+    assert "document" in error_message or "mutually" in error_message
+
+
+@pytest.mark.asyncio
+async def test_inference_with_document_ids_s3_path_file_not_found(
+    mock_s3_async_client, mock_async_bucket, test_config
+):
+    """Test that providing a non-existent S3 file raises an error."""
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="bvaw9xxm",
+        wandb_registry_version="v13",
+    )
+
+    non_existent_s3_key: str = "non-existent-file.txt"
+    non_existent_s3_path: str = (
+        f"s3://{test_config.cache_bucket}/" + non_existent_s3_key
+    )
+
+    with pytest.raises(
+        (FileNotFoundError),
+        match="File not found: s3://test_bucket/non-existent-file.txt",
+    ):
+        await inference(
+            classifier_specs=[spec],
+            document_ids_s3_path=non_existent_s3_path,
+            config=test_config,
+        )
+
+
+@pytest.mark.asyncio
+async def test_inference_with_document_ids_s3_path_empty_file(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_async_bucket,
+    mock_deployment,
+    mock_s3_async_client,
+):
+    """Test inference with an empty document ID file."""
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="bvaw9xxm",
+        wandb_registry_version="v13",
+    )
+
+    s3_key: str = "empty-document-ids.txt"
+    s3_path: str = f"s3://{test_config.cache_bucket}/" + s3_key
+
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=s3_key,
+        Body="".encode("utf-8"),
+    )
+
+    with pytest.raises(
+        (ValueError),
+        match="No document IDs found in file: s3://test_bucket/empty-document-ids.txt",
+    ):
+        await inference(
+            classifier_specs=[spec],
+            document_ids_s3_path=s3_path,
+            config=test_config,
         )
 
 
@@ -367,6 +535,17 @@ async def test_inference_with_dont_run_on_filter(
         ),
     )
     with mock_deployment(state) as mock_inference_run_deployment:
+        from prefect.client.orchestration import get_client
+
+        # Clean Up Prior Artifacts
+        async with get_client() as client:
+            artifacts = await client.read_artifacts()
+            for artifact in artifacts:
+                try:
+                    await client.delete_artifact(artifact.id)
+                except Exception:
+                    pass
+
         # run the inference flow
         _ = await inference(
             classifier_specs=[spec],
@@ -377,8 +556,6 @@ async def test_inference_with_dont_run_on_filter(
         mock_inference_run_deployment.call_args.kwargs["parameters"]["batch"] == [
             gef_doc_id
         ]
-
-        from prefect.client.orchestration import get_client
 
         async with get_client() as client:
             artifacts = await client.read_artifacts()
@@ -484,28 +661,6 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
         assert type(inference_result) is set
 
         assert inference_result == set(input_doc_ids)
-
-
-@pytest.mark.asyncio
-async def test_get_latest_ingest_documents(
-    test_config, mock_bucket_new_and_updated_documents_json
-):
-    _, latest_docs = mock_bucket_new_and_updated_documents_json
-    doc_ids = await get_latest_ingest_documents(test_config)
-    assert set(doc_ids) == latest_docs
-
-
-@pytest.mark.asyncio
-async def test_get_latest_ingest_documents_no_latest(
-    test_config,
-    # Setup the empty bucket
-    mock_async_bucket,
-):
-    with pytest.raises(
-        ValueError,
-        match="failed to find",
-    ):
-        await get_latest_ingest_documents(test_config)
 
 
 @pytest.mark.asyncio
@@ -1786,6 +1941,137 @@ def test_process_single_document_inference():
 
 
 @pytest.mark.asyncio
+async def test_filter_existing_inference_results_no_existing_results(
+    mock_async_bucket,
+    mock_s3_async_client,
+    test_config,
+) -> None:
+    """
+    Test that documents are processed when no inference results exist.
+
+    When a document has no existing inference results, it should be marked
+    for processing regardless of the source document's timestamp.
+    """
+    document_stem = DocumentStem("CCLW.executive.1.1")
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+    source_key = f"{test_config.inference_document_source_prefix}{document_stem}.json"
+
+    # Create source document
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=source_key,
+        Body=b'{"test": "data"}',
+    )
+
+    result = await filter_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec,
+        filter_result=FilterResult(accepted=[document_stem], removed=[]),
+    )
+
+    assert result == ([document_stem], set(), 0)
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_inference_results_up_to_date(
+    mock_async_bucket,
+    mock_s3_async_client,
+    test_config,
+) -> None:
+    """
+    Test that documents are skipped when inference results are up-to-date.
+
+    When inference results exist and are newer than the source document,
+    the document should be skipped from processing.
+    """
+    document_stem = DocumentStem("CCLW.executive.1.1")
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+    source_key = f"{test_config.inference_document_source_prefix}{document_stem}.json"
+    result_key = (
+        f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/"
+        f"{classifier_spec.classifier_id}/{document_stem}.json"
+    )
+
+    # Create source document first
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=source_key,
+        Body=b'{"test": "data"}',
+    )
+
+    # Create inference result after source (result is newer, so up-to-date)
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=result_key,
+        Body=b'{"test": "data"}',
+    )
+
+    result = await filter_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec,
+        filter_result=FilterResult(accepted=[document_stem], removed=[]),
+    )
+
+    assert result == ([], {document_stem}, 1)
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_inference_results_out_of_date(
+    mock_async_bucket,
+    mock_s3_async_client,
+    test_config,
+) -> None:
+    """
+    Test that documents are reprocessed when inference results are out-of-date.
+
+    When the source document is newer than existing inference results,
+    the document should be marked for reprocessing.
+    """
+    document_stem = DocumentStem("CCLW.executive.1.1")
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+    source_key = f"{test_config.inference_document_source_prefix}{document_stem}.json"
+    result_key = (
+        f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/"
+        f"{classifier_spec.classifier_id}/{document_stem}.json"
+    )
+
+    # Create inference result first (older)
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=result_key,
+        Body=b'{"test": "data"}',
+    )
+
+    # Wait to ensure timestamp difference, then create source document (newer)
+    time.sleep(2)
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=source_key,
+        Body=b'{"test": "data"}',
+    )
+
+    result = await filter_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec,
+        filter_result=FilterResult(accepted=[document_stem], removed=[]),
+    )
+
+    assert result == ([document_stem], set(), 1)
+
+
+@pytest.mark.asyncio
 async def test_get_existing_inference_results_empty(
     test_config,
     mock_async_bucket,
@@ -1812,7 +2098,7 @@ async def test_get_existing_inference_results_empty(
         classifier_spec=classifier_spec,
     )
 
-    assert existing == set()
+    assert existing == dict()
 
 
 @pytest.mark.asyncio
@@ -1847,7 +2133,8 @@ async def test_get_existing_inference_results_with_results(
         classifier_spec=classifier_spec,
     )
 
-    assert existing == set(documents)
+    assert set(existing.keys()) == set(documents)
+    assert all([isinstance(i, datetime) for i in existing.values()])
 
 
 @pytest.mark.asyncio
@@ -1893,8 +2180,8 @@ async def test_get_existing_inference_results_different_classifiers(
         classifier_spec=classifier_spec_2,
     )
 
-    assert existing_1 == {doc1}
-    assert existing_2 == {doc2}
+    assert set(existing_1.keys()) == {doc1}
+    assert set(existing_2.keys()) == {doc2}
 
 
 @pytest.mark.asyncio

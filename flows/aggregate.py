@@ -36,6 +36,7 @@ from flows.inference import (
 )
 from flows.utils import (
     DocumentStem,
+    Fault,
     ParameterisedFlow,
     RunOutputIdentifier,
     S3Uri,
@@ -540,7 +541,7 @@ async def aggregate_batch_of_documents(
     config_json: dict[str, Any],
     classifier_specs: Sequence[ClassifierSpec],
     run_output_identifier: RunOutputIdentifier,
-) -> AggregateResult:
+) -> AggregateResult | Fault:
     """
     Aggregate the inference results for the given document ids.
 
@@ -597,9 +598,10 @@ async def aggregate_batch_of_documents(
     aggregate_result = AggregateResult(run_output_identifier=run_output_identifier)
 
     if failures:
-        aggregate_result.errors = (
-            f"Saw {len(failures)} failures when aggregating inference results"
-        )
+        message = f"Saw {len(failures)} failures when aggregating inference results"
+        logger.error(message)
+        aggregate_result.errors = message
+        raise Fault(msg=message, metadata={}, data=aggregate_result)
 
     return aggregate_result
 
@@ -882,7 +884,7 @@ async def aggregate(
     n_documents_in_batch: PositiveInt = DEFAULT_N_DOCUMENTS_IN_BATCH,
     n_batches: PositiveInt = DEFAULT_N_BATCHES,
     classifier_specs: Sequence[ClassifierSpec] | None = None,
-) -> AggregateResult:
+) -> AggregateResult | Fault:
     """
     Aggregate the inference results for the given document ids.
 
@@ -966,8 +968,9 @@ async def aggregate(
     aggregate_result = AggregateResult(run_output_identifier=run_output_identifier)
 
     if failures:
-        aggregate_result.errors = (
-            f"{len(failures)}/{len(failures) + len(successes)} failed"
-        )
+        message = f"{len(failures)}/{len(failures) + len(successes)} failed."
+        logger.error(message)
+        aggregate_result.errors = message
+        raise Fault(msg=message, metadata={}, data=aggregate_result)
 
     return aggregate_result

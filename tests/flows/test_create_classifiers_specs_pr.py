@@ -1,4 +1,3 @@
-import os
 import subprocess
 import tempfile
 from datetime import timedelta
@@ -39,6 +38,7 @@ def test_run_subprocess_with_error_logging__success():
             capture_output=True,
             text=True,
             check=True,
+            input=None,
         )
 
 
@@ -186,17 +186,48 @@ def test_run_subprocess_with_error_logging__check_false():
             capture_output=True,
             text=True,
             check=False,
+            input=None,
+        )
+
+
+def test_run_subprocess_with_error_logging__success_with_input():
+    """Test _run_subprocess_with_error_logging with check=False doesn't raise."""
+    with patch("subprocess.run") as mock_run:
+        mock_result = Mock(returncode=0, stdout="output", stderr="")
+        mock_run.return_value = mock_result
+
+        result = _run_subprocess_with_error_logging(
+            cmd=["grep", "hello"], cwd=Path("/tmp"), input="testing hello world"
+        )
+
+        assert result == mock_result
+        mock_run.assert_called_once_with(
+            ["grep", "hello"],
+            cwd=Path("/tmp"),
+            capture_output=True,
+            text=True,
+            check=True,
+            input="testing hello world",
         )
 
 
 @pytest.mark.asyncio
 async def test_commit_and_create_pr__with_changes():
     """Test commit_and_create_pr when there are changes to commit."""
-    with patch("subprocess.run") as mock_run:
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("shutil.copy") as mock_copy,
+        patch("os.chdir") as mock_chdir,
+    ):
         # Create mock result objects with proper stdout attributes
-        gh_auth_result = Mock()
-        gh_auth_result.stdout = ""
-        gh_auth_result.returncode = 0
+        git_success = Mock()
+        git_success.stdout = ""
+        git_success.returncode = 0
+
+        # Mock shutil.copy to do nothing
+        mock_copy.return_value = None
+        # Mock os.chdir to do nothing
+        mock_chdir.return_value = None
 
         gh_pr_result = Mock()
         gh_pr_result.stdout = (
@@ -206,7 +237,9 @@ async def test_commit_and_create_pr__with_changes():
 
         # Mock subprocess.run for gh commands only
         mock_run.side_effect = [
-            gh_auth_result,  # gh auth setup-git
+            git_success,  # git clone
+            git_success,  # git auth login
+            git_success,  # gh auth setup-git
             gh_pr_result,  # gh pr create
         ]
 
@@ -220,6 +253,7 @@ async def test_commit_and_create_pr__with_changes():
             pr_title="Update testfile",
             pr_body="Automated update",
             git=mock_git,
+            github_token=SecretStr("mock-token"),
             repo="climatepolicyradar/knowledge-graph",
             base_branch="main",
             repo_path=repo_path_mock,
@@ -237,22 +271,40 @@ async def test_commit_and_create_pr__with_changes():
 
 
 @pytest.mark.asyncio
-async def test_commit_and_create_pr__no_changes():
+async def test_commit_and_create_pr__no_changes(temp_git_repo):
     """Test commit_and_create_pr when there are no changes."""
-    repo_path_mock = Mock()
-    mock_git = Mock()
-    mock_git.status_porcelain.return_value = ""
+    with (
+        patch("subprocess.run") as mock_run,
+        patch("shutil.copy") as mock_copy,
+        patch("os.chdir") as mock_chdir,
+    ):
+        # Mock subprocess.run for git clone, gh auth login, gh auth setup-git, gh pr create
+        git_success = Mock()
+        git_success.stdout = ""
+        git_success.returncode = 0
 
-    pr_number = await commit_and_create_pr(
-        file_path="testfile",
-        commit_message="Update testfile",
-        pr_title="Update testfile",
-        pr_body="Automated update",
-        git=mock_git,
-        repo="climatepolicyradar/knowledge-graph",
-        base_branch="main",
-        repo_path=repo_path_mock,
-    )
+        # Mock shutil.copy to do nothing
+        mock_copy.return_value = None
+        # Mock os.chdir to do nothing
+        mock_chdir.return_value = None
+
+        mock_run.return_value = git_success
+
+        repo_path_mock = Mock()
+        mock_git = Mock()
+        mock_git.status_porcelain.return_value = ""
+
+        pr_number = await commit_and_create_pr(
+            file_path="testfile",
+            commit_message="Update testfile",
+            pr_title="Update testfile",
+            pr_body="Automated update",
+            git=mock_git,
+            github_token=SecretStr("mock-token"),
+            repo="climatepolicyradar/knowledge-graph",
+            base_branch="main",
+            repo_path=repo_path_mock,
+        )
 
     assert pr_number is None
     # Verify status was checked but no other git operations happened
@@ -269,8 +321,9 @@ async def test_enable_auto_merge():
     """Test enabling auto-merge on a PR."""
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = Mock()
+        pr_number = 123
         result = await enable_auto_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             merge_method="squash",
         )
@@ -292,8 +345,9 @@ async def test_enable_auto_merge():
             capture_output=True,
             text=True,
             check=True,
+            input=None,
         )
-        assert result == Ok(None)
+        assert result == Ok(pr_number)
 
 
 @pytest.mark.asyncio
@@ -301,8 +355,9 @@ async def test_enable_auto_merge__exception():
     """Test enabling auto-merge on a PR where exception is raised."""
     with patch("subprocess.run") as mock_run:
         mock_run.side_effect = Exception("GitHub CLI error")
+        pr_number = 123
         result = await enable_auto_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             merge_method="squash",
         )
@@ -324,11 +379,12 @@ async def test_enable_auto_merge__exception():
             capture_output=True,
             text=True,
             check=True,
+            input=None,
         )
         assert is_err(result)
         error = unwrap_err(result)
         assert error.msg == "Failed to enable auto-merge for PR."
-        assert error.metadata.get("pr_number") == 123
+        assert error.metadata.get("pr_number") == pr_number
 
 
 @pytest.mark.asyncio
@@ -346,8 +402,9 @@ async def test_wait_for_pr_merge():
             ),  # Second poll
         ]
 
+        pr_number = 123
         result = await wait_for_pr_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             timeout=timedelta(seconds=1),
             poll_interval=timedelta(milliseconds=100),
@@ -368,7 +425,7 @@ async def test_wait_for_pr_merge():
             capture_output=True,
             text=True,
         )
-        assert result == Ok(None)
+        assert result == Ok(pr_number)
 
 
 @pytest.mark.asyncio
@@ -404,8 +461,9 @@ async def test_wait_for_pr_merge__closed():
             stdout='{"state": "CLOSED", "mergedAt": null}', returncode=0
         )
 
+        pr_number = 123
         result = await wait_for_pr_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             timeout=timedelta(minutes=1),
             poll_interval=timedelta(milliseconds=100),
@@ -413,7 +471,7 @@ async def test_wait_for_pr_merge__closed():
 
         assert is_err(result)
         assert "RuntimeError: PR was closed without merging." in unwrap_err(result).msg
-        assert unwrap_err(result).metadata.get("pr_number") == 123
+        assert unwrap_err(result).metadata.get("pr_number") == pr_number
         assert unwrap_err(result).metadata.get("pr_state") == "CLOSED"
 
 
@@ -423,12 +481,13 @@ async def test_wait_for_pr_merge__failed_to_get_pr_timeout():
     with patch("subprocess.run") as mock_run:
         # Mock subprocess.run for gh pr view
         # Returncode 1 simulates failure to get PR info until timeout
+        pr_number = 123
         mock_run.return_value = Mock(
             stdout='{"state": "OPEN", "mergedAt": null}', returncode=1
         )
 
         result = await wait_for_pr_merge(
-            pr_number=123,
+            pr_number=pr_number,
             repo="climatepolicyradar/knowledge-graph",
             timeout=timedelta(milliseconds=100),
             poll_interval=timedelta(milliseconds=200),
@@ -439,7 +498,7 @@ async def test_wait_for_pr_merge__failed_to_get_pr_timeout():
             "TimeoutError: PR did not merge within the timeout period."
             in unwrap_err(result).msg
         )
-        assert unwrap_err(result).metadata.get("pr_number") == 123
+        assert unwrap_err(result).metadata.get("pr_number") == pr_number
 
 
 @pytest.mark.asyncio
@@ -482,8 +541,7 @@ async def test_create_and_merge_pr():
             timeout=timedelta(minutes=30),
             poll_interval=timedelta(seconds=30),
         )
-        assert os.environ["GITHUB_TOKEN"] == "mock-token"
-        assert all(is_ok(r) for r in results)
+        assert is_ok(results)
 
 
 @pytest.mark.asyncio
@@ -513,7 +571,7 @@ async def test_create_and_merge_pr__no_automerge():
         mock_enable_merge.assert_not_called()
         mock_wait_merge.assert_not_called()
 
-        assert all(is_ok(r) for r in results)
+        assert is_ok(results)
 
 
 @pytest.mark.asyncio
@@ -550,9 +608,9 @@ async def test_create_and_merge_pr__automerge_failure():
         )
         mock_wait_merge.assert_not_called()
 
-        assert results[0] == Ok(123)
-        errors = [r._error for r in results if isinstance(r, Err)]
-        assert any("Test error" in e.msg for e in errors)
+        errors = unwrap_err(results)
+        assert is_err(results)
+        assert "Test error" in errors.msg
 
 
 def test_extract_pr_details_valid_url():
@@ -586,36 +644,12 @@ def test_extract_pr_details_empty_string():
         extract_pr_details(result_str)
 
 
-@pytest.mark.asyncio
-async def test_create_and_merge_pr__github_token_exception():
-    """Test the workflow when setting GitHub token raises an exception."""
-    with patch("flows.create_classifiers_specs_pr.commit_and_create_pr") as mock_commit:
-        # Call the main function with a SecretStr that raises an exception
-        github_token_mock = Mock(SecretStr("mock-token"))
-        github_token_mock.get_secret_value.side_effect = Exception("Token error")
-
-        results = await create_and_merge_pr(
-            spec_file="testfile",
-            aws_env=AwsEnv.staging,
-            flow_run_name="Test Run",
-            flow_run_url="http://example.com",
-            github_token=github_token_mock,
-            auto_merge=True,
-        )
-
-        mock_commit.assert_not_called()
-
-        errors = [r._error for r in results if isinstance(r, Err)]
-        assert any(
-            "Failed to set GitHub token environment var." in e.msg for e in errors
-        )
-
-
 @pytest.fixture
 def temp_git_repo():
     """Create a temporary git repository for testing."""
     with tempfile.TemporaryDirectory() as tmpdir:
-        repo_path = Path(tmpdir)
+        repo_path = Path(tmpdir) / "knowledge-graph"
+        repo_path.mkdir(parents=True, exist_ok=True)
 
         # Initialise git repo
         subprocess.run(

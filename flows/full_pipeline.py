@@ -69,7 +69,7 @@ async def create_full_pipeline_summary_artifact(
 async def full_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
-    inference_use_new_and_updated: bool = False,
+    document_ids_s3_path: str | None = None,
     inference_batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
     config: Config | None = None,
@@ -79,6 +79,7 @@ async def full_pipeline(
     indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
+    enable_v2_concepts: bool | None = None,
 ) -> None:
     """
     Full KG pipeline.
@@ -91,8 +92,8 @@ async def full_pipeline(
     Args:
         classifier_specs: Classifier specifications to use for inference.
         document_ids: Specific document IDs to process. If None, processes all.
+        document_ids_s3_path: An S3 path string (e.g., "s3://bucket/key") that contains document ids to process.
         config: Configuration for the inference, aggregation and index flows. If None, creates default.
-        inference_use_new_and_updated: Whether to process only new/updated documents.
         inference_batch_size: Number of documents to process in each batch.
         inference_classifier_concurrency_limit: Maximum concurrent classifiers.
         aggregation_n_documents_in_batch: Number of documents per aggregation batch.
@@ -101,6 +102,7 @@ async def full_pipeline(
         indexer_concurrency_limit: Maximum concurrent indexers.
         indexer_document_passages_concurrency_limit: Max concurrent passage indexers.
         indexer_max_vespa_connections: Maximum Vespa connections for indexing.
+        enable_v2_concepts: Whether to index them into Vespa or not. If set to boolean value will be inferred.
 
     Returns:
         None
@@ -120,7 +122,7 @@ async def full_pipeline(
     inference_run: State = await inference(
         classifier_specs=classifier_specs,
         document_ids=document_ids,
-        use_new_and_updated=inference_use_new_and_updated,
+        document_ids_s3_path=document_ids_s3_path,
         config=config,
         batch_size=inference_batch_size,
         classifier_concurrency_limit=inference_classifier_concurrency_limit,
@@ -177,7 +179,7 @@ async def full_pipeline(
         case _:
             raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
-    aggregation_result: State = await aggregate(
+    aggregation_run: State = await aggregate(
         run_output_identifier=run_output_identifier,
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
@@ -189,19 +191,20 @@ async def full_pipeline(
         else None,
     )
 
-    if isinstance(aggregation_result, Exception):
-        logger.error("Aggregation failed.")
-        raise aggregation_result
+    aggregation_result_raw: (
+        AggregateResult | Fault | Exception
+    ) = await aggregation_run.result(raise_on_failure=False)
 
-    agg_result = AggregateResult(run_output_identifier=run_output_identifier)
-
-    if isinstance(aggregation_result, State):
-        agg_result: AggregateResult = await aggregation_result.result(
-            raise_on_failure=False
-        )
-        run_output_identifier = agg_result.run_output_identifier
-        if agg_result.errors is not None:
-            logger.error(f"Aggregation errors occurred: {agg_result.errors}")
+    match aggregation_result_raw:
+        case Exception() if not isinstance(aggregation_result_raw, Fault):
+            logger.error("Aggregation failed.")
+            raise aggregation_result_raw
+        case Fault():
+            pass  # Raise at the end of the process.
+        case AggregateResult():
+            pass
+        case _:
+            raise ValueError(f"unexpected result {type(aggregation_result_raw)}")
 
     logger.info(
         f"Aggregation complete. Run output identifier is: {run_output_identifier}"
@@ -214,12 +217,12 @@ async def full_pipeline(
         indexer_concurrency_limit=indexer_concurrency_limit,
         indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
         indexer_max_vespa_connections=indexer_max_vespa_connections,
+        enable_v2_concepts=enable_v2_concepts,
         return_state=True,
     )
     indexing_result: None | Exception = await indexing_run.result(
         raise_on_failure=False
     )
-
     if isinstance(indexing_result, Exception):
         logger.error("Indexing failed.")
         raise indexing_result
@@ -229,8 +232,11 @@ async def full_pipeline(
         successful_document_stems=successful_document_stems,
     )
 
-    logger.info("Full pipeline run completed!")
+    if isinstance(inference_result_raw, Fault):
+        logger.error("Inference failed.")
+        raise inference_result_raw
+    if isinstance(aggregation_result_raw, Fault):
+        logger.error("Aggregation failed.")
+        raise aggregation_result_raw
 
-    # mark full run as failed if aggregation errors occurred
-    if agg_result.errors is not None:
-        raise ValueError(agg_result)
+    logger.info("Full pipeline run completed successfully!")
