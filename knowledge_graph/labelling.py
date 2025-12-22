@@ -152,28 +152,28 @@ class ArgillaSession:
 
     def get_dataset(
         self,
-        wikibase_id: WikibaseID | str,
+        dataset_name: WikibaseID | str,
         workspace: str | None = None,
     ) -> Dataset:
         """
-        Get a dataset by its Wikibase ID (ie its name) in the given workspace.
+        Get a dataset by its name (or Wikibase ID of concept) in the given workspace.
 
-        :param wikibase_id: Wikibase ID of the dataset to retrieve
+        :param dataset_name: name of dataset to retrieve
         :param workspace: Name of the workspace to get the dataset from. If not
             provided, uses the session's default_workspace.
         :return: The requested Dataset object
         :raises ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
-        logger.info("Fetching dataset '%s'", wikibase_id)
+        logger.info("Fetching dataset '%s'", dataset_name)
         workspace_object = self.get_workspace(workspace)
         if dataset_object := self.client.datasets(
-            name=str(wikibase_id), workspace=workspace_object
+            name=str(dataset_name), workspace=workspace_object
         ):
             logger.debug("Successfully retrieved dataset: %s", dataset_object.name)
             return dataset_object
         else:
-            logger.debug("Couldn't find dataset: %s", wikibase_id)
-            raise ResourceDoesNotExistError("Dataset", str(wikibase_id))
+            logger.debug("Couldn't find dataset: %s", dataset_name)
+            raise ResourceDoesNotExistError("Dataset", str(dataset_name))
 
     def get_all_datasets(self, workspace: str | None = None) -> list[Dataset]:
         """
@@ -272,7 +272,7 @@ class ArgillaSession:
             raise ValueError("One of new_workspace or new_name must be specified.")
 
         existing_dataset = self.get_dataset(
-            wikibase_id=dataset_name,
+            dataset_name=dataset_name,
             workspace=workspace,
         )
         existing_records = list(existing_dataset.records)
