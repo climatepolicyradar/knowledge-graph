@@ -86,9 +86,10 @@ async def test_full_pipeline_no_config_provided(
                 run_output_identifier=mock_run_output_identifier_str, errors=None
             ),
         )
-        mock_indexing.return_value = State(
-            type=StateType.COMPLETED, data={"message": "Indexing complete."}
-        )
+        # Index returns None on success, need to mock the result() method
+        mock_indexing_state = AsyncMock()
+        mock_indexing_state.result = AsyncMock(return_value=None)
+        mock_indexing.return_value = mock_indexing_state
 
         # Run the flow
         await full_pipeline()
@@ -191,9 +192,10 @@ async def test_full_pipeline_with_full_config(
                 run_output_identifier=mock_run_output_identifier_str, errors=None
             ),
         )
-        mock_indexing.return_value = State(
-            type=StateType.COMPLETED, data={"message": "Indexing complete."}
-        )
+        # Index returns None on success, need to mock the result() method
+        mock_indexing_state = AsyncMock()
+        mock_indexing_state.result = AsyncMock(return_value=None)
+        mock_indexing.return_value = mock_indexing_state
 
         # Run the flow
         await full_pipeline(
@@ -308,9 +310,10 @@ async def test_full_pipeline_with_inference_failure(
                 run_output_identifier=mock_run_output_identifier_str, errors=None
             ),
         )
-        mock_indexing.return_value = State(
-            type=StateType.COMPLETED, data={"message": "Indexing complete."}
-        )
+        # Index returns None on success, need to mock the result() method
+        mock_indexing_state = AsyncMock()
+        mock_indexing_state.result = AsyncMock(return_value=None)
+        mock_indexing.return_value = mock_indexing_state
 
         # Run the flow expecting aggregation and indexing to run on successful documents.
         with pytest.raises(Fault, match="Some inference batches had failures!"):
@@ -441,9 +444,10 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
             ),
         )
 
-        mock_indexing.return_value = State(
-            type=StateType.COMPLETED, data={"message": "Indexing complete."}
-        )
+        # Index returns None on success, need to mock the result() method
+        mock_indexing_state = AsyncMock()
+        mock_indexing_state.result = AsyncMock(return_value=None)
+        mock_indexing.return_value = mock_indexing_state
 
         # Run the flow and expect an exception to be returned
         with pytest.raises(
@@ -591,9 +595,10 @@ async def test_full_pipeline_with_document_ids_s3_path(
                 run_output_identifier=mock_run_output_identifier_str, errors=None
             ),
         )
-        mock_indexing.return_value = State(
-            type=StateType.COMPLETED, data={"message": "Indexing complete."}
-        )
+        # Index returns None on success, need to mock the result() method
+        mock_indexing_state = AsyncMock()
+        mock_indexing_state.result = AsyncMock(return_value=None)
+        mock_indexing.return_value = mock_indexing_state
 
         # Run the flow with document_ids_s3_path
         await full_pipeline(
@@ -621,3 +626,99 @@ async def test_full_pipeline_with_document_ids_s3_path(
 
         mock_aggregate.assert_called_once()
         mock_indexing.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_full_pipeline_uses_aggregation_run_output_identifier_for_indexing(
+    test_config,
+    mock_run_output_identifier_str,
+):
+    """
+    Test that index stage receives run_output_identifier from aggregation, not inference.
+
+    This test verifies the fix for the bug where index was receiving the inference
+    run_output_identifier instead of the aggregation run_output_identifier, causing
+    it to look for documents in the wrong S3 location.
+    """
+
+    # Create distinct identifiers for each stage
+    inference_run_id = "2025-12-17T14:49-inference-id"
+    aggregation_run_id = "2025-12-17T16:12-aggregation-id"
+
+    with (
+        patch(
+            "flows.full_pipeline.inference",
+            new_callable=AsyncMock,
+        ) as mock_inference,
+        patch(
+            "flows.full_pipeline.aggregate",
+            new_callable=AsyncMock,
+        ) as mock_aggregate,
+        patch(
+            "flows.full_pipeline.index",
+            new_callable=AsyncMock,
+        ) as mock_indexing,
+        patch(
+            "flows.full_pipeline.get_async_session",
+        ) as mock_get_session,
+    ):
+        # Mock S3 loading for document stems from inference
+        mock_s3_client = AsyncMock()
+        mock_response = {
+            "Body": AsyncMock(
+                read=AsyncMock(
+                    return_value=b'{"successful_document_stems": ["CCLW.executive.1.1", "CCLW.executive.2.2"]}'
+                )
+            )
+        }
+        mock_s3_client.get_object = AsyncMock(return_value=mock_response)
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
+        mock_session = Mock()
+        mock_session.client = Mock(return_value=mock_client_context)
+        mock_get_session.return_value = mock_session
+
+        # Create mock State objects with properly mocked .result() methods
+        # Inference returns its own run_output_identifier
+        mock_inference_state = AsyncMock()
+        mock_inference_state.result = AsyncMock(return_value=inference_run_id)
+        mock_inference.return_value = mock_inference_state
+
+        # Aggregation returns a DIFFERENT run_output_identifier (as it does in production)
+        aggregation_result = AggregateResult(
+            run_output_identifier=aggregation_run_id,  # Different from inference!
+            errors=None,
+        )
+        mock_aggregate_state = AsyncMock()
+        mock_aggregate_state.result = AsyncMock(return_value=aggregation_result)
+        mock_aggregate.return_value = mock_aggregate_state
+
+        # Index returns None on success
+        mock_indexing_state = AsyncMock()
+        mock_indexing_state.result = AsyncMock(return_value=None)
+        mock_indexing.return_value = mock_indexing_state
+
+        # Run the flow
+        await full_pipeline(config=test_config)
+
+        # Verify that aggregation was called with inference's run_output_identifier
+        aggregate_call_args = mock_aggregate.call_args
+        assert aggregate_call_args.kwargs["run_output_identifier"] == inference_run_id
+
+        # Verify that index was called with AGGREGATION's run_output_identifier
+        # NOT inference's run_output_identifier
+        index_call_args = mock_indexing.call_args
+        assert index_call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
+            aggregation_run_id
+        ), (
+            f"Index should use aggregation's run_output_identifier ({aggregation_run_id}), "
+            f"not inference's ({inference_run_id})"
+        )
+
+        # This is the bug we're testing for:
+        #
+        # If this assertion fails, index is looking in the wrong S3 location
+        assert index_call_args.kwargs["run_output_identifier"] != RunOutputIdentifier(
+            inference_run_id
+        ), "Index should NOT use inference's run_output_identifier"
