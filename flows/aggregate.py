@@ -1,9 +1,9 @@
+import asyncio
 import json
 import os
 import subprocess
 from collections.abc import AsyncGenerator, Sequence
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Optional, TypeAlias, TypeVar, Union
 
 import prefect.tasks as tasks
@@ -12,14 +12,18 @@ from botocore.exceptions import ClientError
 from cpr_sdk.models.search import Passage as VespaPassage
 from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow, task
-from prefect.artifacts import create_table_artifact
+from prefect.artifacts import (
+    create_progress_artifact,
+    create_table_artifact,
+    update_progress_artifact,
+)
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext, TaskRunContext, get_run_context
 from prefect.exceptions import MissingContextError
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
-from pydantic import BaseModel, PositiveInt, ValidationError
+from pydantic import BaseModel, PositiveInt, ValidationError, field_validator
 from types_aiobotocore_s3.client import S3Client
 
 from flows.boundary import (
@@ -41,6 +45,7 @@ from flows.utils import (
     DocumentStem,
     Fault,
     ParameterisedFlow,
+    Percentage,
     RunOutputIdentifier,
     S3Uri,
     SlackNotify,
@@ -74,6 +79,51 @@ SpecStr: TypeAlias = str
 
 # A serialised Vespa concept, see cpr_sdk.models.search.Concept
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
+
+
+class AggregationMetadata(BaseModel):
+    """Metadata for an aggregation result, stored as a sidecar file."""
+
+    created_at: datetime
+    document_stem: DocumentStem
+    classifier_specs: list[ClassifierSpec]
+
+    # Validate datetime is timezone-aware
+    @field_validator("created_at")
+    @classmethod
+    def validate_timezone(cls, v: datetime) -> datetime:
+        """Ensure datetime is timezone-aware, defaulting to UTC if not."""
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
+
+
+def are_classifier_specs_equal(
+    specs_a: Sequence[ClassifierSpec],
+    specs_b: Sequence[ClassifierSpec],
+) -> bool:
+    """
+    Compare two sequences of classifier specs for equality.
+
+    Specs are compared by wikibase_id, classifier_id, and concept_id.
+    Order doesn't matter - specs are sorted before comparison.
+    """
+    if len(specs_a) != len(specs_b):
+        return False
+
+    # Sort by wikibase_id and classifier_id for consistent comparison
+    def _sort_key(spec: ClassifierSpec) -> tuple[str, str]:
+        return spec.wikibase_id, spec.classifier_id
+
+    sorted_a = sorted(specs_a, key=_sort_key)
+    sorted_b = sorted(specs_b, key=_sort_key)
+
+    return all(
+        a.wikibase_id == b.wikibase_id
+        and a.classifier_id == b.classifier_id
+        and a.concept_id == b.concept_id
+        for a, b in zip(sorted_a, sorted_b, strict=True)
+    )
 
 
 def get_classifier_spec_last_modified_date(aws_env: AwsEnv) -> datetime | None:
@@ -113,14 +163,24 @@ def get_classifier_spec_last_modified_date(aws_env: AwsEnv) -> datetime | None:
         return None
 
 
-async def get_existing_aggregation_results(
+async def get_existing_aggregation_metadata(
     config: Config,
-) -> dict[DocumentStem, datetime]:
+    document_stems: Sequence[DocumentStem],
+    batch_size: int = 100,
+) -> dict[DocumentStem, AggregationMetadata | Exception | None]:
     """
-    Get document stems that have aggregation results.
+    Fetch metadata files from S3 for specific document stems.
 
-    Checks the 'latest' folder which contains the most recent aggregation
-    for each document regardless of which run produced it.
+    Args:
+        config: The configuration object
+        document_stems: List of document stems to fetch metadata for
+        batch_size: Size of batches for concurrent S3 fetches
+
+    Returns:
+        Dictionary mapping document stems to:
+        - AggregationMetadata: successfully fetched and parsed metadata
+        - Exception: file exists but error occurred reading/parsing
+        - None: file doesn't exist (NoSuchKey)
     """
     logger = get_logger()
 
@@ -131,7 +191,7 @@ async def get_existing_aggregation_results(
     )
 
     logger.debug(
-        f"checking for existing aggregation results at s3://{config.cache_bucket}/{prefix}"
+        f"checking for existing aggregation metadata at `s3://{config.cache_bucket}/{prefix}`"
     )
 
     session = get_async_session(
@@ -139,113 +199,146 @@ async def get_existing_aggregation_results(
         aws_env=config.aws_env,
     )
 
+    metadata: dict[DocumentStem, AggregationMetadata | Exception | None] = {}
+
     async with session.client("s3") as s3_client:
-        paginator = s3_client.get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(
-            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-            Prefix=prefix,
+
+        async def fetch_metadata(
+            stem: DocumentStem,
+        ) -> tuple[DocumentStem, AggregationMetadata | Exception | None] | None:
+            """
+            Fetch metadata for a single document stem.
+
+            Returns:
+            - (stem, metadata) if file exists and is successfully parsed
+            - (stem, exception) if file exists but error occurred
+            - None if file doesn't exist (NoSuchKey)
+            """
+            key = os.path.join(prefix, f"{stem}.metadata.json")
+            try:
+                response = await s3_client.get_object(
+                    Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+                    Key=key,
+                )
+                content = await response["Body"].read()  # pyright: ignore[reportUnknownMemberType]
+                return stem, AggregationMetadata.model_validate_json(content)
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                if error_code == "NoSuchKey":
+                    # Metadata file doesn't exist - don't include in results
+                    logger.debug(f"no metadata found for {stem}")
+                    return None
+                else:
+                    # File exists but couldn't be read - include exception
+                    logger.warning(f"failed to read metadata for {stem}: {e}")
+                    return stem, e
+            except Exception as e:
+                # File exists but couldn't be read - include exception
+                logger.warning(f"failed to read metadata for {stem}: {e}")
+                return stem, e
+
+        # Fetch metadata files in batches to avoid overwhelming S3
+        batches = list(iterate_batch(document_stems, batch_size=batch_size))
+
+        logger.debug(
+            f"fetching metadata for {len(document_stems)} document stems in {len(batches)} batches"
         )
 
-        existing_aggregation_results: dict[DocumentStem, datetime] = dict()
-        async for page in page_iterator:
-            if "Contents" in page:
-                for obj in page["Contents"]:  # pyright: ignore[reportUnknownVariableType]
-                    key: str = obj["Key"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
-                    last_modified: datetime = obj["LastModified"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+        progress_artifact_id = await create_progress_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+            progress=0.0,
+            key=f"metadata-fetch-progress-{generate_slug(2)}",
+            description=f"Fetching metadata for {len(document_stems)} documents...",
+        )
 
-                    # Extract stem from filename, skipping metadata file if present
-                    filename = Path(key).stem
-                    if filename == Path(METADATA_FILE_NAME).stem:
-                        continue
+        for batch_index, batch in enumerate(batches):
+            batch_results = await asyncio.gather(
+                *[fetch_metadata(stem) for stem in batch]
+            )
 
-                    existing_aggregation_results[DocumentStem(filename)] = last_modified
+            # Build metadata dict from batch results, filtering out files that don't exist
+            for result in batch_results:
+                if result is not None:
+                    stem, value = result
+                    metadata[stem] = value
 
-    logger.debug(
-        f"found {len(existing_aggregation_results)} existing aggregation results"
-    )
+            logger.debug(
+                f"completed batch {batch_index + 1}/{len(batches)}, "
+                f"total metadata found so far: {len(metadata)}"
+            )
 
-    return existing_aggregation_results
+            await update_progress_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+                artifact_id=progress_artifact_id,
+                progress=Percentage.from_lists([batch_index + 1], batches).to_float(),
+                description=(
+                    f"Fetching metadata for {len(document_stems)} documents... "
+                    f"Completed {batch_index + 1}/{len(batches)} batches, "
+                    f"{len(metadata)} metadata files found"
+                ),
+            )
+
+    logger.debug(f"found {len(metadata)} existing aggregation metadata files")
+
+    return metadata
 
 
-async def filter_existing_aggregation_results(
+async def filter_documents_with_metadata(
     config: Config,
     document_stems: Sequence[DocumentStem],
+    classifier_specs: Sequence[ClassifierSpec],
 ) -> tuple[
     list[DocumentStem],
     set[DocumentStem],
     int,
+    dict[DocumentStem, AggregationMetadata | Exception | None],
 ]:
     """
-    Filter out documents that have valid cached aggregation results.
+    Filter documents using sidecar metadata.
 
-    A result is considered valid if its S3 `LastModified` timestamp is newer
-    than the last Git commit of the classifier spec file.
-
-    Args:
-        config: Config object with bucket and environment information
-        document_stems: Full list of document stems to potentially process
-
-    Returns:
-        Tuple of:
-        - documents_to_process: stems that need aggregation
-        - skipped_stems: stems that were skipped due to valid cache
-        - existing_count: total number of existing results found
+    A result is considered valid if its classifier specs. match the current specs..
     """
     logger = get_logger()
 
-    # Get the last modified date of the classifier spec file
-    spec_last_modified = get_classifier_spec_last_modified_date(config.aws_env)
+    existing_metadata = await get_existing_aggregation_metadata(
+        config=config, document_stems=document_stems
+    )
 
-    if spec_last_modified is None:
-        logger.warning(
-            "unable to determine classifier spec last modified date, "
-            "will process all documents"
-        )
-        return (list(document_stems), set(), 0)
-
-    logger.info(f"classifier spec last modified: {spec_last_modified.isoformat()}")
-
-    # Ensure spec timestamp is timezone-aware for comparison
-    if spec_last_modified.tzinfo is None:
-        spec_last_modified = spec_last_modified.replace(tzinfo=timezone.utc)
-
-    # Get existing aggregation results from S3
-    existing_results = await get_existing_aggregation_results(config=config)
-
-    # Filter out documents that have valid cached results
     documents_to_process: list[DocumentStem] = []
+    skipped_stems: set[DocumentStem] = set()
+
     for stem in document_stems:
-        if stem not in existing_results:
-            # No cached result, must process
+        if stem not in existing_metadata:
+            # No cached result
             documents_to_process.append(stem)
             continue
 
-        aggregation_date = existing_results[stem]
-
-        # Ensure aggregation_date is timezone-aware for comparison
-        if aggregation_date.tzinfo is None:
-            aggregation_date = aggregation_date.replace(tzinfo=timezone.utc)
-
-        # Keep result if it's newer than the spec file
-        if aggregation_date > spec_last_modified:
-            # Result is valid, skip this document
+        meta = existing_metadata[stem]
+        if meta is None or isinstance(meta, Exception):
+            # Metadata doesn't exist or couldn't be read (error)
+            documents_to_process.append(stem)
+            if isinstance(meta, Exception):
+                logger.warning(f"metadata error for {stem}: {meta}")
             continue
+
+        # Check if specs are identical (compares full specs, not hashes)
+        if are_classifier_specs_equal(classifier_specs, meta.classifier_specs):
+            # Valid cached result
+            skipped_stems.add(stem)
         else:
-            # Result is stale, must re-aggregate
-            logger.debug(
-                f"aggregation object for {stem} is stale "
-                f"(object: {aggregation_date.isoformat()}, "
-                f"spec: {spec_last_modified.isoformat()})"
-            )
+            # Stale version - specs differ
+            logger.debug(f"aggregation for {stem} has different classifier specs")
             documents_to_process.append(stem)
 
-    skipped_stems = set(document_stems) - set(documents_to_process)
     logger.info(
-        f"found {len(existing_results)} existing aggregation results, "
+        f"found {len(existing_metadata)} cached results, "
         f"skipping {len(skipped_stems)} of {len(document_stems)} documents"
     )
 
-    return (documents_to_process, skipped_stems, len(existing_results))
+    return (
+        documents_to_process,
+        skipped_stems,
+        len(existing_metadata),
+        existing_metadata,
+    )
 
 
 class AggregateResult(BaseModel):
@@ -555,18 +648,40 @@ async def process_document(
             await s3_object_write_text_async(s3, s3_uri, json.dumps(concepts_for_vespa))
 
             # Duplicate to latest
+            latest_key = os.path.join(
+                config.aggregate_inference_results_prefix,
+                LATEST_PREFIX,
+                f"{document_stem}.json",
+            )
             await s3_copy_file(
                 s3,
                 source=s3_uri,
                 target=S3Uri(
                     bucket=config.cache_bucket_str,
-                    key=os.path.join(
-                        config.aggregate_inference_results_prefix,
-                        LATEST_PREFIX,
-                        f"{document_stem}.json",
-                    ),
+                    key=latest_key,
                 ),
             )
+
+            # Write sidecar metadata with full classifier specs
+            metadata = AggregationMetadata(
+                created_at=datetime.now(timezone.utc),
+                document_stem=document_stem,
+                classifier_specs=list(classifier_specs),  # Store full specs
+            )
+            metadata_key = os.path.join(
+                config.aggregate_inference_results_prefix,
+                LATEST_PREFIX,
+                f"{document_stem}.metadata.json",
+            )
+            await s3_object_write_text_async(
+                s3,
+                S3Uri(
+                    bucket=config.cache_bucket_str,
+                    key=metadata_key,
+                ),
+                metadata.model_dump_json(),
+            )
+
             return document_stem
     except ClientError as e:
         raise AggregationFailure(
@@ -677,6 +792,64 @@ async def create_aggregate_inference_overall_summary_artifact(
 
     await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
         key=f"aggregate-inference-overall-{aws_env.value}-{generate_slug(2)}",
+        table=details,
+        description=overview_description,
+    )
+
+
+async def create_caching_summary_artifact(
+    aws_env: AwsEnv,
+    document_stems: Sequence[DocumentStem],
+    skipped_stems: set[DocumentStem],
+    metadata_dict: dict[DocumentStem, AggregationMetadata | Exception | None],
+) -> None:
+    """Create a summary artifact showing which documents were cached vs processed."""
+    # Count errors for overview
+    error_count = sum(
+        1 for meta in metadata_dict.values() if isinstance(meta, Exception)
+    )
+
+    overview_description = f"""# Aggregation Caching Summary
+
+## Overview
+- **Environment**: {aws_env.value}
+- **Total documents**: {len(document_stems)}
+- **Cached (skipped)**: {len(skipped_stems)}
+- **To be processed**: {len(document_stems) - len(skipped_stems)}
+- **Errors**: {error_count}
+"""
+
+    details = []
+    for stem in document_stems:
+        meta = metadata_dict.get(stem)
+
+        # Determine status
+        if stem in skipped_stems:
+            status = "Cached"
+        elif isinstance(meta, Exception):
+            status = "Error"
+        elif meta is None:
+            status = "Not Found"
+        else:
+            status = "To Process"
+
+        row = {
+            "Document Stem": str(stem),
+            "Status": status,
+        }
+
+        # Add metadata or error info
+        if stem in skipped_stems and isinstance(meta, AggregationMetadata):
+            row["Metadata"] = meta.model_dump_json()
+        elif isinstance(meta, Exception):
+            row["Error"] = f"{type(meta).__name__}: {str(meta)}"
+        else:
+            row["Metadata"] = ""
+
+        details.append(row)
+
+    await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
+        key=f"aggregation-caching-{aws_env.value}-{generate_slug(2)}",
         table=details,
         description=overview_description,
     )
@@ -1086,31 +1259,49 @@ async def aggregate(
     # Check if classifier_specs is explicitly provided to disable caching
     if classifier_specs is not None:
         logger.info(
-            "classifier_specs explicitly provided, processing all documents "
-            f"{len(document_stems)} documents without caching checks"
+            "classifier specs. explicitly provided, processing all documents "
+            f"({len(document_stems)}), without caching checks"
         )
-    elif config.skip_existing_aggregation_results:
-        (
-            documents_to_process,
-            skipped_stems,
-            existing_count,
-        ) = await filter_existing_aggregation_results(
-            config=config,
-            document_stems=document_stems,
-        )
-
-        logger.info(
-            f"caching enabled: processing {len(documents_to_process)} documents, "
-            f"skipping {len(skipped_stems)} with valid cached results"
-        )
-
-        # Update document_stems to only process what's needed
-        document_stems = documents_to_process
     else:
-        logger.info(f"caching disabled: processing all {len(document_stems)} documents")
+        # Load classifier specs. if not provided
+        if classifier_specs is None:
+            classifier_specs = load_classifier_specs(config.aws_env)
+
+        if config.skip_existing_aggregation_results:
+            (
+                documents_to_process,
+                skipped_stems,
+                existing_count,
+                metadata_dict,
+            ) = await filter_documents_with_metadata(
+                config=config,
+                document_stems=document_stems,
+                classifier_specs=classifier_specs,
+            )
+
+            logger.info(
+                f"metadata caching: processing {len(documents_to_process)} documents, "
+                f"skipping {len(skipped_stems)} with valid cached results"
+            )
+
+            # Update tracked document stems to only process what's needed
+            document_stems = documents_to_process
+
+            # Create artifact showing which documents were cached vs processed
+            await create_caching_summary_artifact(
+                aws_env=config.aws_env,
+                document_stems=document_stems + list(skipped_stems),
+                skipped_stems=skipped_stems,
+                metadata_dict=metadata_dict,
+            )
+        else:
+            logger.info(
+                f"caching disabled: processing all {len(document_stems)} documents"
+            )
 
     run_output_identifier = build_run_output_identifier()
 
+    # Load classifier specs. if not already loaded
     if classifier_specs is None:
         classifier_specs = load_classifier_specs(config.aws_env)
 
