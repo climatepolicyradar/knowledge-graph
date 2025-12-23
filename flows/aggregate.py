@@ -1,7 +1,9 @@
 import json
 import os
+import subprocess
 from collections.abc import AsyncGenerator, Sequence
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional, TypeAlias, TypeVar, Union
 
 import prefect.tasks as tasks
@@ -27,6 +29,7 @@ from flows.boundary import (
 )
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
+    determine_spec_file_path,
     load_classifier_specs,
     should_skip_doc,
 )
@@ -64,11 +67,185 @@ DEFAULT_N_BATCHES: PositiveInt = 5
 
 METADATA_FILE_NAME = "metadata.json"
 
+LATEST_PREFIX = "latest"
+
 # A string representation of a classifier spec (i.e. Q123:v4)
 SpecStr: TypeAlias = str
 
 # A serialised Vespa concept, see cpr_sdk.models.search.Concept
 SerialisedVespaConcept: TypeAlias = list[dict[str, str]]
+
+
+def get_classifier_spec_last_modified_date(aws_env: AwsEnv) -> datetime | None:
+    """Get the last Git commit date for the classifier spec file."""
+    logger = get_logger()
+    spec_file_path = determine_spec_file_path(aws_env)
+
+    try:
+        # Use ISO 8601 format (%aI) for easy parsing
+        result = subprocess.run(
+            ["git", "log", "-1", "--format=%aI", "--", str(spec_file_path)],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+
+        timestamp_str = result.stdout.strip()
+        if not timestamp_str:
+            logger.warning(
+                f"no Git history found for classifier spec file: {spec_file_path}"
+            )
+            return None
+
+        # Parse ISO 8601 timestamp to datetime:
+        #
+        # Git's %aI format: 2025-12-11T12:04:24Z or 2025-12-11T12:04:24+00:00
+        return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"failed to get Git commit date for {spec_file_path}: {e}")
+        return None
+    except Exception as e:
+        logger.warning(
+            f"unexpected error getting git commit date for {spec_file_path}: {e}"
+        )
+        return None
+
+
+async def get_existing_aggregation_results(
+    config: Config,
+) -> dict[DocumentStem, datetime]:
+    """
+    Get document stems that have aggregation results.
+
+    Checks the 'latest' folder which contains the most recent aggregation
+    for each document regardless of which run produced it.
+    """
+    logger = get_logger()
+
+    # Build the S3 prefix for the latest aggregation results
+    prefix = os.path.join(
+        config.aggregate_inference_results_prefix,
+        LATEST_PREFIX,
+    )
+
+    logger.debug(
+        f"checking for existing aggregation results at s3://{config.cache_bucket}/{prefix}"
+    )
+
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
+
+    async with session.client("s3") as s3_client:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        page_iterator = paginator.paginate(
+            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+            Prefix=prefix,
+        )
+
+        existing_aggregation_results: dict[DocumentStem, datetime] = dict()
+        async for page in page_iterator:
+            if "Contents" in page:
+                for obj in page["Contents"]:  # pyright: ignore[reportUnknownVariableType]
+                    key: str = obj["Key"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+                    last_modified: datetime = obj["LastModified"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+
+                    # Extract stem from filename, skipping metadata file if present
+                    filename = Path(key).stem
+                    if filename == Path(METADATA_FILE_NAME).stem:
+                        continue
+
+                    existing_aggregation_results[DocumentStem(filename)] = last_modified
+
+    logger.debug(
+        f"found {len(existing_aggregation_results)} existing aggregation results"
+    )
+
+    return existing_aggregation_results
+
+
+async def filter_existing_aggregation_results(
+    config: Config,
+    document_stems: Sequence[DocumentStem],
+) -> tuple[
+    list[DocumentStem],
+    set[DocumentStem],
+    int,
+]:
+    """
+    Filter out documents that have valid cached aggregation results.
+
+    A result is considered valid if its S3 `LastModified` timestamp is newer
+    than the last Git commit of the classifier spec file.
+
+    Args:
+        config: Config object with bucket and environment information
+        document_stems: Full list of document stems to potentially process
+
+    Returns:
+        Tuple of:
+        - documents_to_process: stems that need aggregation
+        - skipped_stems: stems that were skipped due to valid cache
+        - existing_count: total number of existing results found
+    """
+    logger = get_logger()
+
+    # Get the last modified date of the classifier spec file
+    spec_last_modified = get_classifier_spec_last_modified_date(config.aws_env)
+
+    if spec_last_modified is None:
+        logger.warning(
+            "unable to determine classifier spec last modified date, "
+            "will process all documents"
+        )
+        return (list(document_stems), set(), 0)
+
+    logger.info(f"classifier spec last modified: {spec_last_modified.isoformat()}")
+
+    # Ensure spec timestamp is timezone-aware for comparison
+    if spec_last_modified.tzinfo is None:
+        spec_last_modified = spec_last_modified.replace(tzinfo=timezone.utc)
+
+    # Get existing aggregation results from S3
+    existing_results = await get_existing_aggregation_results(config=config)
+
+    # Filter out documents that have valid cached results
+    documents_to_process: list[DocumentStem] = []
+    for stem in document_stems:
+        if stem not in existing_results:
+            # No cached result, must process
+            documents_to_process.append(stem)
+            continue
+
+        aggregation_date = existing_results[stem]
+
+        # Ensure aggregation_date is timezone-aware for comparison
+        if aggregation_date.tzinfo is None:
+            aggregation_date = aggregation_date.replace(tzinfo=timezone.utc)
+
+        # Keep result if it's newer than the spec file
+        if aggregation_date > spec_last_modified:
+            # Result is valid, skip this document
+            continue
+        else:
+            # Result is stale, must re-aggregate
+            logger.debug(
+                f"aggregation object for {stem} is stale "
+                f"(object: {aggregation_date.isoformat()}, "
+                f"spec: {spec_last_modified.isoformat()})"
+            )
+            documents_to_process.append(stem)
+
+    skipped_stems = set(document_stems) - set(documents_to_process)
+    logger.info(
+        f"found {len(existing_results)} existing aggregation results, "
+        f"skipping {len(skipped_stems)} of {len(document_stems)} documents"
+    )
+
+    return (documents_to_process, skipped_stems, len(existing_results))
 
 
 class AggregateResult(BaseModel):
@@ -385,7 +562,7 @@ async def process_document(
                     bucket=config.cache_bucket_str,
                     key=os.path.join(
                         config.aggregate_inference_results_prefix,
-                        "latest",
+                        LATEST_PREFIX,
                         f"{document_stem}.json",
                     ),
                 ),
@@ -905,6 +1082,32 @@ async def aggregate(
         document_stems=document_stems,
         run_output_identifier=run_output_identifier,
     )
+
+    # Check if classifier_specs is explicitly provided to disable caching
+    if classifier_specs is not None:
+        logger.info(
+            "classifier_specs explicitly provided, processing all documents "
+            f"{len(document_stems)} documents without caching checks"
+        )
+    elif config.skip_existing_aggregation_results:
+        (
+            documents_to_process,
+            skipped_stems,
+            existing_count,
+        ) = await filter_existing_aggregation_results(
+            config=config,
+            document_stems=document_stems,
+        )
+
+        logger.info(
+            f"caching enabled: processing {len(documents_to_process)} documents, "
+            f"skipping {len(skipped_stems)} with valid cached results"
+        )
+
+        # Update document_stems to only process what's needed
+        document_stems = documents_to_process
+    else:
+        logger.info(f"caching disabled: processing all {len(document_stems)} documents")
 
     run_output_identifier = build_run_output_identifier()
 
