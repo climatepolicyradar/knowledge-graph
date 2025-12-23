@@ -143,6 +143,11 @@ class Config(BaseModel):
         description="Skip documents that already have inference results in S3. Set to False to force re-processing.",
     )
 
+    skip_existing_aggregation_results: bool = Field(
+        default=True,
+        description="Skip documents that already have aggregation results in S3. Set to `False` to force re-processing.",
+    )
+
     @classmethod
     async def create(cls) -> "Config":
         """Create a new Config instance with initialized values."""
@@ -242,4 +247,5 @@ class Config(BaseModel):
             "aws_env": self.aws_env,
             "s3_concurrency_limit": self.s3_concurrency_limit,
             "skip_existing_inference_results": self.skip_existing_inference_results,
+            "skip_existing_aggregation_results": self.skip_existing_aggregation_results,
         }

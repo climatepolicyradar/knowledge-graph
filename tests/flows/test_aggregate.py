@@ -17,6 +17,7 @@ from prefect.context import FlowRunContext
 from prefect.states import Running
 
 from flows.aggregate import (
+    METADATA_FILE_NAME,
     AggregateResult,
     AggregationFailure,
     Metadata,
@@ -27,7 +28,10 @@ from flows.aggregate import (
     build_run_output_identifier,
     collect_stems_by_specs,
     convert_labelled_passage_to_concepts,
+    filter_existing_aggregation_results,
     get_all_labelled_passages_for_one_document,
+    get_classifier_spec_last_modified_date,
+    get_existing_aggregation_results,
     get_model_from_span,
     get_parent_concepts_from_concept,
     parse_model_field,
@@ -848,3 +852,332 @@ async def test__document_stems_from_parameters_pointer(
             "CPR.document.i00000549.n0000",
         ]
     )
+
+
+@pytest.mark.asyncio
+async def test_get_classifier_spec_last_modified_date_success():
+    """Test getting git commit date for classifier spec file."""
+    with patch("subprocess.run") as mock_run:
+        # Mock successful git command
+        mock_run.return_value = MagicMock(
+            stdout="2025-12-20T10:30:00+00:00\n",
+            returncode=0,
+        )
+
+        result = get_classifier_spec_last_modified_date(AwsEnv.sandbox)
+
+        assert result is not None
+        assert isinstance(result, datetime)
+        assert result.year == 2025
+        assert result.month == 12
+        assert result.day == 20
+
+        # Verify git command was called
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args
+        assert "git" in call_args[0][0]
+        assert "log" in call_args[0][0]
+        assert "--format=%aI" in call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_get_classifier_spec_last_modified_date_no_history():
+    """Test handling of missing Git history."""
+    with patch("subprocess.run") as mock_run:
+        # Mock empty stdout (no git history)
+        mock_run.return_value = MagicMock(
+            stdout="",
+            returncode=0,
+        )
+
+        result = get_classifier_spec_last_modified_date(AwsEnv.sandbox)
+
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_classifier_spec_last_modified_date_git_error():
+    """Test handling of Git command failure."""
+    with patch("subprocess.run") as mock_run:
+        # Mock git command failure
+        mock_run.side_effect = Exception("git command failed")
+
+        result = get_classifier_spec_last_modified_date(AwsEnv.sandbox)
+
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_get_existing_aggregation_results_empty(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    """Test getting existing aggregation results from empty S3 bucket."""
+    result = await get_existing_aggregation_results(config=test_config)
+
+    assert isinstance(result, dict)
+    assert len(result) == 0
+
+
+@pytest.mark.asyncio
+async def test_get_existing_aggregation_results_with_results(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    """Test getting existing aggregation results with results in S3."""
+    # Create some aggregation results in the latest folder
+    latest_prefix = os.path.join(
+        test_config.aggregate_inference_results_prefix,
+        "latest",
+    )
+
+    document_stems = [
+        "CCLW.executive.10061.4515",
+        "UNFCCC.party.492.0",
+        "CPR.document.i00000549.n0000",
+    ]
+
+    for stem in document_stems:
+        key = os.path.join(latest_prefix, f"{stem}.json")
+        await mock_s3_async_client.put_object(
+            Bucket=test_config.cache_bucket,
+            Key=key,
+            Body=json.dumps({"test": "data"}),
+            ContentType="application/json",
+        )
+
+    # Add a metadata file that should be skipped
+    metadata_key = os.path.join(latest_prefix, METADATA_FILE_NAME)
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=metadata_key,
+        Body=json.dumps({"meta": "data"}),
+        ContentType="application/json",
+    )
+
+    result = await get_existing_aggregation_results(config=test_config)
+
+    assert len(result) == 3
+    assert all(stem in result for stem in document_stems)
+    assert all(isinstance(result[stem], datetime) for stem in document_stems)
+    # Metadata file should be skipped
+    assert Path(METADATA_FILE_NAME).stem not in result
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_aggregation_results_no_git_history(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    document_stems = [
+        DocumentStem("CCLW.executive.10061.4515"),
+        DocumentStem("UNFCCC.party.492.0"),
+    ]
+
+    # When: The date is unavailable
+    with patch(
+        "flows.aggregate.get_classifier_spec_last_modified_date",
+        return_value=None,
+    ):
+        (
+            documents_to_process,
+            skipped_stems,
+            existing_count,
+        ) = await filter_existing_aggregation_results(
+            config=test_config,
+            document_stems=document_stems,
+        )
+
+    # Then: Should process all documents when Git history unavailable
+    assert len(documents_to_process) == 2
+    assert len(skipped_stems) == 0
+    assert existing_count == 0
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_aggregation_results_no_cached_results(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    document_stems = [
+        DocumentStem("CCLW.executive.10061.4515"),
+        DocumentStem("UNFCCC.party.492.0"),
+    ]
+
+    # When: There is a date
+    spec_date = datetime(2025, 12, 20, 10, 0, 0)
+
+    with patch(
+        "flows.aggregate.get_classifier_spec_last_modified_date",
+        return_value=spec_date,
+    ):
+        (
+            documents_to_process,
+            skipped_stems,
+            existing_count,
+        ) = await filter_existing_aggregation_results(
+            config=test_config,
+            document_stems=document_stems,
+        )
+
+    # Then: Should process all documents when no cached results, since we haven't mocked any results
+    assert len(documents_to_process) == 2
+    assert len(skipped_stems) == 0
+    assert existing_count == 0
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_aggregation_results_valid_cache(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    document_stems = [
+        DocumentStem("CCLW.executive.10061.4515"),
+        DocumentStem("UNFCCC.party.492.0"),
+    ]
+
+    # When: Spec was last modified on Dec 20
+    spec_date = datetime(2025, 12, 20, 10, 0, 0)
+
+    # When: Create aggregation results that are newer than spec (Dec 21)
+    latest_prefix = os.path.join(
+        test_config.aggregate_inference_results_prefix,
+        "latest",
+    )
+
+    # Need to use moto's time traveling to set LastModified
+    for stem in document_stems:
+        key = os.path.join(latest_prefix, f"{stem}.json")
+        await mock_s3_async_client.put_object(
+            Bucket=test_config.cache_bucket,
+            Key=key,
+            Body=json.dumps({"test": "data"}),
+            ContentType="application/json",
+        )
+
+    with patch(
+        "flows.aggregate.get_classifier_spec_last_modified_date",
+        return_value=spec_date,
+    ):
+        # Wait a tiny bit to ensure S3 `LastModified` is after `spec_date`
+        await asyncio.sleep(0.1)
+
+        (
+            documents_to_process,
+            skipped_stems,
+            existing_count,
+        ) = await filter_existing_aggregation_results(
+            config=test_config,
+            document_stems=document_stems,
+        )
+
+    # Then: All documents should be skipped, as they're available cached
+    assert len(documents_to_process) == 0
+    assert len(skipped_stems) == 2
+    assert existing_count == 2
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_aggregation_results_stale_cache(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    document_stems = [
+        DocumentStem("CCLW.executive.10061.4515"),
+        DocumentStem("UNFCCC.party.492.0"),
+    ]
+
+    # When: Create aggregation results first
+    latest_prefix = os.path.join(
+        test_config.aggregate_inference_results_prefix,
+        "latest",
+    )
+
+    for stem in document_stems:
+        key = os.path.join(latest_prefix, f"{stem}.json")
+        await mock_s3_async_client.put_object(
+            Bucket=test_config.cache_bucket,
+            Key=key,
+            Body=json.dumps({"test": "data"}),
+            ContentType="application/json",
+        )
+
+    # When: Wait a bit then set spec date to future (making cache stale)
+    await asyncio.sleep(0.1)
+    spec_date = datetime(2099, 12, 31, 23, 59, 59)  # Far future
+
+    with patch(
+        "flows.aggregate.get_classifier_spec_last_modified_date",
+        return_value=spec_date,
+    ):
+        (
+            documents_to_process,
+            skipped_stems,
+            existing_count,
+        ) = await filter_existing_aggregation_results(
+            config=test_config,
+            document_stems=document_stems,
+        )
+
+    # Then: All documents should be processed, as the cache is stale
+    assert len(documents_to_process) == 2
+    assert len(skipped_stems) == 0
+    assert existing_count == 2  # Found results but they're stale
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_aggregation_results_partial_cache(
+    test_config,
+    mock_async_bucket,
+    mock_s3_async_client,
+):
+    all_document_stems = [
+        DocumentStem("CCLW.executive.10061.4515"),
+        DocumentStem("UNFCCC.party.492.0"),
+        DocumentStem("CPR.document.i00000549.n0000"),  # This one has no cache
+    ]
+
+    # When: Spec was last modified on Dec 20
+    spec_date = datetime(2025, 12, 20, 10, 0, 0)
+
+    # When: Create aggregation results for only first two documents
+    latest_prefix = os.path.join(
+        test_config.aggregate_inference_results_prefix,
+        "latest",
+    )
+
+    for stem in all_document_stems[:2]:  # Only first two
+        key = os.path.join(latest_prefix, f"{stem}.json")
+        await mock_s3_async_client.put_object(
+            Bucket=test_config.cache_bucket,
+            Key=key,
+            Body=json.dumps({"test": "data"}),
+            ContentType="application/json",
+        )
+
+    with patch(
+        "flows.aggregate.get_classifier_spec_last_modified_date",
+        return_value=spec_date,
+    ):
+        await asyncio.sleep(0.1)
+
+        (
+            documents_to_process,
+            skipped_stems,
+            existing_count,
+        ) = await filter_existing_aggregation_results(
+            config=test_config,
+            document_stems=all_document_stems,
+        )
+
+    # Then: Should skip 2, process 1
+    assert len(documents_to_process) == 1
+    assert len(skipped_stems) == 2
+    assert existing_count == 2
+    assert [DocumentStem("CPR.document.i00000549.n0000")] == documents_to_process
