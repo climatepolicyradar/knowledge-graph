@@ -64,10 +64,10 @@ def _(mo):
 
 
 @app.cell
-def _(WIKIBASE_ID, wikibase):
-    recursive_subconcepts = wikibase.get_recursive_has_subconcept_relationships(
-        WIKIBASE_ID
-    )
+def _():
+    # recursive_subconcepts = wikibase.get_recursive_has_subconcept_relationships(
+    #     WIKIBASE_ID
+    # )
     return
 
 
@@ -82,7 +82,6 @@ def _(mo):
 @app.cell
 def _(LLMClassifier, concept):
     clf = LLMClassifier(concept, model_name="openrouter:openai/gpt-5")
-
     return (clf,)
 
 
@@ -107,7 +106,39 @@ def _(mo):
 
 
 @app.cell
-def _():
+def _(WIKIBASE_ID, wikibase):
+    # get direct subconcepts
+    print("getting non-recursive concept")
+    concept_non_recursive = wikibase.get_concept(
+        WIKIBASE_ID,
+        include_labels_from_subconcepts=False,
+        include_recursive_subconcept_of=False,
+        include_recursive_has_subconcept=False,
+    )
+
+    print("getting details for direct subconcepts")
+    direct_subconcepts = wikibase.get_concepts(
+        wikibase_ids=concept_non_recursive.has_subconcept
+    )
+    _n = "\n"
+    direct_subconcepts_string = _n.join(
+        [
+            f" - {subconcept.preferred_label}{': ' + subconcept.definition if subconcept.definition else ''}"
+            for subconcept in direct_subconcepts
+        ]
+    )
+
+    direct_subconcepts_description = f"""## Direct subconcepts
+
+    The concept has the following direct subconcepts, which are semantically/conceptually part of the concept. Each subconcept is given by its name followed by its description.
+
+    {direct_subconcepts_string}
+    """
+    return (direct_subconcepts_description,)
+
+
+@app.cell
+def _(direct_subconcepts_description):
     system_prompt_template = """
     You are a specialist analyst, tasked with identifying mentions of concepts in policy documents.
     These documents are mostly drawn from a climate and development context.
@@ -117,6 +148,7 @@ def _():
 
     <concept_description>
     {concept_description}
+    {direct_subconcepts_description}
     </concept_description>
 
     Labelling guidelines for this concept:
@@ -137,7 +169,12 @@ def _():
     5. If a passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
     6. If an entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag. Skip this step if you have tagged any concept mentions so far.
     7. The input text must be reproduced exactly, down to the last character, only adding concept tags.
-    8. Double check that you have tagged all mentions of the concept and that every tagged part is describing an actual mention of that concept."""
+    8. Double check that you have tagged all mentions of the concept and that every tagged part is describing an actual mention of that concept.""".format(
+        direct_subconcepts_description=direct_subconcepts_description,
+        concept_description="{concept_description}",
+    )
+
+    print(system_prompt_template)
     return (system_prompt_template,)
 
 
