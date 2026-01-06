@@ -382,7 +382,7 @@ def test_whether_remove_user_from_workspace_removes_a_user_from_a_workspace(
 
 
 def test_whether_add_labelled_passages_adds_labelled_passages_to_a_dataset(
-    mock_argilla_client, mock_workspace, mock_dataset
+    mock_argilla_client, mock_workspace, mock_dataset, mock_user
 ):
     text = "Renewable energy is key to climate mitigation efforts"
     span = Span(
@@ -400,6 +400,16 @@ def test_whether_add_labelled_passages_adds_labelled_passages_to_a_dataset(
     dataset = mock_dataset(name="Q123")
     dataset.records = MagicMock()
 
+    # Mock dataset settings with SpanQuestion
+    mock_span_question = MagicMock()
+    mock_span_question.labels = {"Q123": "test label"}
+    dataset.settings = MagicMock()
+    dataset.settings.questions = [mock_span_question]
+
+    # Mock user lookup
+    user = mock_user(username="alice")
+    mock_client.users.return_value = user
+
     mock_client.workspaces.return_value = workspace
     mock_client.datasets.return_value = dataset
 
@@ -410,6 +420,324 @@ def test_whether_add_labelled_passages_adds_labelled_passages_to_a_dataset(
     )
 
     assert result == dataset
+
+    # Verify dataset.records.log was called
+    dataset.records.log.assert_called_once()
+
+    # Verify the record is a Record object with fields and responses
+    logged_records = dataset.records.log.call_args[0][0]
+    assert len(logged_records) == 1
+    record = logged_records[0]
+
+    # Check it's a Record object
+    from argilla import Record
+
+    assert isinstance(record, Record)
+
+    # Check fields
+    assert record.fields["text"] == text
+
+    # Check responses
+    responses_list = list(record.responses)
+    assert len(responses_list) == 1
+    response = responses_list[0]
+    assert response.question_name == "entities"
+    assert response.user_id == user.id
+    assert response.status == ResponseStatus.submitted
+    assert len(response.value) == 1
+    assert response.value[0] == {"start": 27, "end": 46, "label": "Q123"}
+
+
+def test_add_labelled_passages_with_spans_no_labellers_with_user(
+    mock_argilla_client, mock_workspace, mock_dataset, mock_user
+):
+    """Test that spans without labellers use the user parameter"""
+    text = "Climate change mitigation"
+    span = Span(
+        text=text,
+        start_index=0,
+        end_index=14,
+        concept_id=WikibaseID("Q123"),
+        labellers=[],  # No labellers
+        timestamps=[],
+    )
+    test_passage = LabelledPassage(text=text, spans=[span])
+
+    mock_client, _ = mock_argilla_client
+    workspace = mock_workspace()
+    dataset = mock_dataset(name="Q123")
+    dataset.records = MagicMock()
+
+    # Mock dataset settings
+    mock_span_question = MagicMock()
+    mock_span_question.labels = {"Q123": "test label"}
+    dataset.settings = MagicMock()
+    dataset.settings.questions = [mock_span_question]
+
+    # Mock user lookup
+    user = mock_user(username="bob")
+    mock_client.users.return_value = user
+
+    mock_client.workspaces.return_value = workspace
+    mock_client.datasets.return_value = dataset
+
+    session = ArgillaSession()
+    result = session.add_labelled_passages(
+        labelled_passages=[test_passage],
+        wikibase_id="Q123",
+        users=["bob"],  # Provide default users
+    )
+
+    assert result == dataset
+
+    # Verify response was created with default user
+    logged_records = dataset.records.log.call_args[0][0]
+    record = logged_records[0]
+    responses_list = list(record.responses)
+    assert len(responses_list) == 1
+    assert responses_list[0].user_id == user.id
+
+
+def test_add_labelled_passages_with_spans_no_labellers_no_user(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """Test that spans without labellers and no user parameter are skipped"""
+    text = "Climate change mitigation"
+    span = Span(
+        text=text,
+        start_index=0,
+        end_index=14,
+        concept_id=WikibaseID("Q123"),
+        labellers=[],  # No labellers
+        timestamps=[],
+    )
+    test_passage = LabelledPassage(text=text, spans=[span])
+
+    mock_client, _ = mock_argilla_client
+    workspace = mock_workspace()
+    dataset = mock_dataset(name="Q123")
+    dataset.records = MagicMock()
+
+    # Mock dataset settings
+    mock_span_question = MagicMock()
+    mock_span_question.labels = {"Q123": "test label"}
+    dataset.settings = MagicMock()
+    dataset.settings.questions = [mock_span_question]
+
+    mock_client.workspaces.return_value = workspace
+    mock_client.datasets.return_value = dataset
+
+    session = ArgillaSession()
+    result = session.add_labelled_passages(
+        labelled_passages=[test_passage],
+        wikibase_id="Q123",
+        # No user parameter provided
+    )
+
+    assert result == dataset
+
+    # Verify no responses were created
+    logged_records = dataset.records.log.call_args[0][0]
+    record = logged_records[0]
+    assert len(list(record.responses)) == 0
+
+
+def test_add_labelled_passages_multiple_labellers_per_span(
+    mock_argilla_client, mock_workspace, mock_dataset, mock_user
+):
+    """Test that spans with multiple labellers create separate responses"""
+    text = "Climate change mitigation"
+    span = Span(
+        text=text,
+        start_index=0,
+        end_index=14,
+        concept_id=WikibaseID("Q123"),
+        labellers=["alice", "bob"],  # Multiple labellers
+        timestamps=[datetime.now(), datetime.now()],
+    )
+    test_passage = LabelledPassage(text=text, spans=[span])
+
+    mock_client, _ = mock_argilla_client
+    workspace = mock_workspace()
+    dataset = mock_dataset(name="Q123")
+    dataset.records = MagicMock()
+
+    # Mock dataset settings
+    mock_span_question = MagicMock()
+    mock_span_question.labels = {"Q123": "test label"}
+    dataset.settings = MagicMock()
+    dataset.settings.questions = [mock_span_question]
+
+    # Mock user lookup - return different users
+    alice_user = mock_user(username="alice", user_id=uuid.uuid4())
+    bob_user = mock_user(username="bob", user_id=uuid.uuid4())
+
+    def get_user_side_effect(username):
+        if username == "alice":
+            return alice_user
+        elif username == "bob":
+            return bob_user
+        raise ResourceDoesNotExistError("User", username)
+
+    mock_client.users.side_effect = get_user_side_effect
+
+    mock_client.workspaces.return_value = workspace
+    mock_client.datasets.return_value = dataset
+
+    session = ArgillaSession()
+    result = session.add_labelled_passages(
+        labelled_passages=[test_passage],
+        wikibase_id="Q123",
+    )
+
+    assert result == dataset
+
+    # Verify two separate responses were created
+    logged_records = dataset.records.log.call_args[0][0]
+    record = logged_records[0]
+
+    # Verify that the record has 2 responses
+    responses_list = list(record.responses)
+    assert len(responses_list) == 2
+
+    # Verify both users are represented
+    user_ids = {resp.user_id for resp in responses_list}
+    assert alice_user.id in user_ids
+    assert bob_user.id in user_ids
+
+
+def test_add_labelled_passages_with_invalid_concept_ids(
+    mock_argilla_client, mock_workspace, mock_dataset, mock_user
+):
+    """Test that spans with invalid concept IDs are skipped but response is still created as negative example"""
+    text = "Climate change mitigation"
+    span = Span(
+        text=text,
+        start_index=0,
+        end_index=14,
+        concept_id=WikibaseID("Q999"),  # Not in dataset labels
+        labellers=["alice"],
+        timestamps=[datetime.now()],
+    )
+    test_passage = LabelledPassage(text=text, spans=[span])
+
+    mock_client, _ = mock_argilla_client
+    workspace = mock_workspace()
+    dataset = mock_dataset(name="Q123")
+    dataset.records = MagicMock()
+
+    # Mock dataset settings with only Q123
+    mock_span_question = MagicMock()
+    mock_span_question.labels = {"Q123": "test label"}  # Q999 is not valid
+    dataset.settings = MagicMock()
+    dataset.settings.questions = [mock_span_question]
+
+    # Mock user lookup
+    user = mock_user(username="alice")
+    mock_client.users.return_value = user
+
+    mock_client.workspaces.return_value = workspace
+    mock_client.datasets.return_value = dataset
+
+    session = ArgillaSession()
+    result = session.add_labelled_passages(
+        labelled_passages=[test_passage],
+        wikibase_id="Q123",
+    )
+
+    assert result == dataset
+
+    # Verify a response was created with empty spans (negative example)
+    logged_records = dataset.records.log.call_args[0][0]
+    record = logged_records[0]
+    responses_list = list(record.responses)
+    assert len(responses_list) == 1
+    response = responses_list[0]
+    assert response.user_id == user.id
+    assert len(response.value) == 0  # No spans (negative example)
+
+
+def test_add_labelled_passages_with_missing_user(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """Test that spans with non-existent users are skipped"""
+    text = "Climate change mitigation"
+    span = Span(
+        text=text,
+        start_index=0,
+        end_index=14,
+        concept_id=WikibaseID("Q123"),
+        labellers=["nonexistent"],
+        timestamps=[datetime.now()],
+    )
+    test_passage = LabelledPassage(text=text, spans=[span])
+
+    mock_client, _ = mock_argilla_client
+    workspace = mock_workspace()
+    dataset = mock_dataset(name="Q123")
+    dataset.records = MagicMock()
+
+    # Mock dataset settings
+    mock_span_question = MagicMock()
+    mock_span_question.labels = {"Q123": "test label"}
+    dataset.settings = MagicMock()
+    dataset.settings.questions = [mock_span_question]
+
+    # Mock user lookup to raise error
+    mock_client.users.side_effect = ResourceDoesNotExistError("User", "nonexistent")
+
+    mock_client.workspaces.return_value = workspace
+    mock_client.datasets.return_value = dataset
+
+    session = ArgillaSession()
+    result = session.add_labelled_passages(
+        labelled_passages=[test_passage],
+        wikibase_id="Q123",
+    )
+
+    assert result == dataset
+
+    # Verify no responses were created (user not found)
+    logged_records = dataset.records.log.call_args[0][0]
+    record = logged_records[0]
+    assert len(list(record.responses)) == 0
+
+
+def test_add_labelled_passages_without_spans(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """Test that passages without spans load into Argilla without responses"""
+    text = "Climate change mitigation"
+    test_passage = LabelledPassage(text=text, spans=[])  # No spans
+
+    mock_client, _ = mock_argilla_client
+    workspace = mock_workspace()
+    dataset = mock_dataset(name="Q123")
+    dataset.records = MagicMock()
+
+    # Mock dataset settings
+    mock_span_question = MagicMock()
+    mock_span_question.labels = {"Q123": "test label"}
+    dataset.settings = MagicMock()
+    dataset.settings.questions = [mock_span_question]
+
+    mock_client.workspaces.return_value = workspace
+    mock_client.datasets.return_value = dataset
+
+    session = ArgillaSession()
+    result = session.add_labelled_passages(
+        labelled_passages=[test_passage],
+        wikibase_id="Q123",
+    )
+
+    assert result == dataset
+
+    # Verify record was created without responses
+    logged_records = dataset.records.log.call_args[0][0]
+    assert len(logged_records) == 1
+    record = logged_records[0]
+    assert record.fields["text"] == text
+    assert len(list(record.responses)) == 0
 
 
 def test_whether_get_labelled_passages_returns_labelled_passages_from_a_dataset(
