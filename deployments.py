@@ -36,6 +36,7 @@ from flows.train import train_for_vibe_checker, train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import JsonDict, get_logger
 from flows.vibe_check import vibe_check_inference
+from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
 
 MEGABYTES_PER_GIGABYTE = 1024
@@ -295,6 +296,18 @@ if __name__ == "__main__":
             AwsEnv.production: "0 8 * * MON-THU",
             AwsEnv.staging: "0 9 * * MON-THU",
             AwsEnv.sandbox: "0 10 * * MON-THU",
+        },
+    )
+
+    create_deployment(
+        flow=wikibase_to_s3,
+        description="Upload concepts from Wikibase to S3",
+        # required for application topics in concepts-api
+        env_schedules={
+            AwsEnv.production: "0 9 * * TUE,THU",
+            AwsEnv.staging: "0 15 2 * *",
+            AwsEnv.sandbox: "0 15 1 * *",
+            # Not needed in labs
         },
     )
 
