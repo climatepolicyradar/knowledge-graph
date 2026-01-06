@@ -5,6 +5,7 @@ from typing import Any, Optional
 import boto3
 import wandb
 import yaml
+from mypy_boto3_s3 import S3Client
 from prefect import flow
 
 from flows.config import Config
@@ -19,7 +20,7 @@ from scripts.train import run_training
 async def _set_up_training_environment(
     config: Config | None,
     aws_env: AwsEnv,
-) -> tuple[Config, WikibaseConfig, ArgillaConfig, Any]:
+) -> tuple[Config, WikibaseConfig, ArgillaConfig, S3Client]:
     """
     Set up the common config for classifier training
 
