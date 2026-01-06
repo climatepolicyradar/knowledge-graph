@@ -1,5 +1,6 @@
 import os
 import uuid
+from collections import defaultdict
 from functools import lru_cache
 from logging import getLogger
 from typing import Any, Literal, NamedTuple, Sequence, overload
@@ -9,6 +10,7 @@ from argilla import (
     Argilla,
     Dataset,
     Record,
+    Response,
     ResponseStatus,
     Settings,
     SpanQuestion,
@@ -151,28 +153,28 @@ class ArgillaSession:
 
     def get_dataset(
         self,
-        wikibase_id: WikibaseID | str,
+        dataset_name: WikibaseID | str,
         workspace: str | None = None,
     ) -> Dataset:
         """
-        Get a dataset by its Wikibase ID (ie its name) in the given workspace.
+        Get a dataset by its name (or Wikibase ID of concept) in the given workspace.
 
-        :param wikibase_id: Wikibase ID of the dataset to retrieve
+        :param dataset_name: name of dataset to retrieve
         :param workspace: Name of the workspace to get the dataset from. If not
             provided, uses the session's default_workspace.
         :return: The requested Dataset object
         :raises ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
-        logger.info("Fetching dataset '%s'", wikibase_id)
+        logger.info("Fetching dataset '%s'", dataset_name)
         workspace_object = self.get_workspace(workspace)
         if dataset_object := self.client.datasets(
-            name=str(wikibase_id), workspace=workspace_object
+            name=str(dataset_name), workspace=workspace_object
         ):
             logger.debug("Successfully retrieved dataset: %s", dataset_object.name)
             return dataset_object
         else:
-            logger.debug("Couldn't find dataset: %s", wikibase_id)
-            raise ResourceDoesNotExistError("Dataset", str(wikibase_id))
+            logger.debug("Couldn't find dataset: %s", dataset_name)
+            raise ResourceDoesNotExistError("Dataset", str(dataset_name))
 
     def get_all_datasets(self, workspace: str | None = None) -> list[Dataset]:
         """
@@ -252,7 +254,7 @@ class ArgillaSession:
 
     def copy_dataset(
         self,
-        wikibase_id: WikibaseID,
+        dataset_name: str,
         workspace: str | None = None,
         new_workspace: str | None = None,
         new_name: str | None = None,
@@ -268,11 +270,11 @@ class ArgillaSession:
         :return Dataset: new dataset
         """
 
-        if not new_workspace or new_name:
+        if not (new_workspace or new_name):
             raise ValueError("One of new_workspace or new_name must be specified.")
 
         existing_dataset = self.get_dataset(
-            wikibase_id=wikibase_id,
+            dataset_name=dataset_name,
             workspace=workspace,
         )
         existing_records = list(existing_dataset.records)
@@ -473,21 +475,150 @@ class ArgillaSession:
             username=username, workspace=workspace, action="remove"
         )
 
+    def _group_spans_by_labeller(
+        self,
+        spans: list[Span],
+        default_users: list[str] | None,
+    ) -> dict[str, list[Span]]:
+        """
+        Group spans by labeller, using default_users for spans without labellers.
+
+        :param spans: List of Span objects to group
+        :param default_users: Usernames to use for spans without labellers
+        :return: Dictionary mapping labeller names to their spans
+        """
+        spans_by_labeller = defaultdict(list)
+        for span in spans:
+            if span.labellers:
+                for labeller in span.labellers:
+                    spans_by_labeller[labeller].append(span)
+            elif default_users:
+                for default_user in default_users:
+                    spans_by_labeller[default_user].append(span)
+            else:
+                logger.warning(
+                    "Span '%s' has no labellers and no default users provided, skipping",
+                    span.labelled_text,
+                )
+        return spans_by_labeller
+
+    def _spans_to_argilla_value(
+        self,
+        spans: list[Span],
+        wikibase_id: WikibaseID | str,
+    ) -> list[dict]:
+        """
+        Transform Span objects to Argilla span format.
+
+        :param spans: List of Span objects to transform
+        :param wikibase_id: The dataset's wikibase ID (used as the label)
+        :return: List of span dictionaries in Argilla format
+        """
+        expected_label = str(wikibase_id)
+        span_values = []
+        for span in spans:
+            concept_id = str(span.concept_id) if span.concept_id else None
+            if not concept_id:
+                logger.warning("Span has no concept_id, skipping")
+                continue
+            if concept_id != expected_label:
+                logger.warning(
+                    f"Span has concept_id '{concept_id}' but dataset expects '{expected_label}', skipping"
+                )
+                continue
+            span_values.append(
+                {
+                    "start": span.start_index,
+                    "end": span.end_index,
+                    "label": concept_id,
+                }
+            )
+        return span_values
+
+    def _create_argilla_responses_for_labelled_passage(
+        self,
+        labelled_passage: LabelledPassage,
+        wikibase_id: WikibaseID | str,
+        default_users: list[str] | None,
+    ) -> list[Response]:
+        """
+        Create Response objects for all labellers in a passage.
+
+        For passages with spans, creates one response per labeller with their spans.
+        For passages without spans or where all spans are filtered out, creates
+        a response with empty spans to represent a negative example.
+
+        :param labelled_passage: LabelledPassage containing spans to upload
+        :param wikibase_id: The dataset's wikibase ID (used as the label)
+        :param default_users: Usernames to use for spans without labellers
+        :return: List of Response objects for Argilla
+        """
+        # If passage has no spans and no default users, we can't create a response
+        if not labelled_passage.spans and not default_users:
+            logger.warning(
+                "Passage has no spans and no default users provided, skipping"
+            )
+            return []
+
+        spans_by_labeller: dict[str, list[Span]] = self._group_spans_by_labeller(
+            labelled_passage.spans, default_users
+        )
+
+        # If no labellers were found (empty dict), use the default users for a negative example
+        if not spans_by_labeller and default_users:
+            spans_by_labeller = {user: [] for user in default_users}
+
+        responses = []
+        for labeller, labeller_spans in spans_by_labeller.items():
+            try:
+                user = self.get_user(username=labeller)
+            except ResourceDoesNotExistError:
+                logger.warning(
+                    f"User '{labeller}' not found in Argilla, skipping their annotations"
+                )
+                continue
+
+            if not user.id:
+                logger.warning(
+                    f"User '{labeller}' has no ID, skipping their annotations"
+                )
+                continue
+
+            # Get span values (may be empty for negative examples)
+            span_values = self._spans_to_argilla_value(labeller_spans, wikibase_id)
+
+            # Always create a response, even with empty spans (for negative examples)
+            responses.append(
+                Response(
+                    question_name="entities",
+                    value=span_values,
+                    user_id=user.id,
+                    status=ResponseStatus.submitted,
+                )
+            )
+
+        return responses
+
     def add_labelled_passages(
         self,
         labelled_passages: list[LabelledPassage],
         wikibase_id: WikibaseID | str,
         workspace: str | None = None,
+        users: list[str] | None = None,
     ) -> Dataset:
         """
         Add labelled passages to an existing dataset in Argilla.
 
-        :param labelled_passages: List of LabelledPassage objects to add. Note that only
-            the text and the metadata of each passage will be uploaded - spans
-            attached to the labelled passages will be ignored
+        Any spans in the labelled passages are added as completed responses for each
+        labeller. Labellers can be provided in the spans themselves, or overwritten by
+        the `users` argument.
+
+        :param labelled_passages: List of LabelledPassage objects to add.
         :param wikibase_id: Wikibase ID of the dataset to add passages to
-        :param workspace: Name of the workspace to add passages to. If not provided, the
-            session's default_workspace will be used
+        :param workspace: Name of the workspace to add passages to. If not provided,
+            the session's default_workspace will be used
+        :param users: Optional list of usernames to attribute spans to if they have no
+            labellers. If not provided, spans without labellers will be skipped.
         :return: The updated dataset
         :raises ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
@@ -500,13 +631,21 @@ class ArgillaSession:
 
         records = []
         for passage in labelled_passages:
-            records.append(
-                Record(
-                    id=str(uuid.uuid4()),
-                    fields={"text": passage.text},
-                    metadata=self._format_metadata_keys_for_argilla(passage.metadata),
-                )
+            fields = {
+                "text": passage.text,
+            }
+
+            responses = self._create_argilla_responses_for_labelled_passage(
+                passage, wikibase_id, users
             )
+
+            record = Record(
+                id=str(uuid.uuid4()),
+                fields=fields,  # type: ignore
+                responses=responses,
+                metadata=self._format_metadata_keys_for_argilla(passage.metadata),
+            )
+            records.append(record)
 
         logger.debug("Formatted %d records for Argilla ingestion", len(records))
         dataset.records.log(records)
