@@ -703,10 +703,10 @@ def test_add_labelled_passages_with_missing_user(
     assert len(list(record.responses)) == 0
 
 
-def test_add_labelled_passages_backward_compatibility(
+def test_add_labelled_passages_without_spans(
     mock_argilla_client, mock_workspace, mock_dataset
 ):
-    """Test that passages without spans continue to work (backward compatibility)"""
+    """Test that passages without spans load into Argilla without responses"""
     text = "Climate change mitigation"
     test_passage = LabelledPassage(text=text, spans=[])  # No spans
 
