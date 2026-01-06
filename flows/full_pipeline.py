@@ -208,10 +208,6 @@ async def full_pipeline(
                 aggregation_run_output_identifier = (
                     aggregation_result_raw.data.run_output_identifier
                 )
-                logger.info(
-                    f"aggregation completed with partial failures. "
-                    f"run output identifier is `{aggregation_run_output_identifier}`"
-                )
             else:
                 raise ValueError(
                     f"Expected Fault.data to contain AggregateResult, got {type(aggregation_result_raw.data)}"
@@ -220,17 +216,13 @@ async def full_pipeline(
             aggregation_run_output_identifier = (
                 aggregation_result_raw.run_output_identifier
             )
-            logger.info(
-                f"aggregation run output identifier is `{aggregation_result_raw.run_output_identifier}`"
-                f"aggregation run output identifier is `{aggregation_run_output_identifier}`"
-            )
         case _:
             raise ValueError(
                 f"unexpected result {type(aggregation_result_raw)}, {aggregation_result_raw}"
             )
 
     if aggregation_run_output_identifier is not None:
-        logger.info("attempting indexing with successful aggregation results")
+        logger.info("Attempting indexing with successful aggregation results.")
         indexing_run: State = await index(
             run_output_identifier=aggregation_run_output_identifier,
             config=config,
