@@ -438,9 +438,13 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
         # aggregation state contains failed documents
         mock_aggregate.return_value = State(
             type=StateType.COMPLETED,
-            data=AggregateResult(
-                run_output_identifier=mock_run_output_identifier_str,
-                errors="1/2 Documents failed",
+            data=Fault(
+                msg="1/2 Documents failed",
+                metadata={},
+                data=AggregateResult(
+                    run_output_identifier=mock_run_output_identifier_str,
+                    errors="1/2 Documents failed",
+                ),
             ),
         )
 
