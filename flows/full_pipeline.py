@@ -196,9 +196,6 @@ async def full_pipeline(
     ) = await aggregation_run.result(raise_on_failure=False)
     logger.info("aggregation completed")
 
-    # Initialise indexing_result_raw to None - will be set if indexing runs
-    indexing_result_raw: None | Exception | Fault = None
-
     match aggregation_result_raw:
         case Exception() if not isinstance(aggregation_result_raw, Fault):
             raise aggregation_result_raw
@@ -235,17 +232,8 @@ async def full_pipeline(
         )
         indexing_result_raw = await indexing_run.result(raise_on_failure=False)
         logger.info("indexing completed")
-        match indexing_result_raw:
-            case Exception() if not isinstance(indexing_result_raw, Fault):
-                raise indexing_result_raw
-            case Fault():
-                pass  # Raise at the end of the process
-            case None:
-                pass
-            case _:
-                raise ValueError(
-                    f"unexpected result {type(indexing_result_raw)}, {indexing_result_raw}"
-                )
+        if isinstance(indexing_result_raw, Exception):
+            raise indexing_result_raw
 
     await create_full_pipeline_summary_artifact(
         config=config,
@@ -257,10 +245,5 @@ async def full_pipeline(
         raise inference_result_raw
     if isinstance(aggregation_result_raw, Fault):
         raise aggregation_result_raw
-    # Only check indexing result if indexing actually ran (i.e., aggregation had some successes)
-    if aggregation_run_output_identifier is not None and isinstance(
-        indexing_result_raw, Fault
-    ):
-        raise indexing_result_raw
 
     logger.info("Full pipeline run completed successfully!")
