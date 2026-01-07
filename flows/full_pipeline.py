@@ -147,18 +147,18 @@ async def full_pipeline(
             successful_document_stems: set[DocumentStem] = inference_result_raw.data[
                 "successful_document_stems"
             ]
-            run_output_identifier: RunOutputIdentifier = inference_result_raw.data[
-                "run_output_identifier"
-            ]
+            inference_run_output_identifier: RunOutputIdentifier = (
+                inference_result_raw.data["run_output_identifier"]
+            )
             logger.info(
                 f"Inference complete with partial failures. Successfully classified {len(successful_document_stems)} documents."
             )
         case str():
-            run_output_identifier: RunOutputIdentifier = inference_result_raw
+            inference_run_output_identifier: RunOutputIdentifier = inference_result_raw
             s3_uri = build_inference_result_s3_uri(
                 cache_bucket_str=config.cache_bucket_str,
                 inference_document_target_prefix=config.inference_document_target_prefix,
-                run_output_identifier=run_output_identifier,
+                run_output_identifier=inference_run_output_identifier,
             )
             session = get_async_session(
                 region_name=config.bucket_region,
@@ -179,8 +179,8 @@ async def full_pipeline(
         case _:
             raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
-    aggregation_result: State = await aggregate(
-        run_output_identifier=run_output_identifier,
+    aggregation_run: State = await aggregate(
+        run_output_identifier=inference_run_output_identifier,
         config=config,
         n_documents_in_batch=aggregation_n_documents_in_batch,
         n_batches=aggregation_n_batches,
@@ -191,49 +191,59 @@ async def full_pipeline(
         else None,
     )
 
-    if isinstance(aggregation_result, Exception):
-        logger.error("Aggregation failed.")
-        raise aggregation_result
+    aggregation_result_raw: (
+        AggregateResult | Fault | Exception
+    ) = await aggregation_run.result(raise_on_failure=False)
+    logger.info("aggregation completed")
 
-    agg_result = AggregateResult(run_output_identifier=run_output_identifier)
+    match aggregation_result_raw:
+        case Exception() if not isinstance(aggregation_result_raw, Fault):
+            raise aggregation_result_raw
+        case Fault():
+            # Partial success - extract AggregateResult from Fault data
+            if isinstance(aggregation_result_raw.data, AggregateResult):
+                aggregation_run_output_identifier = (
+                    aggregation_result_raw.data.run_output_identifier
+                )
+            else:
+                raise ValueError(
+                    f"Expected Fault.data to contain AggregateResult, got {type(aggregation_result_raw.data)}"
+                )
+        case AggregateResult():
+            aggregation_run_output_identifier = (
+                aggregation_result_raw.run_output_identifier
+            )
+        case _:
+            raise ValueError(
+                f"unexpected result {type(aggregation_result_raw)}, {aggregation_result_raw}"
+            )
 
-    if isinstance(aggregation_result, State):
-        agg_result: AggregateResult = await aggregation_result.result(
-            raise_on_failure=False
+    if aggregation_run_output_identifier is not None:
+        logger.info("Attempting indexing with successful aggregation results.")
+        indexing_run: State = await index(
+            run_output_identifier=aggregation_run_output_identifier,
+            config=config,
+            batch_size=indexing_batch_size,
+            indexer_concurrency_limit=indexer_concurrency_limit,
+            indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
+            indexer_max_vespa_connections=indexer_max_vespa_connections,
+            enable_v2_concepts=enable_v2_concepts,
+            return_state=True,
         )
-        run_output_identifier = agg_result.run_output_identifier
-        if agg_result.errors is not None:
-            logger.error(f"Aggregation errors occurred: {agg_result.errors}")
-
-    logger.info(
-        f"Aggregation complete. Run output identifier is: {run_output_identifier}"
-    )
-
-    indexing_run: State = await index(
-        run_output_identifier=run_output_identifier,
-        config=config,
-        batch_size=indexing_batch_size,
-        indexer_concurrency_limit=indexer_concurrency_limit,
-        indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
-        indexer_max_vespa_connections=indexer_max_vespa_connections,
-        enable_v2_concepts=enable_v2_concepts,
-        return_state=True,
-    )
-    indexing_result: None | Exception = await indexing_run.result(
-        raise_on_failure=False
-    )
-
-    if isinstance(indexing_result, Exception):
-        logger.error("Indexing failed.")
-        raise indexing_result
+        indexing_result_raw = await indexing_run.result(raise_on_failure=False)
+        logger.info("indexing completed")
+        if isinstance(indexing_result_raw, Exception):
+            raise indexing_result_raw
 
     await create_full_pipeline_summary_artifact(
         config=config,
         successful_document_stems=successful_document_stems,
     )
 
-    logger.info("Full pipeline run completed!")
+    logger.info("checking after the fact for earlier stage failures")
+    if isinstance(inference_result_raw, Fault):
+        raise inference_result_raw
+    if isinstance(aggregation_result_raw, Fault):
+        raise aggregation_result_raw
 
-    # mark full run as failed if aggregation errors occurred
-    if agg_result.errors is not None:
-        raise ValueError(agg_result)
+    logger.info("Full pipeline run completed successfully!")

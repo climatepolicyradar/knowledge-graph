@@ -280,19 +280,19 @@ def check_description_and_definition_length(
     issues = []
     minimum_length = 20
     for concept in concepts:
-        if concept.description and len(concept.description) < minimum_length:
+        if concept.description is None or len(concept.description) < minimum_length:
             issues.append(
                 ConceptIssue(
                     issue_type="short_description",
-                    message=f"{format_concept_link(concept)} has a short description",
+                    message=f"{format_concept_link(concept)} has a short or missing description",
                     concept=concept,
                 )
             )
-        if concept.definition and len(concept.definition) < minimum_length:
+        if concept.definition is None or len(concept.definition) < minimum_length:
             issues.append(
                 ConceptIssue(
                     issue_type="short_definition",
-                    message=f"{format_concept_link(concept)} has a short definition",
+                    message=f"{format_concept_link(concept)} has a short or missing definition",
                     concept=concept,
                 )
             )

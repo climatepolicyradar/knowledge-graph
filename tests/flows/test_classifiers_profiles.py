@@ -327,7 +327,7 @@ def test_promote_classifiers_profiles(mock_profile_mapping):
         promote_classifier_profile(
             wikibase_id=mock_profile_mapping.wikibase_id,
             classifier_id=mock_profile_mapping.classifier_id,
-            classifiers_profile=mock_profile_mapping.classifiers_profile,
+            classifiers_profile=[str(mock_profile_mapping.classifiers_profile)],
             aws_env=AwsEnv.staging,
             upload_to_wandb=True,
         )
@@ -351,7 +351,7 @@ def test_promote_classifiers_profiles__dry_run(mock_profile_mapping):
         promote_classifier_profile(
             wikibase_id=mock_profile_mapping.wikibase_id,
             classifier_id=mock_profile_mapping.classifier_id,
-            classifiers_profile=mock_profile_mapping.classifiers_profile,
+            classifiers_profile=[str(mock_profile_mapping.classifiers_profile)],
             aws_env=AwsEnv.staging,
             upload_to_wandb=False,
         )
@@ -1166,7 +1166,7 @@ async def test_send_classifiers_profile_slack_alert_success():
             wandb_errors=wandb_errors,
             vespa_errors=vespa_errors,
             successes=successes,
-            aws_env=AwsEnv.staging,
+            aws_env=AwsEnv.production,
             upload_to_wandb=True,
             upload_to_vespa=True,
             event=Mock(),
@@ -1174,7 +1174,7 @@ async def test_send_classifiers_profile_slack_alert_success():
         )
 
         mock_slack_client.chat_postMessage.assert_any_call(
-            channel="alerts-platform-staging",
+            channel="alerts-platform-production",
             text="Classifiers Profile Sync Summary: uploading to wandb uploading to vespa",
             attachments=ANY,  # ignore content of attachments
         )
@@ -1186,19 +1186,19 @@ async def test_send_classifiers_profile_slack_alert_success():
             blocks=ANY,
         )
         mock_slack_client.chat_postMessage.assert_any_call(
-            channel="alerts-platform-staging",
+            channel="alerts-platform-production",
             thread_ts="12345",
             text=f"WandB Errors: {len(wandb_errors)} issues found",
             blocks=ANY,
         )
         mock_slack_client.chat_postMessage.assert_any_call(
-            channel="alerts-platform-staging",
+            channel="alerts-platform-production",
             thread_ts="12345",
             text=f"Vespa Errors: {len(vespa_errors)} issues found",
             blocks=ANY,
         )
         mock_slack_client.chat_postMessage.assert_any_call(
-            channel="alerts-platform-staging",
+            channel="alerts-platform-production",
             thread_ts="12345",
             text="PR Errors: 1 issues found",
             blocks=ANY,

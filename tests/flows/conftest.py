@@ -40,6 +40,7 @@ from vespa.io import VespaQueryResponse
 from flows.config import Config
 from flows.inference import S3_BLOCK_RESULTS_CACHE
 from flows.utils import DocumentStem
+from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import wandb_model_artifact_filename
@@ -70,6 +71,17 @@ def test_config():
         wikibase_url="https://test.test.test",
         argilla_api_url="https://test.argilla.url",
         argilla_api_key=SecretStr("test_argilla_api_key"),
+    )
+
+
+@pytest.fixture
+def test_wikibase_to_s3_config():
+    yield WikibaseToS3Config(
+        cdn_bucket_name="test_bucket",
+        aws_env=AwsEnv("sandbox"),
+        wikibase_password=SecretStr("test_password"),
+        wikibase_username="test_username",
+        wikibase_url="https://test.test.test",
     )
 
 
@@ -262,6 +274,25 @@ def mock_bucket(
         CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
     )
     yield test_config.cache_bucket
+
+
+@pytest_asyncio.fixture
+async def mock_async_cdn_bucket(
+    mock_aws_creds, mock_s3_async_client, test_wikibase_to_s3_config
+) -> AsyncGenerator[str, None]:
+    """Returns mocked s3 cdn bucket name"""
+    await mock_s3_async_client.create_bucket(
+        Bucket=test_wikibase_to_s3_config.cdn_bucket_name,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    yield test_wikibase_to_s3_config.cdn_bucket_name
+
+    await clean_up_bucket(
+        mock_s3_async_client, test_wikibase_to_s3_config.cdn_bucket_name
+    )
+    await mock_s3_async_client.delete_bucket(
+        Bucket=test_wikibase_to_s3_config.cdn_bucket_name
+    )
 
 
 def load_fixture(file_name) -> str:

@@ -313,6 +313,40 @@ async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
     return file_stems
 
 
+async def get_s3_prefix_last_modified_dates(
+    config: Config,
+    prefix: str,
+) -> dict[str, datetime]:
+    """
+    Retrieve the last modified datetime for all objects in an S3 prefix.
+
+    Args:
+        config: Config object containing bucket information
+        prefix: S3 prefix to list objects under
+
+    Returns:
+        Dictionary mapping S3 keys to their last modified datetime.
+    """
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
+    )
+    async with session.client("s3") as s3_client:
+        paginator = s3_client.get_paginator("list_objects_v2")
+        page_iterator = paginator.paginate(
+            Bucket=config.cache_bucket_str,
+            Prefix=prefix,
+        )
+
+        result: dict[str, datetime] = {}
+        async for page in page_iterator:
+            for obj in page.get("Contents", []):
+                key = obj["Key"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                last_modified = obj["LastModified"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                result[key] = last_modified
+    return result
+
+
 async def filter_existing_inference_results(
     config: Config,
     classifier_spec: ClassifierSpec,
@@ -329,10 +363,35 @@ async def filter_existing_inference_results(
         classifier_spec=classifier_spec,
     )
 
-    # Filter out documents that already have results
-    documents_to_process = [
-        stem for stem in filter_result.accepted if stem not in existing_results
-    ]
+    text_extraction_dates: dict[
+        str, datetime
+    ] = await get_s3_prefix_last_modified_dates(
+        config=config,
+        prefix=config.inference_document_source_prefix,
+    )
+
+    # Filter out documents that already have results and were produced from the latest
+    # version of text for a document.
+    documents_to_process: list[DocumentStem] = []
+    for stem in filter_result.accepted:
+        if stem not in existing_results:
+            documents_to_process.append(stem)
+            continue
+
+        inference_date: datetime = existing_results[stem]
+        key: str = os.path.join(
+            config.inference_document_source_prefix,
+            f"{stem}.json",
+        )
+        text_extraction_date: datetime | None = text_extraction_dates.get(key)
+
+        if not text_extraction_date:
+            logger.warning(
+                f"No latestModified date for: s3://{config.cache_bucket_str}/{key}"
+            )
+
+        if not text_extraction_date or inference_date < text_extraction_date:
+            documents_to_process.append(stem)
 
     # Track which documents were skipped
     skipped_stems = set(filter_result.accepted) - set(documents_to_process)
@@ -347,7 +406,7 @@ async def filter_existing_inference_results(
 async def get_existing_inference_results(
     config: Config,
     classifier_spec: ClassifierSpec,
-) -> set[DocumentStem]:
+) -> dict[DocumentStem, datetime]:
     """Get document stems that have inference results for a classifier."""
     logger = get_logger()
 
@@ -375,17 +434,23 @@ async def get_existing_inference_results(
             Prefix=prefix,
         )
 
-        existing_stems: set[DocumentStem] = set()
+        existing_inference_results_stems: dict[DocumentStem, datetime] = dict()
         async for page in page_iterator:
             if "Contents" in page:
                 for obj in page["Contents"]:  # pyright: ignore[reportUnknownVariableType]
-                    key = obj["Key"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+                    key: str = obj["Key"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+                    last_modified: datetime = obj["LastModified"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+
                     filename = Path(key).stem
-                    existing_stems.add(DocumentStem(filename))
+                    existing_inference_results_stems[DocumentStem(filename)] = (
+                        last_modified
+                    )
 
-    logger.debug(f"found {len(existing_stems)} existing results for {classifier_spec}")
+    logger.debug(
+        f"found {len(existing_inference_results_stems)} existing results for {classifier_spec}"
+    )
 
-    return existing_stems
+    return existing_inference_results_stems
 
 
 async def get_document_ids_from_file(

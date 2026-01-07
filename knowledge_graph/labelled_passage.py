@@ -1,12 +1,17 @@
 import html
+import logging
 import re
 from collections import defaultdict
+from datetime import datetime
 
+import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field, model_validator
 
-from knowledge_graph.identifiers import Identifier
+from knowledge_graph.identifiers import Identifier, WikibaseID
 from knowledge_graph.span import Span, merge_overlapping_spans
+
+logger = logging.getLogger(__name__)
 
 
 class LabelledPassage(BaseModel):
@@ -216,3 +221,162 @@ def labelled_passages_to_dataframe(
     df["prediction_probability"] = prediction_probabilities
 
     return df
+
+
+def _detect_human_label_format(value) -> bool | None:
+    """
+    Detect whether a human label value indicates a positive or negative label.
+
+    Supports multiple formats:
+    - Boolean: True (positive) / False (negative)
+    - String: "yes"/"y"/"true"/"1" (positive), "no"/"n"/"false"/"0" (negative)
+    - Numeric: non-zero (positive) / 0 (negative)
+    - Empty/NaN: None (no label - absence of annotation)
+
+    :param value: The value from the human label column
+    :return bool | None: True for positive label, False for negative label, None for no label
+    """
+    # Empty values - return None (i.e. no label/absence of annotation)
+    if pd.isna(value) or value == "" or value is None:
+        return None
+
+    if isinstance(value, bool):
+        return value
+
+    # String values
+    if isinstance(value, str):
+        value_lower = value.strip().lower()
+
+        if value_lower in ["yes", "y", "true", "1"]:
+            return True
+        elif value_lower in ["no", "n", "false", "0"]:
+            return False
+
+        # Any other non-empty string is treated as True
+        return True
+
+    # Numeric values: 0 is False, non-zero is True
+    try:
+        numeric_value = float(value)
+        return numeric_value != 0
+    except (ValueError, TypeError):
+        return None
+
+
+def _reconstruct_metadata(df_row: pd.Series) -> dict:
+    """
+    Reconstruct nested metadata dictionary from flattened DataFrame columns.
+
+    Converts columns like 'metadata.source' and 'metadata.dataset' back to
+    {'source': ..., 'dataset': ...}
+
+    :param pd.Series df_row: A row from the DataFrame
+    :return dict: The reconstructed metadata dictionary
+    """
+    metadata = {}
+    for col_name in df_row.index:
+        col_str = str(col_name)
+        if col_str.startswith("metadata."):
+            key = col_str[len("metadata.") :]
+            value = df_row[col_name]
+            if value is not None and not (isinstance(value, float) and np.isnan(value)):
+                metadata[key] = value
+    return metadata
+
+
+def dataframe_to_labelled_passages(
+    df: pd.DataFrame,
+    concept_id: WikibaseID,
+    labeller_names: list[str] = [],
+    human_label_column: str | None = None,
+    skip_unlabelled: bool = True,
+) -> list[LabelledPassage]:
+    """
+    Convert a DataFrame to a list of LabelledPassages with human-labelled spans.
+
+    Only spans from human labels are created. Any spans that were in the 'spans' column
+    of the dataframe are discarded.
+
+    :param pd.DataFrame df: Input DataFrame with columns:
+        - 'text': passage text (required)
+        - 'id': passage identifier (required)
+        - 'metadata.*': flattened metadata fields (optional, e.g., 'metadata.source')
+        - human label column specified by `human_label_column` parameter
+    :param concept_id: Concept ID to use for human-labelled spans
+    :param labeller_names: List of identifiers for the human labellers. All names will be
+        added to each span's labellers field. If not provided, spans will have empty
+        labellers lists.
+    :param human_label_column: Name of column containing human labels. If not specified,
+        passages will be created with no spans.
+    :param skip_unlabelled: If True, skip passages where the human label is None
+        (empty/unlabeled). Only passages with explicit labels (True or False) will be
+        returned. Defaults to True.
+    :return list[LabelledPassage]: List of LabelledPassage objects with human-labelled spans
+
+    :Example:
+
+        >>> df = pd.DataFrame({
+        ...     'text': ['Climate change is severe', 'Another passage'],
+        ...     'human_label': [True, False],
+        ...     'metadata.source': ['doc1', 'doc1']
+        ... })
+        >>> passages = dataframe_to_labelled_passages(
+        ...     df,
+        ...     labeller_names=['alice', 'bob'],
+        ...     human_label_column='human_label',
+        ...     default_concept_id='Q42'
+        ... )
+        >>> assert len(passages[0].spans) == 1  # Positive label creates span
+        >>> assert len(passages[1].spans) == 0  # Negative label, no span
+        >>> assert passages[0].spans[0].labellers == ['alice', 'bob']
+    """
+
+    if bool(df["id"].isnull().any()):
+        len_before = len(df)
+        df = df.dropna(subset="id")
+        n_rows_dropped = len_before - len(df)
+
+        logger.warning(
+            f"Input dataframe does not have values for all rows in the 'id' column.\nDropped {n_rows_dropped} with no ID value."
+        )
+
+    passages = []
+
+    for _, row in df.iterrows():
+        passage_id = row["id"]
+        text = str(row["text"])
+        metadata = _reconstruct_metadata(row)
+
+        spans = []
+
+        if human_label_column and human_label_column in row.index:
+            label = _detect_human_label_format(row[human_label_column])
+
+            if skip_unlabelled and label is None:
+                continue
+
+            # Only create a span for explicit positive labels (True)
+            # False = explicit negative label (no span created)
+            # None = no label/unlabeled (no span created)
+            if label is True:
+                timestamp = datetime.now()
+                timestamps = [timestamp] * len(labeller_names)
+
+                spans.append(
+                    Span(
+                        text=text,
+                        start_index=0,
+                        end_index=len(text),
+                        concept_id=WikibaseID(concept_id),
+                        labellers=labeller_names,
+                        timestamps=timestamps,
+                    )
+                )
+
+        passage = LabelledPassage(
+            text=text, spans=spans, metadata=metadata, id=passage_id
+        )
+
+        passages.append(passage)
+
+    return passages

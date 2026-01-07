@@ -1,4 +1,9 @@
 ---
+- wikibase_id: Q47
+  concept_id: hdgvd2ju
+  classifier_id: rfvhzrck
+  classifiers_profile: primary
+  wandb_registry_version: v0
 - wikibase_id: Q53
   concept_id: kgtd77zy
   classifier_id: r4xsb4ff
@@ -24,6 +29,11 @@
   classifier_id: 3p7eyng3
   classifiers_profile: primary
   wandb_registry_version: v23
+- wikibase_id: Q221
+  concept_id: s9rbcnjc
+  classifier_id: zahr3y3c
+  classifiers_profile: experimental
+  wandb_registry_version: v14
 - wikibase_id: Q223
   concept_id: fxx6vsts
   classifier_id: dntrzvg4
@@ -54,6 +64,11 @@
   classifier_id: 9cfzu8vh
   classifiers_profile: primary
   wandb_registry_version: v30
+- wikibase_id: Q557
+  concept_id: yd3rpeuh
+  classifier_id: nnv2ma7z
+  classifiers_profile: primary
+  wandb_registry_version: v0
 - wikibase_id: Q567
   concept_id: 596hws3c
   classifier_id: 534fxa9d
@@ -442,3 +457,33 @@
   classifier_id: 6y38j2hv
   classifiers_profile: primary
   wandb_registry_version: v3
+- wikibase_id: Q1830
+  concept_id: p8hgdgwd
+  classifier_id: v32gpea3
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1831
+  concept_id: ewzessvq
+  classifier_id: syxb9y5d
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1832
+  concept_id: tbhqkjzf
+  classifier_id: ggks7e8w
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1833
+  concept_id: sdkqfbce
+  classifier_id: xwnp7asb
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1834
+  concept_id: 8j78jey7
+  classifier_id: 7zt2v5xg
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1835
+  concept_id: xk8b47d2
+  classifier_id: p7jtajcb
+  classifiers_profile: primary
+  wandb_registry_version: v0
