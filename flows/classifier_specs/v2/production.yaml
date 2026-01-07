@@ -487,3 +487,8 @@
   classifier_id: p7jtajcb
   classifiers_profile: primary
   wandb_registry_version: v0
+- wikibase_id: Q2008
+  concept_id: 9765nh64
+  classifier_id: 2zkkg734
+  classifiers_profile: primary
+  wandb_registry_version: v0
