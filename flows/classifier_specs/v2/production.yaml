@@ -487,6 +487,16 @@
   classifier_id: p7jtajcb
   classifiers_profile: primary
   wandb_registry_version: v0
+- wikibase_id: Q1836
+  concept_id: mry6wsvv
+  classifier_id: 5w8u9wqd
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q1837
+  concept_id: cymvhdq5
+  classifier_id: etrke5xm
+  classifiers_profile: primary
+  wandb_registry_version: v0
 - wikibase_id: Q2008
   concept_id: 9765nh64
   classifier_id: 2zkkg734
