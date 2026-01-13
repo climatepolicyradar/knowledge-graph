@@ -1,3 +1,4 @@
+import re
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
@@ -17,6 +18,7 @@ from flows.classifiers_profiles import (
     create_vespa_profile_mappings,
     demote_classifier_profile,
     emit_finished,
+    format_error,
     get_classifiers_profiles,
     handle_classifier_profile_action,
     maybe_allow_retiring,
@@ -896,6 +898,19 @@ def test_emit_finished__emit_event_raises_exception():
                 },
             )
         )
+
+
+def test_format_error():
+    try:
+        raise Exception("Something bad")
+    except Exception as e:
+        got = format_error(e)
+        pattern = (
+            r"Exception: Something bad\nTraceback \(most recent call last\):\n"
+            r".*File \".+\", line \d+, in \w+\n"  # no strictness for the traceback
+            r".*raise Exception\(\"Something bad\"\)\nException: Something bad\n"
+        )
+        assert re.search(pattern, got, re.DOTALL)
 
 
 def test_concept_present_in_vespa__has_results():
