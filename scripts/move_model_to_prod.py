@@ -151,7 +151,7 @@ def main(
         # Update metadata for target environment
         metadata = {
             **original_metadata,
-            "aws_env": target_env.value,
+            "aws_env": target_env.name,
             "source_artifact": wandb_path,
             "promoted_from_env": source_env.value,
         }
