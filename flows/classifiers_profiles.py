@@ -412,7 +412,7 @@ async def get_classifiers_profiles(
     results: list[Result[ClassifiersProfileMapping, Error]] = []
     classifiers_profiles = []
     for concept in concepts:
-        logger.info(f"getting classifier profile for concept: {concept.wikibase_id}")
+        logger.debug(f"getting classifier profile for concept: {concept.wikibase_id}")
         try:
             if not concept.wikibase_id:
                 results.append(
@@ -449,7 +449,7 @@ async def get_classifiers_profiles(
                     )
                 )
 
-            logger.info(
+            logger.debug(
                 f"Got {len(concept_classifiers_profiles)} classifier profiles from wikibase {concept.wikibase_id}"
             )
 
