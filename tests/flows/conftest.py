@@ -107,7 +107,9 @@ async def mock_s3_async_client(
     with mock_aws():
         session = aioboto3.Session(region_name="eu-west-1")
         config = BotoCoreConfig(
-            read_timeout=30, connect_timeout=30, retries={"max_attempts": 3}
+            read_timeout=30,
+            connect_timeout=30,
+            retries={"max_attempts": 3, "mode": "adaptive"},
         )
         async with session.client("s3", config=config) as client:
             yield client
