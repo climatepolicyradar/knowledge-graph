@@ -213,6 +213,11 @@ if __name__ == "__main__":
         description="Run concept classifier inference on a batch of documents with CPU compute",
         extra_tags=["type:sub"],
         gpu=False,
+        flow_variables={
+            "cpu": MEGABYTES_PER_GIGABYTE * 8,
+            "memory": MEGABYTES_PER_GIGABYTE * 32,
+            "match_latest_revision_in_family": True,
+        },
     )
 
     create_deployment(
@@ -220,7 +225,11 @@ if __name__ == "__main__":
         description="Run concept classifier inference on a batch of documents with GPU compute",
         extra_tags=["type:sub"],
         gpu=True,
-        flow_variables={},
+        flow_variables={
+            "cpu": MEGABYTES_PER_GIGABYTE * 8,
+            "memory": MEGABYTES_PER_GIGABYTE * 32,
+            "match_latest_revision_in_family": True,
+        },
     )
 
     # Aggregate inference results
