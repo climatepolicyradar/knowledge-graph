@@ -190,6 +190,7 @@ def test_classifier_cache_disabled(temp_cache_dir, simple_concept, monkeypatch):
     assert classifier._cache is None
 
 
+@pytest.mark.transformers
 def test_cache_key_generation(simple_concept, temp_cache_dir, monkeypatch):
     """Test that cache keys are generated consistently."""
     import knowledge_graph.config as config
