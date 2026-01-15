@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import subprocess
 from collections.abc import AsyncGenerator, Sequence
 from datetime import datetime, timezone
 from typing import Any, Optional, TypeAlias, TypeVar, Union
@@ -33,7 +32,6 @@ from flows.boundary import (
 )
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
-    determine_spec_file_path,
     load_classifier_specs,
     should_skip_doc,
 )
@@ -124,43 +122,6 @@ def are_classifier_specs_equal(
         and a.concept_id == b.concept_id
         for a, b in zip(sorted_a, sorted_b, strict=True)
     )
-
-
-def get_classifier_spec_last_modified_date(aws_env: AwsEnv) -> datetime | None:
-    """Get the last Git commit date for the classifier spec file."""
-    logger = get_logger()
-    spec_file_path = determine_spec_file_path(aws_env)
-
-    try:
-        # Use ISO 8601 format (%aI) for easy parsing
-        result = subprocess.run(
-            ["git", "log", "-1", "--format=%aI", "--", str(spec_file_path)],
-            capture_output=True,
-            text=True,
-            check=True,
-            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        )
-
-        timestamp_str = result.stdout.strip()
-        if not timestamp_str:
-            logger.warning(
-                f"no Git history found for classifier spec file: {spec_file_path}"
-            )
-            return None
-
-        # Parse ISO 8601 timestamp to datetime:
-        #
-        # Git's %aI format: 2025-12-11T12:04:24Z or 2025-12-11T12:04:24+00:00
-        return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-
-    except subprocess.CalledProcessError as e:
-        logger.warning(f"failed to get Git commit date for {spec_file_path}: {e}")
-        return None
-    except Exception as e:
-        logger.warning(
-            f"unexpected error getting git commit date for {spec_file_path}: {e}"
-        )
-        return None
 
 
 async def get_existing_aggregation_metadata(

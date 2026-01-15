@@ -31,7 +31,6 @@ from flows.aggregate import (
     convert_labelled_passage_to_concepts,
     filter_documents_with_metadata,
     get_all_labelled_passages_for_one_document,
-    get_classifier_spec_last_modified_date,
     get_existing_aggregation_metadata,
     get_model_from_span,
     get_parent_concepts_from_concept,
@@ -853,59 +852,6 @@ async def test__document_stems_from_parameters_pointer(
             "CPR.document.i00000549.n0000",
         ]
     )
-
-
-@pytest.mark.asyncio
-async def test_get_classifier_spec_last_modified_date_success():
-    """Test getting git commit date for classifier spec file."""
-    with patch("subprocess.run") as mock_run:
-        # Mock successful git command
-        mock_run.return_value = MagicMock(
-            stdout="2025-12-20T10:30:00+00:00\n",
-            returncode=0,
-        )
-
-        result = get_classifier_spec_last_modified_date(AwsEnv.sandbox)
-
-        assert result is not None
-        assert isinstance(result, datetime)
-        assert result.year == 2025
-        assert result.month == 12
-        assert result.day == 20
-
-        # Verify git command was called
-        mock_run.assert_called_once()
-        call_args = mock_run.call_args
-        assert "git" in call_args[0][0]
-        assert "log" in call_args[0][0]
-        assert "--format=%aI" in call_args[0][0]
-
-
-@pytest.mark.asyncio
-async def test_get_classifier_spec_last_modified_date_no_history():
-    """Test handling of missing Git history."""
-    with patch("subprocess.run") as mock_run:
-        # Mock empty stdout (no git history)
-        mock_run.return_value = MagicMock(
-            stdout="",
-            returncode=0,
-        )
-
-        result = get_classifier_spec_last_modified_date(AwsEnv.sandbox)
-
-        assert result is None
-
-
-@pytest.mark.asyncio
-async def test_get_classifier_spec_last_modified_date_git_error():
-    """Test handling of Git command failure."""
-    with patch("subprocess.run") as mock_run:
-        # Mock git command failure
-        mock_run.side_effect = Exception("git command failed")
-
-        result = get_classifier_spec_last_modified_date(AwsEnv.sandbox)
-
-        assert result is None
 
 
 @pytest.mark.asyncio
