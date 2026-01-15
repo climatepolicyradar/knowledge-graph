@@ -25,8 +25,21 @@ def train_distributive_justice() -> None:
 
     criteria = f"""
 		### THE POWER TEST
-		Before tagging, ask: Does this passage describe a process that helps marginalized or impacted groups to influence, challenge, or shape a decision? 
-		ONLY tag if the answer is yes. In addition:
+        Before tagging, ask: Does this passage describe a process that helps marginalized or impacted groups to influence, challenge, or shape a decision? 
+        ONLY tag if the answer is yes.
+
+        **Examples that FAIL the power test:**
+        - "empower those that are most impacted" — too vague, no mechanism described
+        - "civil society must hold stakeholders to account" — describes advocacy role, not decision-making power
+        - "ensure effective interaction with water users" — interaction ≠ influence
+        - "will be fully involved in planning and monitoring" — passive involvement, unclear if they have power to shape decisions
+
+        **Examples that PASS the power test:**
+        - "women participate in workshops on land tenure and financial access, including joint management" — specific method, specific group, decision-making role
+        - "communities have formal representation on the oversight committee with voting rights"
+        - "participatory land use planning conducted in 68 villages"
+  
+        In addition:
 		
 		### 1.  MEANINGFUL PARTICIPATION vs. GENERIC MENTIONS
 		- **INCLUDE**: Specific, named participatory methods (e.g. co-design, Participatory Land Use Planning) as long as impacted groups have a meaningful role.
@@ -46,9 +59,10 @@ def train_distributive_justice() -> None:
 		- **INCLUDE**: Include measures which meaningfully improve the fairness of decision making, such as special protections and procedures for vulnerable groups.
 		- **EXCLUDE**: General safety protocols or confidentiality measures. While vital for safety, these are safeguards, not procedural justice (decision-making power).
 		
-		### 5. PROCEDURAL JUSTICE SOLUTIONS vs. PROBLEM DESCRIPTIONS
-		- **INCLUDE**: Passages that describe a *lack* of procedural justice as a justice problem or that suggest fair decision-making as a potential solution.
-		- **EXCLUDE**: General descriptions of injustice or unjust representation without a mention of procedural remedies.	
+        ### 5. PROCEDURAL JUSTICE SOLUTIONS vs. PROBLEM DESCRIPTIONS
+        - **INCLUDE**: Passages that describe a *lack* of procedural justice as a justice problem or that suggest fair decision-making as a potential solution.
+        - **EXCLUDE**: General descriptions of injustice or unjust representation without a mention of procedural remedies.
+        - **EXCLUDE**: Descriptions of barriers TO participation (e.g. "discriminatory norms prevent women from decision-making", "fail to take into account needs of vulnerable groups"). These describe problems, not solutions. Only tag if the passage also describes mechanisms to ADDRESS these barriers.
 		
 		### 6. INSTITUTIONAL POWER & MAINSTREAMING 
 		- **INCLUDE**: High-level mandates and formal commitments from those in power to give decision-making power to vulnerable stakeholders. These represent institutional commitments to justice.
@@ -61,6 +75,11 @@ def train_distributive_justice() -> None:
             - Recognition Justice: {recognition.definition}
             - Transformative Justice: {transformative.definition}
             - Distributive Justice: {distributive.definition}
+            
+        ### 7. CONTEXT REQUIREMENT
+        - **EXCLUDE**: Isolated keywords, headers, or short fragments (< 1 sentence) that mention participation-adjacent terms without describing an actual mechanism, process, or commitment.
+        - **EXCLUDE**: Abstract labels (e.g. "Democratization", "Participatory Governance") unless the surrounding text describes concrete implementation.
+        - **NOTE**: A phrase like "stakeholder engagement" alone is insufficient — there must be enough context to determine WHO is engaged and HOW they gain influence.
 		"""
 
     instructions = """
