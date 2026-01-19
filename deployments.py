@@ -108,6 +108,13 @@ def create_deployment(
     image_name = os.path.join(docker_registry, docker_repository)
     image = f"{image_name}:{version}"
     if gpu:
+        # Convert memory variable to a string for coiled job config typing
+        # Because we defined the coiled template as a str, but are just copying
+        # the prefect default that uses an int for other workers. See:
+        # https://github.com/climatepolicyradar/orchestrator/blob/main/infra/prefect_infra/prefect_work_pools.py
+        if memory := flow_variables.get("memory"):
+            flow_variables["memory"] = f"{memory} GiB"
+
         if aws_env == AwsEnv.production:
             aws_env_str = AwsEnv.production.name
         else:
