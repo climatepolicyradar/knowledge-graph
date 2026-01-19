@@ -29,27 +29,28 @@ def train_distributive_justice() -> None:
         ONLY tag if the answer is yes.
 
         **Examples that FAIL the power test:**
-        - "empower those that are most impacted" — too vague, no mechanism described
-        - "civil society must hold stakeholders to account" — describes advocacy role, not decision-making power
-        - "ensure effective interaction with water users" — interaction ≠ influence
-        - "will be fully involved in planning and monitoring" — passive involvement, unclear if they have power to shape decisions
+        - "it is necessary to empower the most vulnerable" — too vague, no mechanism described
+        - "civil society must hold governments to account" — no procedural element
+        - "increased communication with energy users" — interaction ≠ influence
+        - "stakeholders will be consulted during planning and monitoring" — unclear who stakeholders are, nor if they have power to shape decisions
 
         **Examples that PASS the power test:**
-        - "women participate in workshops on land tenure and financial access, including joint management" — specific method, specific group, decision-making role
-        - "communities have formal representation on the oversight committee with voting rights"
-        - "participatory land use planning conducted in 68 villages"
-        - "the plan reflects input from over 30,000 citizens, Indigenous Peoples, and advisory bodies" — large-scale public input into policy
-        - "engaging the entire society in the energy transition to generate consensus" — broad societal participation in national decisions
-        - "consultation of stakeholders through sectoral workshops" — named participatory method with stakeholders
-        - "Conduct FGDs (women and women-led)" — specific participatory research method with vulnerable group
+        - "subsistance farmers took part in workshops on land tenure rights, including joint management" — organising of an impacted group towards inclusive decision-making
+        - "Indigenous Peoples have mandated representation in the project oversight committee" - meaningful procedural safeguards
+        - "promoted PLP in 40 rural communities" - in this context, PLP is likely participatory land use planning, a strong method with a named vulnerable group
+        - "the national committee's proposal reflects input from over 30,000 citizens, trade unions and advisory bodies" — large-scale public input sollicited by a powerful institution suggests meaningful change
+        - "co-design with local stakeholders through sectoral workshops" — strong participatory method with stakeholders
+        - "women-led FGDs resulted in" — Focus Group Discussions are not very strong, but with a named group and suggestion that outcomes were taken up
   
-        In addition:
+        More formally, use the the following criteria to tag:
 		
 		### 1.  MEANINGFUL PARTICIPATION vs. GENERIC MENTIONS
 		- **INCLUDE**: Specific, named participatory methods (e.g. co-design, Participatory Land Use Planning) as long as impacted groups have a meaningful role.
-        - **INCLUDE**: Large-scale public input processes where significant numbers of citizens, communities, or Indigenous peoples contributed to policy development (e.g. "reflects input from 30,000 Canadians", "national launching workshop with broad representation"). These represent meaningful voice at scale.
+        - **INCLUDE**: Large-scale public input processes where significant numbers of citizens, communities, or Indigenous peoples contributed to policy development. 
         - **INCLUDE**: Processes described as building "consensus" through multi-stakeholder engagement — consensus-building implies negotiation and influence, not one-way information.
-		- **NOTE**: Be careful around generic inclusion methods (e.g. workshops, consultation, engagement). Especially if they explicitly mention involvement of a vulnerable group, it can pass the POWER TEST, but without mention of a group or goal, they can mean one-way information session which should be excluded. 
+		- **NOTE**: Be careful around generic inclusion methods (e.g. workshops, consultation, engagement):
+            a)Especially if they explicitly mention involvement of a vulnerable group, it can pass the POWER TEST. 
+            b) Without mention of a group or goal, such generic languages suggests a one-way information session which should be excluded. 
 		- **EXCLUDE**: Tokenistic inclusion where consultation is a checkbox. 
 		- **EXCLUDE**: Mentions of groups receiving things (e.g. money, training) without a say in the management of those things (distribution, not participation). 
 		
@@ -58,7 +59,7 @@ def train_distributive_justice() -> None:
 		- **EXCLUDE**: Standard administrative law boilerplate. These are general regulatory functions, not procedural justice.
 		
 		### 3. EMPOWERING TRANSPARENCY vs. COMPLIANCE
-		- **INCLUDE**: Transparency processes that builds community agency or explicitly mentions accountability to impacted/vulnerable groups.
+		- **INCLUDE**: Transparency processes that builds community agency. Also include transparency processes that explicitly mention accountability to impacted/vulnerable groups.
 		- **EXCLUDE**: Technical or bureaucratic transparency (e.g. publishing emission inventories, financial audits, standard MRV). These are for donors/regulators/other countries, not for justice.
 		
 		### 4. FAIRNESS vs. PROTECTIVE SAFEGUARDS
@@ -84,13 +85,11 @@ def train_distributive_justice() -> None:
             
         ### 7. CONTEXT REQUIREMENT
         - **EXCLUDE**: Single abstract words (e.g. "Democratization", "Accountability") without any context.
-        - **INCLUDE**: Short phrases that contain BOTH a participatory method AND a group or goal (e.g. "participatory consultations", "stakeholder engagement in project selection", "FGDs with women").
-        - **INCLUDE**: Document titles or headings that explicitly name participatory processes (e.g. "Women's Participation in Community Forestry", "Participatory Governance in Rwanda").
-        - **NOTE**: When in doubt about short phrases, ask: does this name a specific method (consultation, FGD, workshop, input gathering) AND indicate who participates? If yes, include it.		
+        - **NOTE**: When in doubt about short phrases with no means to gauge the depth of involvement nor the importance of the process, ask: does this name a specific process (consultation, FGD, workshop, input gathering) AND at least one impacted group or justice goal? If yes, include it.		
         
-        ### 8. DOCUMENT TITLES AND REFERENCES  
-        - **INCLUDE**: Document titles, report names, or publication references that explicitly name participatory concepts (e.g. "Women's Participation in Community Forestry", "Transforming [X] for greater gender equality"). The title indicates the document substantively addresses procedural justice.
-        - **NOTE**: Even in reference lists or citations, tag the participation-relevant portion of the title.
+        ### 8. HEADINGS, DOCUMENT TITLES AND REFERENCES  
+        - **INCLUDE**: Headings, document titles, report names, or publication references that explicitly name participatory processes (e.g. "Lessons from the field: Including Women in Community Forestry").
+        - **NOTE**: Even in reference lists or citations, tag the participation-relevant portion of the title. The title indicates the document substantively addresses procedural justice.
         """
 
     instructions = """
