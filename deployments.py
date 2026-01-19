@@ -217,6 +217,7 @@ if __name__ == "__main__":
             "cpu": MEGABYTES_PER_GIGABYTE * 8,
             "memory": MEGABYTES_PER_GIGABYTE * 32,
             "match_latest_revision_in_family": True,
+            "ephemeralStorage": {"sizeInGiB": 50},
         },
     )
 
@@ -226,8 +227,8 @@ if __name__ == "__main__":
         extra_tags=["type:sub"],
         gpu=True,
         flow_variables={
-            "cpu": MEGABYTES_PER_GIGABYTE * 8,
-            "memory": MEGABYTES_PER_GIGABYTE * 32,
+            "cpu": 8,
+            "memory": "32 GiB",
             "match_latest_revision_in_family": True,
         },
     )

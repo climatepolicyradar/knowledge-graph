@@ -1,3 +1,4 @@
+import re
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import pytest
@@ -17,6 +18,7 @@ from flows.classifiers_profiles import (
     create_vespa_profile_mappings,
     demote_classifier_profile,
     emit_finished,
+    format_error,
     get_classifiers_profiles,
     handle_classifier_profile_action,
     maybe_allow_retiring,
@@ -872,30 +874,34 @@ def test_emit_finished__emit_event_raises_exception():
 
         result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
 
-        assert result == Err(
-            Error(
-                msg="failed to emit event",
-                metadata={
-                    "event": "sync-classifiers_profiles.finished",
-                    "resource": {
-                        "prefect.resource.id": "sync-classifiers-profiles",
-                        "awsenv": "staging",
-                    },
-                    "payload": {
-                        "promotions": [
-                            {
-                                "classifiers_profile_mapping": {
-                                    "wikibase_id": "Q123",
-                                    "classifier_id": "aaaa2222",
-                                    "classifiers_profile": "primary",
-                                }
-                            }
-                        ]
-                    },
-                    "exception": "Failed to emit event",
-                },
-            )
+        assert isinstance(result, Err) and result._error.msg == "failed to emit event"
+        metadata = result._error.metadata
+        assert metadata
+        assert metadata["event"] == "sync-classifiers_profiles.finished"
+        assert (
+            metadata["resource"]["prefect.resource.id"] == "sync-classifiers-profiles"
         )
+        assert metadata["resource"]["awsenv"] == AwsEnv.staging
+        assert (
+            metadata["payload"]["promotions"][0]["classifiers_profile_mapping"][
+                "wikibase_id"
+            ]
+            == "Q123"
+        )
+        assert "Failed to emit event" in metadata["exception"]
+
+
+def test_format_error():
+    try:
+        raise Exception("Something bad")
+    except Exception as e:
+        got = format_error(e)
+        pattern = (
+            r"Exception: Something bad\nTraceback \(most recent call last\):\n"
+            r".*File \".+\", line \d+, in \w+\n"  # no strictness for the traceback
+            r".*raise Exception\(\"Something bad\"\)\nException: Something bad\n"
+        )
+        assert re.search(pattern, got, re.DOTALL)
 
 
 def test_concept_present_in_vespa__has_results():
@@ -946,16 +952,15 @@ def test_concept_present_in_vespa__search_error():
         vespa_search_adapter=mock_search_adapter,
     )
 
-    assert result == Err(
-        _error=Error(
-            msg="failed to search Vespa for results",
-            metadata={
-                "concept_wikibase_id": "Q123",
-                "classifier_id": "aaaa2222",
-                "exception": "Vespa connection failed",
-            },
-        )
+    assert (
+        isinstance(result, Err)
+        and result._error.msg == "failed to search Vespa for results"
     )
+    metadata = result._error.metadata
+    assert metadata
+    assert metadata["concept_wikibase_id"] == "Q123"
+    assert metadata["classifier_id"] == "aaaa2222"
+    assert "Vespa connection failed" in metadata["exception"]
 
 
 def test_maybe_allow_retiring__retiring_profile_with_results():
@@ -1041,18 +1046,18 @@ def test_maybe_allow_retiring__retiring_profile_vespa_error():
     )
 
     assert not allow
-    assert updated_results == [
-        Err(
-            _error=Error(
-                msg="failed to search Vespa for results. Failed to check for results in Vespa, so can't retire",
-                metadata={
-                    "concept_wikibase_id": "Q123",
-                    "classifier_id": "aaaa2222",
-                    "exception": "Vespa connection failed",
-                },
-            )
-        )
-    ]
+    assert len(updated_results) == 1
+    err = updated_results[0]
+    assert (
+        isinstance(err, Err)
+        and err._error.msg
+        == "failed to search Vespa for results. Failed to check for results in Vespa, so can't retire"
+    )
+    metadata = err._error.metadata
+    assert metadata
+    assert metadata["concept_wikibase_id"] == "Q123"
+    assert metadata["classifier_id"] == "aaaa2222"
+    assert "Vespa connection failed" in metadata["exception"]
 
 
 def test_maybe_allow_retiring__non_retiring_profile():

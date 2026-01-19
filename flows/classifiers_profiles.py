@@ -7,6 +7,7 @@ Assumes that the classifier model has been trained in wandb
 import os
 import tempfile
 import textwrap
+import traceback
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
@@ -83,6 +84,10 @@ def log_and_return_error(logger, msg: str, metadata: dict) -> Err:
     return Err(Error(msg=msg, metadata=metadata))
 
 
+def format_error(exception: Exception) -> str:
+    return f"{type(exception).__name__}: {exception}\n{traceback.format_exc()}"
+
+
 def wandb_validation(
     wikibase_id: WikibaseID,
     aws_env: AwsEnv,
@@ -138,7 +143,7 @@ def wandb_validation(
     except Exception as e:
         return log_and_return_error(
             logger,
-            msg=f"Error retrieving artifact: {e}",
+            msg=f"Error retrieving artifact: {format_error(e)}",
             metadata={
                 "wikibase_id": wikibase_id,
                 "classifier_id": classifier_id,
@@ -226,7 +231,7 @@ def handle_classifier_profile_action(
     except Exception as e:
         return log_and_return_error(
             logger,
-            f"Error {action} classifier profile: {e}",
+            f"Error {action} classifier profile: {format_error(e)}",
             {
                 "wikibase_id": wikibase_id,
                 "classifier_id": classifier_id,
@@ -370,7 +375,7 @@ async def read_concepts(
         try:
             concepts = await wikibase.get_concepts_async()
         except Exception as e:
-            logger.error(f"Failed to read concept store: {e}")
+            logger.error(f"Failed to read concept store: {format_error(e)}")
             raise Exception(f"Failed to read concept store: {e}")
 
         logger.info(f"Loaded {len(concepts)} concepts from wikibase")
@@ -407,7 +412,7 @@ async def get_classifiers_profiles(
     results: list[Result[ClassifiersProfileMapping, Error]] = []
     classifiers_profiles = []
     for concept in concepts:
-        logger.info(f"getting classifier profile for concept: {concept.wikibase_id}")
+        logger.debug(f"getting classifier profile for concept: {concept.wikibase_id}")
         try:
             if not concept.wikibase_id:
                 results.append(
@@ -444,12 +449,14 @@ async def get_classifiers_profiles(
                     )
                 )
 
-            logger.info(
+            logger.debug(
                 f"Got {len(concept_classifiers_profiles)} classifier profiles from wikibase {concept.wikibase_id}"
             )
 
         except Exception as e:
-            logger.info(f"Error getting classifier ID from wikibase: {e}")
+            logger.error(
+                f"Error getting classifier ID from wikibase: {format_error(e)}"
+            )
             results.append(
                 Err(
                     Error(
@@ -467,7 +474,7 @@ async def get_classifiers_profiles(
         )
         results.extend(validation_results)
     except Exception as e:
-        raise Exception(f"Error validating classifiers profiles {e}")
+        raise Exception(f"Error validating classifiers profiles: {format_error(e)}")
 
     return results
 
@@ -738,7 +745,7 @@ async def send_classifiers_profile_slack_alert(
                     f"no thread TS in main response for System Errors: {main_response}"
                 )
     except Exception as e:
-        logger.error(f"failed to send Slack alerts: {e}")
+        logger.error(f"failed to send Slack alerts: {format_error(e)}")
     return
 
 
@@ -957,7 +964,7 @@ async def _post_errors_thread(
         )
         logger.info(f"posted {error_type} thread")
     except Exception as e:
-        logger.error(f"failed to post {error_type} thread: {e}")
+        logger.error(f"failed to post {error_type} thread: {format_error(e)}")
 
 
 def create_vespa_profile_mappings(
@@ -978,7 +985,9 @@ def create_vespa_profile_mappings(
             )
 
         except Exception as e:
-            errors.append(f"Failed to create mapping for {spec.wikibase_id}: {e}")
+            errors.append(
+                f"Failed to create mapping for {spec.wikibase_id}: {format_error(e)}"
+            )
 
     if errors:
         raise ValueError(f"Errors creating VespaClassifiersProfile.Mapping: {errors}")
@@ -1004,7 +1013,7 @@ def create_vespa_classifiers_profile(
 
     except Exception as e:
         raise ValueError(
-            f"Failed to create VespaClassifiersProfile for {name.value} with mappings {mappings}: {e}"
+            f"Failed to create VespaClassifiersProfile for {name.value} with mappings {mappings}: {format_error(e)}"
         )
 
 
@@ -1075,7 +1084,7 @@ async def update_vespa_with_classifiers_profiles(
         results.append(
             log_and_return_error(
                 logger,
-                msg=f"Error creating VespaClassifiersProfile(s) objects: {e}",
+                msg=f"Error creating VespaClassifiersProfile(s) objects: {format_error(e)}",
                 metadata={},
             )
         )
@@ -1207,7 +1216,7 @@ def emit_finished(
                     "event": event,
                     "resource": resource,
                     "payload": payload,
-                    "exception": str(e),
+                    "exception": format_error(e),
                 },
             )
         )
@@ -1298,7 +1307,7 @@ def concept_present_in_vespa(
                 metadata={
                     "concept_wikibase_id": wikibase_id,
                     "classifier_id": classifier_id,
-                    "exception": str(e),
+                    "exception": format_error(e),
                 },
             )
         )
@@ -1581,7 +1590,7 @@ async def sync_classifiers_profiles(
                 cs_pr_results=cs_pr_results,
             )
         except Exception as e:
-            logger.error(f"failed to send validation alert: {e}")
+            logger.error(f"failed to send validation alert: {format_error(e)}")
 
     await create_classifiers_profiles_artifact(
         validation_errors=validation_errors,
