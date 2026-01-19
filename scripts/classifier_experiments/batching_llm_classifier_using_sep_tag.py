@@ -1,6 +1,9 @@
-#!/usr/bin/env python3
 """
-Test batch prediction performance for LLMClassifier.
+Script for testing batch prediction using a [SEP] tag.
+
+WARNING: the rest of this script has been claude-coded, with some light touch
+supervision. Don't use any of the methods here outside of this script without rereading
+and/or rewriting.
 
 Context
 -------
