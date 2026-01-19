@@ -228,7 +228,7 @@ if __name__ == "__main__":
         gpu=True,
         flow_variables={
             "cpu": 8,
-            "memory": f"{MEGABYTES_PER_GIGABYTE * 32} GiB",
+            "memory": "32 GiB",
             "match_latest_revision_in_family": True,
         },
     )
