@@ -38,11 +38,17 @@ def train_distributive_justice() -> None:
         - "women participate in workshops on land tenure and financial access, including joint management" — specific method, specific group, decision-making role
         - "communities have formal representation on the oversight committee with voting rights"
         - "participatory land use planning conducted in 68 villages"
+        - "the plan reflects input from over 30,000 citizens, Indigenous Peoples, and advisory bodies" — large-scale public input into policy
+        - "engaging the entire society in the energy transition to generate consensus" — broad societal participation in national decisions
+        - "consultation of stakeholders through sectoral workshops" — named participatory method with stakeholders
+        - "Conduct FGDs (women and women-led)" — specific participatory research method with vulnerable group
   
         In addition:
 		
 		### 1.  MEANINGFUL PARTICIPATION vs. GENERIC MENTIONS
 		- **INCLUDE**: Specific, named participatory methods (e.g. co-design, Participatory Land Use Planning) as long as impacted groups have a meaningful role.
+        - **INCLUDE**: Large-scale public input processes where significant numbers of citizens, communities, or Indigenous peoples contributed to policy development (e.g. "reflects input from 30,000 Canadians", "national launching workshop with broad representation"). These represent meaningful voice at scale.
+        - **INCLUDE**: Processes described as building "consensus" through multi-stakeholder engagement — consensus-building implies negotiation and influence, not one-way information.
 		- **NOTE**: Be careful around generic inclusion methods (e.g. workshops, consultation, engagement). Especially if they explicitly mention involvement of a vulnerable group, it can pass the POWER TEST, but without mention of a group or goal, they can mean one-way information session which should be excluded. 
 		- **EXCLUDE**: Tokenistic inclusion where consultation is a checkbox. 
 		- **EXCLUDE**: Mentions of groups receiving things (e.g. money, training) without a say in the management of those things (distribution, not participation). 
@@ -77,10 +83,15 @@ def train_distributive_justice() -> None:
             - Distributive Justice: {distributive.definition}
             
         ### 7. CONTEXT REQUIREMENT
-        - **EXCLUDE**: Isolated keywords, headers, or short fragments (< 1 sentence) that mention participation-adjacent terms without describing an actual mechanism, process, or commitment.
-        - **EXCLUDE**: Abstract labels (e.g. "Democratization", "Participatory Governance") unless the surrounding text describes concrete implementation.
-        - **NOTE**: A phrase like "stakeholder engagement" alone is insufficient — there must be enough context to determine WHO is engaged and HOW they gain influence.
-		"""
+        - **EXCLUDE**: Single abstract words (e.g. "Democratization", "Accountability") without any context.
+        - **INCLUDE**: Short phrases that contain BOTH a participatory method AND a group or goal (e.g. "participatory consultations", "stakeholder engagement in project selection", "FGDs with women").
+        - **INCLUDE**: Document titles or headings that explicitly name participatory processes (e.g. "Women's Participation in Community Forestry", "Participatory Governance in Rwanda").
+        - **NOTE**: When in doubt about short phrases, ask: does this name a specific method (consultation, FGD, workshop, input gathering) AND indicate who participates? If yes, include it.		
+        
+        ### 8. DOCUMENT TITLES AND REFERENCES  
+        - **INCLUDE**: Document titles, report names, or publication references that explicitly name participatory concepts (e.g. "Women's Participation in Community Forestry", "Transforming [X] for greater gender equality"). The title indicates the document substantively addresses procedural justice.
+        - **NOTE**: Even in reference lists or citations, tag the participation-relevant portion of the title.
+        """
 
     instructions = """
     Instructions:
