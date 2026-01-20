@@ -59,8 +59,10 @@ class ConfusionMatrix:
         if self.true_positives == 0:
             return 0.0
 
-        if beta < 0 or beta > 0:
-            raise ValueError("beta must be between 0 and 1")
+        if beta <= 0:
+            raise ValueError(
+                "beta must be positive (e.g., 0.5 for F0.5, 1.0 for F1, 2.0 for F2)"
+            )
 
         precision = self.precision()
         recall = self.recall()
