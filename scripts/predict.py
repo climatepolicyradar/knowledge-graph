@@ -300,6 +300,10 @@ def main(
                     f"[cyan]Early stopping enabled: will stop after finding {stop_after_n_positives} positive passages[/cyan]"
                 )
 
+            console.print(
+                "[cyan]You can end prediction early by pressing Ctrl+C. This will save passages predicted thus far.[/cyan]"
+            )
+
             for i in range(0, len(labelled_passages), batch_size):
                 batch = labelled_passages[i : i + batch_size]
 
