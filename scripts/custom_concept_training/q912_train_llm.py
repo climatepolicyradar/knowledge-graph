@@ -38,6 +38,34 @@ INSTRUCTIONS = """
         8. Double check that you have tagged all instances of procedural justice according to the provided definition, and that every tagged part contains enough information to show why this is relevant.
     """
 
+SYSTEM_PROMPT_TEMPLATE = (
+    """
+You are a specialist analyst and a climate justice activist from a
+climate-vulnerable community. You combine expert policy knowledge,
+with a critical perspective on power dynamics. This is informed by
+your practical lived experience, as well as legal- and decolonial theory.
+
+Your goal is to identify passages that demonstrate marginalized
+groups gaining meaningful influence or agency in decision-making.
+You are critical of tokenism, but you are alert to the ways procedural
+justice is formalized in policy language. This means you recognise that
+policy documents use terms like mainstreaming and decentralization in
+varied ways: it can be empty jargon and checkbox exercises, but it
+can also be a meaningful step towards real influence in projects
+and society.
+
+
+You will mark up references to concepts with XML tags.
+
+First, carefully review the following description of the concept:
+
+<concept_description>
+{concept_description}
+</concept_description>
+"""
+    + INSTRUCTIONS
+)
+
 
 def get_concept_description() -> str:
     """
@@ -140,42 +168,6 @@ def get_concept_description() -> str:
         """
 
 
-def get_system_prompt_template() -> str:
-    """
-    Build the strong persona system prompt template.
-
-    :returns: The system prompt template with instructions.
-    :rtype: str
-    """
-    return (
-        """
-        You are a specialist analyst and a climate justice activist from a
-        climate-vulnerable community. You combine expert policy knowledge,
-        with a critical perspective on power dynamics. This is informed by
-        your practical lived experience, as well as legal- and decolonial theory.
-
-        Your goal is to identify passages that demonstrate marginalized
-        groups gaining meaningful influence or agency in decision-making.
-        You are critical of tokenism, but you are alert to the ways procedural
-        justice is formalized in policy language. This means you recognise that
-        policy documents use terms like mainstreaming and decentralization in
-        varied ways: it can be empty jargon and checkbox exercises, but it
-        can also be a meaningful step towards real influence in projects
-        and society.
-
-
-        You will mark up references to concepts with XML tags.
-
-        First, carefully review the following description of the concept:
-
-        <concept_description>
-        {concept_description}
-        </concept_description>
-        """
-        + INSTRUCTIONS
-    )
-
-
 def get_concept_overrides() -> list[str]:
     """
     Get the concept override list for training and sampling.
@@ -194,7 +186,6 @@ def get_concept_overrides() -> list[str]:
 def train() -> None:
     """Run training for the procedural justice classifier."""
     concept_overrides = get_concept_overrides()
-    system_prompt_template = get_system_prompt_template()
 
     console.print("Training model with strong persona template")
     train_cli(
@@ -204,7 +195,7 @@ def train() -> None:
         classifier_type="LLMClassifier",
         classifier_override=[
             f"model_name={MODEL_NAME}",
-            f"system_prompt_template={system_prompt_template}",
+            f"system_prompt_template={SYSTEM_PROMPT_TEMPLATE}",
         ],
         concept_override=concept_overrides,
     )
