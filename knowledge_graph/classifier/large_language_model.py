@@ -22,6 +22,7 @@ from knowledge_graph.classifier.classifier import (
 )
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
+from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span, SpanXMLConceptFormattingError
 
 logger = logging.getLogger(__name__)
@@ -454,31 +455,50 @@ class AutoLLMClassifier(BaseLLMClassifier):
     4. Stores optimized instructions in system_prompt_template
     5. Uses the optimized prompt for all subsequent predictions
 
+    Model Configuration
+    -------------------
+    Three separate models can be configured for different phases:
+
+    - classifier_model_name: Used for final inference after optimization
+    - evaluation_model_name: Used for scoring during optimization (many calls, use cheap model)
+    - proposal_model_name: Used for generating instruction candidates (use smart model)
+
+    Example
+    -------
+    >>> classifier = AutoLLMClassifier(
+    ...     concept=concept,
+    ...     classifier_model_name="gpt-4o",           # Production inference
+    ...     evaluation_model_name="gpt-4o-mini",      # Cheap model for scoring
+    ...     proposal_model_name="gpt-4o",             # Smart model for instructions
+    ... )
+
     Parameters
     ----------
     concept : Concept
         The concept to classify
-    model_name : str, default="gemini-2.0-flash"
-        Model identifier (e.g., "gemini-2.0-flash", "gpt-4o")
+    classifier_model_name : str, default="gemini-2.0-flash"
+        Model for final inference after optimization
     system_prompt_template : str, default=AUTO_DEFAULT_SYSTEM_PROMPT
         Base system prompt with {concept_description} and {instructions} placeholders
     random_seed : int, default=42
         Random seed for reproducibility
-    optimization_model_name : str | None, default=None
-        Model to use during DSPy optimization. Defaults to model_name if not set.
-        Can use cheaper/faster model for optimization (e.g., gemini-2.0-flash-thinking).
+    evaluation_model_name : str | None, default=None
+        Model for evaluation during optimization. Defaults to classifier_model_name.
+        Use a cheaper/faster model (e.g., gpt-4o-mini) since evaluation requires many calls.
+    proposal_model_name : str | None, default=None
+        Model for generating instruction candidates. Defaults to evaluation_model_name.
+        Use a smarter model (e.g., gpt-4o, claude-3.5-sonnet) for better instructions.
     """
 
     def __init__(
         self,
         concept: Concept,
-        model_name: Annotated[
+        classifier_model_name: Annotated[
             str,
             Field(
                 description=(
-                    "The name of the model to use. See https://ai.pydantic.dev/models/ "
-                    "for a list of available models and the necessary environment "
-                    "variables needed to run each."
+                    "The model to use for final inference after optimization. "
+                    "See https://ai.pydantic.dev/models/ for available models."
                 ),
             ),
         ] = "gemini-2.0-flash",
@@ -501,18 +521,30 @@ class AutoLLMClassifier(BaseLLMClassifier):
                 )
             ),
         ] = 42,
-        optimization_model_name: Annotated[
+        evaluation_model_name: Annotated[
             str | None,
             Field(
                 description=(
-                    "Model to use during DSPy optimization. If None, uses model_name. "
-                    "Can be set to a cheaper/faster model for cost-effective optimization."
+                    "Model for evaluation during DSPy optimization. If None, uses "
+                    "classifier_model_name. Use a cheaper model (e.g., gpt-4o-mini) "
+                    "since evaluation requires many LLM calls."
+                )
+            ),
+        ] = None,
+        proposal_model_name: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "Model for generating instruction candidates during optimization. "
+                    "If None, uses evaluation_model_name. Use a smarter model "
+                    "(e.g., gpt-4o, claude-3.5-sonnet) for higher quality instructions."
                 )
             ),
         ] = None,
     ):
         # Store optimization settings and initialize instructions before calling super().__init__
-        self.optimization_model_name = optimization_model_name or model_name
+        self.evaluation_model_name = evaluation_model_name or classifier_model_name
+        self.proposal_model_name = proposal_model_name or self.evaluation_model_name
         self.optimized_instructions: str | None = None
 
         # Initialize with default instructions to satisfy template formatting
@@ -523,7 +555,7 @@ class AutoLLMClassifier(BaseLLMClassifier):
 
         super().__init__(
             concept=concept,
-            model_name=model_name,
+            model_name=classifier_model_name,
             system_prompt_template=formatted_template,
             random_seed=random_seed,
         )
@@ -552,21 +584,26 @@ class AutoLLMClassifier(BaseLLMClassifier):
 
     def _create_agent(self) -> Agent:  # type: ignore[type-arg]
         """
-        Create pydantic-ai agent for inference.
+        Create pydantic-ai agent for inference using OpenRouter.
 
         Returns
         -------
         Agent
             Configured pydantic-ai agent
         """
+        # Route through OpenRouter - requires OPENROUTER_API_KEY environment variable
+        model_name = self.model_name
+        if not model_name.startswith("openrouter:"):
+            model_name = f"openrouter:{model_name}"
+
         return Agent(  # type: ignore[return-value]
-            model=self.model_name,
+            model=model_name,
             system_prompt=self.system_prompt,
             output_type=LLMResponse,
         )
 
     def _prepare_dspy_examples(
-        self, passages: list["LabelledPassage"], validation_size: float
+        self, passages: list[LabelledPassage], validation_size: float
     ) -> tuple[list, list]:
         """
         Convert LabelledPassage objects to DSPy Examples with stratified split.
@@ -634,11 +671,21 @@ class AutoLLMClassifier(BaseLLMClassifier):
 
         return train_examples, val_examples
 
-    def _create_dspy_lm(self):
+    def _create_dspy_lm(self, model_name: str | None = None, temperature: float = 0.7):
         """
         Create DSPy language model for optimization.
 
         Maps model names to appropriate DSPy LM classes using Litellm format.
+
+        Parameters
+        ----------
+        model_name : str | None, default=None
+            Model name to use. If None, uses self.evaluation_model_name.
+        temperature : float, default=0.7
+            Temperature for LLM sampling. Higher values (e.g., 0.7-1.0) produce
+            more varied outputs, which is important for optimization to evaluate
+            how different instructions affect model behavior. Set to 0 for
+            deterministic outputs.
 
         Returns
         -------
@@ -647,18 +694,28 @@ class AutoLLMClassifier(BaseLLMClassifier):
         """
         import dspy
 
-        model_name = self.optimization_model_name
+        model_name = model_name or self.evaluation_model_name
 
-        # DSPy uses Litellm under the hood, which has provider/model format
-        if "gpt" in model_name or "o1" in model_name:
-            return dspy.LM(model=f"openai/{model_name}")
-        elif "claude" in model_name:
-            return dspy.LM(model=f"anthropic/{model_name}", max_tokens=4000)
-        elif "gemini" in model_name:
-            return dspy.LM(model=f"google/{model_name}", max_tokens=4000)
+        # DSPy uses Litellm under the hood, route all models through OpenRouter
+        # Requires OPENROUTER_API_KEY environment variable
+        # Temperature > 0 is critical for optimization - without it, all instruction
+        # candidates may produce identical outputs, preventing meaningful comparison
+        if model_name.startswith("openrouter/"):
+            # Already has openrouter prefix
+            openrouter_model = model_name
         else:
-            # Generic Litellm fallback
-            return dspy.LM(model=model_name, max_tokens=4000)
+            # Prepend openrouter/ to model name
+            openrouter_model = f"openrouter/{model_name}"
+
+        # Reasoning models (o1, o3, gpt-5, etc.) require special parameters
+        import re
+
+        reasoning_pattern = re.compile(r"(o1|o3|gpt-5)", re.IGNORECASE)
+        if reasoning_pattern.search(model_name):
+            # Reasoning models require temperature=1.0 and max_tokens >= 16000
+            return dspy.LM(model=openrouter_model, max_tokens=16000, temperature=1.0)
+
+        return dspy.LM(model=openrouter_model, max_tokens=4000, temperature=temperature)
 
     def _extract_optimized_instructions(self, optimized_module) -> str:
         """
@@ -676,22 +733,49 @@ class AutoLLMClassifier(BaseLLMClassifier):
         str
             Optimized instructions as plain text
         """
-        # MIPRO stores optimized prompt in the predict module's signature
-        signature = optimized_module.predict.signature
+        try:
+            # MIPRO stores optimized prompt in the predict module's signature
+            signature = optimized_module.predict.signature
 
-        # Extract the instructions field (MIPRO modifies the signature docstring)
-        if hasattr(signature, "instructions"):
-            return signature.instructions
-        else:
-            # Fallback: extract from signature docstring
-            return signature.__doc__ or DEFAULT_INSTRUCTIONS
+            # Extract the instructions field (MIPRO modifies the signature docstring)
+            instructions = None
+            if hasattr(signature, "instructions"):
+                instructions = signature.instructions
+
+            # Validate we got meaningful instructions
+            if instructions and isinstance(instructions, str) and instructions.strip():
+                logger.debug(
+                    f"Extracted optimized instructions ({len(instructions)} chars)"
+                )
+                return instructions
+
+            # Try fallback to signature docstring
+            if signature.__doc__ and signature.__doc__.strip():
+                logger.warning(
+                    "signature.instructions was empty, falling back to __doc__"
+                )
+                return signature.__doc__
+
+            # Final fallback to DEFAULT_INSTRUCTIONS
+            logger.warning(
+                "Could not extract optimized instructions from module, "
+                "using DEFAULT_INSTRUCTIONS"
+            )
+            return DEFAULT_INSTRUCTIONS
+
+        except Exception as e:
+            logger.error(
+                f"Failed to extract optimized instructions: {e}. "
+                "Using DEFAULT_INSTRUCTIONS."
+            )
+            return DEFAULT_INSTRUCTIONS
 
     def fit(
         self,
-        labelled_passages: list["LabelledPassage"] | None = None,
-        validation_size: float = 0.2,
+        labelled_passages: list[LabelledPassage] | None = None,
+        validation_size: float = 0.3,
         min_passages: int = 10,
-        max_passages: int | None = 50,
+        max_passages: int | None = 100,
         enable_wandb: bool = False,
         mipro_num_candidates: int = 10,
         mipro_num_trials: int = 15,
@@ -709,11 +793,11 @@ class AutoLLMClassifier(BaseLLMClassifier):
         ----------
         labelled_passages : list[LabelledPassage] | None, default=None
             Training data. If None, uses concept.labelled_passages
-        validation_size : float, default=0.2
-            Proportion to use for validation (default 0.2 for 80/20 split)
+        validation_size : float, default=0.15
+            Proportion to use for validation (default 0.15 for 85/15 split)
         min_passages : int, default=10
             Minimum required passages to perform optimization
-        max_passages : int | None, default=None
+        max_passages : int | None, default=100
             Maximum passages to use (randomly sampled if more available).
             Useful for faster experimentation. If None, uses all passages.
         enable_wandb : bool, default=False
@@ -777,24 +861,42 @@ class AutoLLMClassifier(BaseLLMClassifier):
             passages, validation_size
         )
 
-        # 3. Configure DSPy with optimization model
-        lm = self._create_dspy_lm()
-        dspy.configure(lm=lm)
+        # 3. Configure DSPy with evaluation model (used for scoring instruction candidates)
+        # Temperature > 0 ensures varied outputs across different instruction candidates
+        # cache=False ensures each instruction candidate gets fresh LLM responses
+        # Without this, DSPy might return cached responses that don't reflect
+        # instruction differences, causing all candidates to score identically
+        evaluation_lm = self._create_dspy_lm(
+            model_name=self.evaluation_model_name, temperature=0.7
+        )
+        dspy.configure(lm=evaluation_lm, cache=False)
 
-        # 4. Create DSPy module for concept tagging task
+        # 4. Create proposal model for generating instruction candidates
+        # This can be a smarter/more capable model since it's called fewer times
+        proposal_lm = self._create_dspy_lm(
+            model_name=self.proposal_model_name, temperature=1.0
+        )
+
+        logger.info(
+            f"Optimization models - Evaluation: {self.evaluation_model_name}, "
+            f"Proposal: {self.proposal_model_name}"
+        )
+
+        # 5. Create DSPy module for concept tagging task
         concept_tagger = ConceptTaggerModule(
             concept_description=self.concept.to_markdown(),
             signature=ConceptTaggingSignature,
         )
 
-        # 5. Setup passage-level F-beta metric (F0.5) for precision-focused optimization
+        # 6. Setup passage-level F-beta metric (F0.5) for precision-focused optimization
         # F0.5 weights precision 2x more than recall while maintaining F1 constraint
+        assert self.concept.wikibase_id is not None
         metric_fn = create_passage_level_fbeta_metric(
             concept_id=self.concept.wikibase_id,
             beta=0.5,  # Precision-focused: weights precision 2x more than recall
         )
 
-        # 6. Run MIPRO optimization
+        # 7. Run MIPRO optimization
         wandb_run = None
         try:
             # Optional W&B integration
@@ -804,7 +906,9 @@ class AutoLLMClassifier(BaseLLMClassifier):
                 wandb_run = wandb.init(
                     project=f"auto-llm-{self.concept.wikibase_id}",
                     config={
-                        "model_name": self.optimization_model_name,
+                        "classifier_model_name": self.model_name,
+                        "evaluation_model_name": self.evaluation_model_name,
+                        "proposal_model_name": self.proposal_model_name,
                         "concept_id": str(self.concept.wikibase_id),
                         "num_train": len(train_examples),
                         "num_val": len(val_examples),
@@ -813,6 +917,7 @@ class AutoLLMClassifier(BaseLLMClassifier):
 
             optimizer = MIPROv2(
                 metric=metric_fn,
+                prompt_model=proposal_lm,  # Smart model for generating instruction candidates
                 auto=None,  # Disable auto mode to manually control num_candidates
                 num_candidates=mipro_num_candidates,
                 max_bootstrapped_demos=0,  # Disable bootstrapping for instruction-only optimization
@@ -830,7 +935,7 @@ class AutoLLMClassifier(BaseLLMClassifier):
                 requires_permission_to_run=False,
             )
 
-            # 7. Extract optimized instructions
+            # 8. Extract optimized instructions
             self.optimized_instructions = self._extract_optimized_instructions(
                 optimized_module
             )
@@ -852,17 +957,17 @@ class AutoLLMClassifier(BaseLLMClassifier):
             self.is_fitted = True
             return self
 
-        # 8. Update system prompt with optimized instructions
+        # 9. Update system prompt with optimized instructions
         self.system_prompt_template = AUTO_DEFAULT_SYSTEM_PROMPT
         self.system_prompt = self.system_prompt_template.format(
             concept_description=self.concept.to_markdown(),
             instructions=self.optimized_instructions,
         )
 
-        # 9. Recreate pydantic-ai agent with new prompt
+        # 10. Recreate pydantic-ai agent with new prompt
         self.agent = self._create_agent()
 
-        # 10. Mark as fitted
+        # 11. Mark as fitted
         self.is_fitted = True
 
         logger.info(
