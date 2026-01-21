@@ -157,6 +157,7 @@ def main(
             model.fit()
             console.log(f"🤖 Created a {model}")
             classifier_ids.append(model.id)
+            console.log(f"Running {model} on {len(raw_text_passages)} passages.")
 
             predictions = model.predict(
                 raw_text_passages, batch_size=100, show_progress=True
