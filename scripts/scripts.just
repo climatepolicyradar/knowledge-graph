@@ -96,7 +96,7 @@ extend-dataset id workspace:
 
 # push a sampled set of passages to argilla for a specific wikibase ID
 push-to-argilla id workspace:
-    uv run python scripts/push_new_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
+    uv run python scripts/argilla/push_new_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
 
 # generate an HTML report of classifier performance
 generate-report wikibase-ids:
