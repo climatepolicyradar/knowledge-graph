@@ -1,4 +1,5 @@
 import math
+import re
 from contextlib import nullcontext
 from typing import Annotated, Optional
 
@@ -42,6 +43,12 @@ def main(
         help="Dataset to use",
         click_type=click.Choice(["balanced", "combined"]),
     ),
+    corpus_type: Annotated[
+        Optional[str],
+        typer.Option(
+            help="Filter to a specific corpus type (e.g., 'Sabin', 'Litigation')"
+        ),
+    ] = None,
     max_size_to_sample_from: int = typer.Option(
         500_000,
         help="Maximum number of passages to load from the dataset before sampling",
@@ -81,10 +88,17 @@ def main(
     negative_sample_size = math.floor(sample_size * min_negative_proportion)
     positive_sample_size = sample_size - negative_sample_size
 
+    # Build corpus suffix for filename
+    corpus_suffix = ""
+    if corpus_type:
+        # Normalize: lowercase, spaces to underscores, remove punctuation
+        normalized = re.sub(r"[^\w\s]", "", corpus_type.lower()).replace(" ", "_")
+        corpus_suffix = f"_{normalized}"
+
     if dataset_name == "balanced":
-        dataset_filename = "balanced_dataset_for_sampling.feather"
+        dataset_filename = f"sampled_dataset{corpus_suffix}.feather"
     elif dataset_name == "combined":
-        dataset_filename = "combined_dataset.feather"
+        dataset_filename = f"combined_dataset{corpus_suffix}.feather"
     else:
         raise ValueError(f"Unknown dataset_name: {dataset_name}")
 
@@ -99,7 +113,7 @@ def main(
         except FileNotFoundError as e:
             raise FileNotFoundError(
                 f"{dataset_path} not found. If you haven't already, you should run:\n"
-                "  just build-dataset"
+                f"  just build-dataset"
             ) from e
 
     # Limit dataset size if needed
@@ -239,10 +253,15 @@ def main(
             console.log(sampled_passages[column].value_counts(), end="\n\n")
 
         # Convert sampled passage rows to LabelledPassage objects and save them
+        # Convert sampled passage rows to LabelledPassage objects and save them
         labelled_passages = []
         for _, row in sampled_passages.iterrows():
             metadata = row.to_dict()
             metadata.pop("text_block.text")
+            # Convert numpy arrays to lists for JSON serialization
+            for key, value in metadata.items():
+                if hasattr(value, "tolist"):
+                    metadata[key] = value.tolist()
             labelled_passages.append(
                 LabelledPassage(
                     text=row["text_block.text"],  # type: ignore
