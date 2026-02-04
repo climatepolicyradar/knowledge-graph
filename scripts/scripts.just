@@ -1,7 +1,7 @@
 
 # build a dataset of passages for sampling
 build-dataset n="10000":
-    poetry run python scripts/build_dataset.py --n {{n}}
+    uv run python scripts/build_dataset.py --n {{n}}
 
 # fetch metadata and labelled passages for a specific wikibase ID
 # Optionally ad a wikibase_config as a string, if omitted this will rely on env variables instead:
@@ -89,6 +89,10 @@ vibe-check-predict id +OPTS="":
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id:
     uv run python scripts/sample.py --wikibase-id {{id}}
+
+# sample a set of passages from the dataset for a specific corpus for a specific wikibase ID
+sample-corpus id corpus:
+    uv run python scripts/sample.py --wikibase-id {{id}} --corpus-type {{corpus}}
 
 # extend an existing dataset in argilla with additional passages for a specific wikibase ID
 extend-dataset id workspace:
