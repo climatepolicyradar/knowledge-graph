@@ -524,7 +524,7 @@ def main(
 
                             # Evaluate classifier
                             start_time = time.time()
-                            _, _ = evaluate_classifier(
+                            _, _, _ = evaluate_classifier(
                                 classifier=classifier,
                                 labelled_passages=concept.labelled_passages,
                                 wandb_run=run,
