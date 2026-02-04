@@ -240,6 +240,43 @@ def train() -> None:
 
 
 @app.command()
+def autollm(
+    n_trials: int = typer.Option(5, help="Number of optimization trials to run"),
+    beta: float = typer.Option(
+        0.5, help="Beta value for f-beta score (default 1.0 = F1)"
+    ),
+    optimiser_model: str = typer.Option(
+        "openrouter:google/gemini-3-pro-preview",
+        help="Model to use for prompt optimization",
+    ),
+    final_model: str = typer.Option(
+        "openrouter:google/gemini-3-pro-preview",
+        help="Model to use for the final classifier",
+    ),
+) -> None:
+    """Train an AutoLLMClassifier that automatically optimizes its own prompt."""
+    concept_overrides = get_concept_overrides()
+
+    console.print("Training AutoLLMClassifier with automatic prompt optimization")
+    asyncio.run(
+        run_training(
+            wikibase_id=WIKIBASE_ID,
+            track_and_upload=True,
+            aws_env=AwsEnv.labs,
+            classifier_type="AutoLLMClassifier",
+            classifier_kwargs={
+                "model_name": "openrouter:google/gemini-3-flash-preview",
+                "n_trials": n_trials,
+                "beta": beta,
+                "optimiser_model_name": optimiser_model,
+                "final_classifier_model_name": final_model,
+            },
+            concept_overrides=concept_overrides,
+        )
+    )
+
+
+@app.command()
 def sample(
     sample_size: int = typer.Option(10000, help="The number of passages to sample"),
     dataset_name: str = typer.Option(
