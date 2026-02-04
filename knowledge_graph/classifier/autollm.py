@@ -113,7 +113,6 @@ class AutoLLMClassifier(LLMClassifier):
             meta_prompt = DEFAULT_META_PROMPT
 
         labelled_passages = self.concept.labelled_passages
-        gold_standard = create_gold_standard_labelled_passages(labelled_passages)
         trial_results: list[TrialResult] = []
 
         print("=" * 60)
@@ -122,7 +121,6 @@ class AutoLLMClassifier(LLMClassifier):
         initial_result = self._evaluate_and_store(
             classifier=self,
             labelled_passages=labelled_passages,
-            gold_standard=gold_standard,
             beta=beta,
             batch_size=batch_size,
         )
@@ -167,7 +165,6 @@ class AutoLLMClassifier(LLMClassifier):
             trial_result = self._evaluate_and_store(
                 classifier=trial_classifier,
                 labelled_passages=labelled_passages,
-                gold_standard=gold_standard,
                 beta=beta,
                 batch_size=batch_size,
             )
@@ -207,7 +204,6 @@ class AutoLLMClassifier(LLMClassifier):
         final_result = self._evaluate_and_store(
             classifier=final_classifier,
             labelled_passages=labelled_passages,
-            gold_standard=gold_standard,
             beta=beta,
             batch_size=batch_size,
         )
@@ -226,7 +222,6 @@ class AutoLLMClassifier(LLMClassifier):
         self,
         classifier: LLMClassifier,
         labelled_passages: list,
-        gold_standard: list,
         beta: float,
         batch_size: int,
     ) -> TrialResult:
@@ -235,7 +230,6 @@ class AutoLLMClassifier(LLMClassifier):
 
         :param classifier: The classifier to evaluate
         :param labelled_passages: Labelled passages for evaluation
-        :param gold_standard: Gold standard labelled passages
         :param beta: Beta value for f-beta score
         :param batch_size: Batch size for evaluation
         :return: TrialResult with prompt, score, and predictions
@@ -247,7 +241,7 @@ class AutoLLMClassifier(LLMClassifier):
         )
 
         f_beta_score = confusion_matrix.f_beta_score(beta=beta)
-
+        gold_standard = create_gold_standard_labelled_passages(labelled_passages)
         predictions_df = create_validation_predictions_dataframe(
             gold_standard, model_labelled_passages
         )
