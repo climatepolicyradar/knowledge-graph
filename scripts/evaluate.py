@@ -284,13 +284,17 @@ def log_metrics_to_wandb(
         run.summary[metric_name] = metric_value
 
 
-def log_validation_set_predictions_to_wandb(
-    run: Run,
+def create_validation_predictions_dataframe(
     gold_standard_labelled_passages: list[LabelledPassage],
     model_labelled_passages: list[LabelledPassage],
-):
-    """Log individual validation set predictions to W&B as a table."""
+) -> pd.DataFrame:
+    """
+    Create a DataFrame of validation set predictions.
 
+    :param gold_standard_labelled_passages: Gold standard labelled passages
+    :param model_labelled_passages: Model predicted labelled passages
+    :return: DataFrame with passage-level predictions and metadata
+    """
     table_data = []
     for gold_passage, model_passage in zip(
         gold_standard_labelled_passages, model_labelled_passages
@@ -330,10 +334,19 @@ def log_validation_set_predictions_to_wandb(
 
         table_data.append(row)
 
-    df = pd.DataFrame(table_data)
+    return pd.DataFrame(table_data)
 
+
+def log_validation_set_predictions_to_wandb(
+    run: Run,
+    gold_standard_labelled_passages: list[LabelledPassage],
+    model_labelled_passages: list[LabelledPassage],
+):
+    """Log individual validation set predictions to W&B as a table."""
+    df = create_validation_predictions_dataframe(
+        gold_standard_labelled_passages, model_labelled_passages
+    )
     predictions_df = wandb.Table(dataframe=df)
-
     run.log({"validation_set_predictions": predictions_df})
 
 
@@ -342,15 +355,16 @@ def evaluate_classifier(
     labelled_passages: list[LabelledPassage],
     wandb_run: Optional[Run] = None,
     batch_size: int = 16,
-) -> tuple[pd.DataFrame, list[LabelledPassage]]:
+) -> tuple[pd.DataFrame, list[LabelledPassage], ConfusionMatrix]:
     """
     Evaluate the performance of a classifier using an evaluation dataset.
 
     :param Classifier classifier: classifier to evaluate
     :param list[LabelledPassage] labelled_passages: labelled passages, as pulled from
         Argilla, to evaluate the classifier against
-    :return tuple[pd.DataFrame, list[LabelledPassage]]: dataframe of metrics, and list
-        of passages labelled by the model
+    :return tuple[pd.DataFrame, list[LabelledPassage], ConfusionMatrix]: dataframe of
+        metrics, list of passages labelled by the model, and passage-level confusion
+        matrix (for computing f-beta scores with arbitrary beta values)
     """
 
     console.log("🥇 Creating a list of gold-standard labelled passages")
@@ -394,6 +408,10 @@ def evaluate_classifier(
 
     print_metrics(df)
 
+    passage_level_cm = count_passage_level_metrics(
+        gold_standard_labelled_passages, model_labelled_passages
+    )
+
     if wandb_run:
         log_metrics_to_wandb(wandb_run, df)  # type: ignore
         console.log("📊 Logging validation set predictions to W&B")
@@ -408,7 +426,7 @@ def evaluate_classifier(
             ground_truth=gold_standard_labelled_passages,
         )
 
-    return df, model_labelled_passages
+    return df, model_labelled_passages, passage_level_cm
 
 
 def create_wandb_model_evaluation_charts(
@@ -617,7 +635,7 @@ def main(
             wandb_run.use_artifact(wandb_model_path)
 
     try:
-        df, _ = evaluate_classifier(
+        df, _, _ = evaluate_classifier(
             classifier=loaded_classifier,
             labelled_passages=concept.labelled_passages,
             wandb_run=wandb_run,

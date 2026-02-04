@@ -668,7 +668,7 @@ async def train_classifier(
             )
 
         if evaluate:
-            metrics_df, model_labelled_passages = evaluate_classifier(
+            metrics_df, model_labelled_passages, _ = evaluate_classifier(
                 classifier=classifier,
                 labelled_passages=classifier.concept.labelled_passages,
                 wandb_run=run,

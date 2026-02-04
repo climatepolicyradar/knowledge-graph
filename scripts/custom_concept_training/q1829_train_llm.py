@@ -9,12 +9,15 @@ Usage:
     uv run scripts/custom_concept_training/q1829_train_llm.py sample
 """
 
+import asyncio
+
 import typer
 
+from knowledge_graph.classifier.large_language_model import LLMClassifierPrompt
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from scripts.sample import main as sample_cli
-from scripts.train import main as train_cli
+from scripts.train import run_training
 
 app = typer.Typer()
 
@@ -30,57 +33,67 @@ CONCEPT_DEFINITION = """A finance flow is an economic flow that reflects the cre
     4. the value (which can, but does not need to be, expressed in monetary terms directly).
     It is acceptable if not all of these elements are present, but where they are, all of these elements should be considered part
     of the same financial flow.
+"""
 
-    Guidelines for annotation are:
+LABELLING_GUIDELINES = """
+Guidelines for annotation are:
 
-        - Include when the text describes money or financial assets moving (e.g. payments, loans, investments, disbursements, repayments).
-        - Include both one-off transactions and ongoing streams (e.g. monthly payments, yearly disbursements).
-        - Include in the same label all relevant elements of the flow (if given): who is paying, who is receiving, the purpose, the amount and the timeframe, as well as any crucial details, such as legal conditions or interest payable. However, always ensure such statements include the flow itself; do not tag if the text only specifies conditions.
-        - Include financial commitments, as well as disbursements, as long as commitments are firm, such as budgets and pledges.
-        - Exclude when the text only states amounts held, owed, or valued at a point in time (these are stocks, not flows).
-        - Exclude metaphorical/non-financial uses of "flow" (e.g. "flow of information").
-        - Exclude hypothetical flows and financial discussions which are not tied to concrete financial commitments.
-        - Exclude financial flows that are outside the real economy, which means excluding factors like operational expenses or investments made into financial markets. Note, however, that flows such as development assistance or payments to/from climate funds are to be included.
-        - Exclude discussions on the need for finance or finance flows, as well as discussions- or statistics on the economy or performance of a company.
+    - Include when the text describes money or financial assets moving (e.g. payments, loans, investments, disbursements, repayments).
+    - Include both one-off transactions and ongoing streams (e.g. monthly payments, yearly disbursements).
+    - Include in the same label all relevant elements of the flow (if given): who is paying, who is receiving, the purpose, the amount and the timeframe, as well as any crucial details, such as legal conditions or interest payable. However, always ensure such statements include the flow itself; do not tag if the text only specifies conditions.
+    - Include financial commitments, as well as disbursements, as long as commitments are firm, such as budgets and pledges.
+    - Exclude when the text only states amounts held, owed, or valued at a point in time (these are stocks, not flows).
+    - Exclude metaphorical/non-financial uses of "flow" (e.g. "flow of information").
+    - Exclude hypothetical flows and financial discussions which are not tied to concrete financial commitments.
+    - Exclude financial flows that are outside the real economy, which means excluding factors like operational expenses or investments made into financial markets. Note, however, that flows such as development assistance or payments to/from climate funds are to be included.
+    - Exclude discussions on the need for finance or finance flows, as well as discussions- or statistics on the economy or performance of a company.
 """
 
 SYSTEM_PROMPT_TEMPLATE = """
-    You are a specialist analyst, tasked with identifying mentions of concepts in policy documents.
-    These documents are mostly drawn from a climate and development context.
-    You will mark up references to concepts with XML tags.
+You are a specialist analyst, tasked with identifying mentions of concepts in policy documents.
+These documents are mostly drawn from a climate and development context.
+You will mark up references to concepts with XML tags.
 
-    First, carefully review the following description of the concept:
+First, carefully review the following description of the concept:
 
-    <concept_description>
-    {concept_description}
-    </concept_description>
+<concept_description>
+{concept_description}
+</concept_description>
 
-    Instructions:
+Instructions:
 
-    1. Read through each passage carefully, thinking about the concept and different ways it can be used in documents.
-    2. Identify any mentions of the concept, including references that are not included explicitly as examples, but which do match the definition and guidelines.
-    3. Surround each identified mention with <concept> tags.
-    4. If a passage contains multiple instances, each one should be tagged separately.
-    5. If a passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
-    6. If an entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag.
-    7. The input text must be reproduced exactly, down to the last character, only adding concept tags.
-    8. Double check that you have tagged all financial flows and that every tagged part is describing an actual financial flow, including the source, destination, instrument and value, if any is given.
-    """
+1. Read through each passage carefully, thinking about the concept and different ways it can be used in documents.
+2. Identify any mentions of the concept, including references that are not included as an example, but which match the definition.
+3. Surround each identified mention with <concept> tags.
+4. If a passage contains multiple instances, each one should be tagged separately.
+5. If a passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
+6. If an entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag. Skip this step if you have tagged any concept mentions so far.
+7. The input text must be reproduced exactly, down to the last character, only adding concept tags.
+8. Double check that you have tagged all mentions of the concept and that every tagged part is describing an actual mention of that concept.
+"""
 
 
 @app.command()
 def train() -> None:
     """Run training for the financial flow classifier."""
-    train_cli(
-        wikibase_id=WIKIBASE_ID,
-        track_and_upload=True,
-        aws_env=AwsEnv.labs,
-        classifier_type="LLMClassifier",
-        classifier_override=[
-            "model_name=openrouter:openai/gpt-5",
-            f"system_prompt_template={SYSTEM_PROMPT_TEMPLATE}",
-        ],
-        concept_override=[f"definition={CONCEPT_DEFINITION}"],
+    # Create the LLMClassifierPrompt with separated base template and guidelines
+    prompt = LLMClassifierPrompt(
+        system_prompt_template=SYSTEM_PROMPT_TEMPLATE,
+        labelling_guidelines=LABELLING_GUIDELINES,
+    )
+
+    asyncio.run(
+        run_training(
+            wikibase_id=WIKIBASE_ID,
+            track_and_upload=True,
+            aws_env=AwsEnv.labs,
+            classifier_type="LLMClassifier",
+            classifier_kwargs={
+                "model_name": "openrouter:openai/gpt-5",
+                "system_prompt_template": prompt,
+            },
+            concept_overrides={"definition": CONCEPT_DEFINITION},
+        )
     )
 
 

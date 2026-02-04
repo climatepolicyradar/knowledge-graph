@@ -7,7 +7,7 @@ from typing import Annotated, Optional, Sequence
 
 import httpx
 import nest_asyncio
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from pydantic_ai import Agent
 from pydantic_ai.agent import AgentRunResult
 from pydantic_ai.exceptions import UnexpectedModelBehavior
@@ -63,6 +63,57 @@ Instructions:
 """
 
 
+class LLMClassifierPrompt(BaseModel):
+    """
+    A prompt for classification.
+
+    Decomposed into parts for more transparent iteration and validation.
+    """
+
+    system_prompt_template: Annotated[
+        str,
+        Field(
+            description=(
+                "The unformatted system prompt for the LLM. Needs to be able to be populated with {concept_description} parameter."
+            )
+        ),
+    ]
+    labelling_guidelines: Annotated[
+        str | None,
+        Field(
+            description=(
+                "Optional concept-specific labelling guidelines to be appended to the system prompt template. "
+                "Should contain numbered or bullet lists about what to tag, and *not* to tag as the concept. "
+                "Might also contain a preamble."
+            )
+        ),
+    ] = None
+
+    @field_validator("system_prompt_template", mode="after")
+    @classmethod
+    def validate_system_prompt_template(cls, value: str) -> str:
+        """Validate that the system prompt template contains required replacement fields (in {})."""
+
+        if "{concept_description}" not in value:
+            raise ValueError("System prompt must contain {concept_description}")
+
+        return value
+
+    def format(self, concept: Concept) -> str:
+        """Return the prompt formatted with details from the concept, with labelling guidelines appended if available."""
+        formatted = self.system_prompt_template.format(
+            concept_description=concept.to_markdown()
+        )
+        if self.labelling_guidelines:
+            formatted += f"\n\n<labelling_guidelines>\n{self.labelling_guidelines}\n</labelling_guidelines>"
+        return formatted
+
+
+DEFAULT_LLM_CLASSIFIER_PROMPT = LLMClassifierPrompt(
+    system_prompt_template=DEFAULT_SYSTEM_PROMPT
+)
+
+
 class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier, ABC):
     """
     A classifier that uses an LLM to predict the presence of a concept in a text.
@@ -81,15 +132,11 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             ),
         ],
         system_prompt_template: Annotated[
-            str,
+            LLMClassifierPrompt,
             Field(
-                description=(
-                    "The unformatted system prompt for the LLM, with values in {}. "
-                    "Should be able to be populated with {concept_description} and "
-                    "{examples} parameters."
-                ),
+                description=("The system prompt template for the LLM"),
             ),
-        ] = DEFAULT_SYSTEM_PROMPT,
+        ] = DEFAULT_LLM_CLASSIFIER_PROMPT,
         random_seed: Annotated[
             Optional[int],
             Field(
@@ -107,13 +154,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         self.system_prompt_template = system_prompt_template
         self.random_seed = random_seed
 
-        assert "{concept_description}" in system_prompt_template, (
-            "System prompt must contain {concept_description}"
-        )
-
-        self.system_prompt = system_prompt_template.format(
-            concept_description=self.concept.to_markdown()
-        )
+        self.system_prompt = system_prompt_template.format(concept)
 
         self.agent = self._create_agent()
 
@@ -332,15 +373,11 @@ class LLMClassifier(BaseLLMClassifier):
             ),
         ] = "openrouter:openai/gpt-5",
         system_prompt_template: Annotated[
-            str,
+            LLMClassifierPrompt,
             Field(
-                description=(
-                    "The unformatted system prompt for the LLM, with values in {}. "
-                    "Should be able to be populated with {concept_description} and "
-                    "{examples} parameters."
-                ),
+                description=("The system prompt template for the LLM"),
             ),
-        ] = DEFAULT_SYSTEM_PROMPT,
+        ] = DEFAULT_LLM_CLASSIFIER_PROMPT,
         random_seed: Annotated[
             int,
             Field(
@@ -388,15 +425,11 @@ class LocalLLMClassifier(BaseLLMClassifier):
             ),
         ] = "gemma3n:e4b",
         system_prompt_template: Annotated[
-            str,
+            LLMClassifierPrompt,
             Field(
-                description=(
-                    "The unformatted system prompt for the LLM, with values in {}. "
-                    "Should be able to be populated with {concept_description} and "
-                    "{examples} parameters."
-                ),
+                description=("The system prompt template for the LLM"),
             ),
-        ] = DEFAULT_SYSTEM_PROMPT,
+        ] = DEFAULT_LLM_CLASSIFIER_PROMPT,
         random_seed: Annotated[
             int,
             Field(

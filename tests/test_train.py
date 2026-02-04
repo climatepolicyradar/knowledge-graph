@@ -136,7 +136,12 @@ async def test_run_training(
 
         mock_metrics_df = Mock()
         mock_labelled_passages = []
-        mock_evaluate.return_value = (mock_metrics_df, mock_labelled_passages)
+        mock_confusion_matrix = Mock()
+        mock_evaluate.return_value = (
+            mock_metrics_df,
+            mock_labelled_passages,
+            mock_confusion_matrix,
+        )
 
         result = await run_training(
             wikibase_id=WikibaseID("Q787"),
@@ -312,9 +317,14 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
         mock_argilla_session.return_value = mock_argilla_instance
+        mock_confusion_matrix = Mock()
 
         # Configure evaluate_classifier to return mock data
-        mock_evaluate.return_value = (mock_metrics_df, mock_labelled_passages)
+        mock_evaluate.return_value = (
+            mock_metrics_df,
+            mock_labelled_passages,
+            mock_confusion_matrix,
+        )
 
         # Create mock artifact instances with proper context manager support
         mock_labelled_passages_artifact = Mock()
