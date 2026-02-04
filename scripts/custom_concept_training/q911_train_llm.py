@@ -9,14 +9,20 @@ Usage:
     uv run scripts/custom_concept_training/q911_train_llm.py sample
 """
 
+import asyncio
+
 import typer
 from rich.console import Console
 
+from knowledge_graph.classifier.large_language_model import (
+    DEFAULT_SYSTEM_PROMPT,
+    LLMClassifierPrompt,
+)
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.wikibase import WikibaseSession
 from scripts.sample import main as sample_cli
-from scripts.train import main as train_cli
+from scripts.train import run_training
 
 app = typer.Typer()
 console = Console()
@@ -26,127 +32,123 @@ MODEL_NAME = "openrouter:google/gemini-3-pro-preview"
 
 CONCEPT_DEFINITION = "Justice is the ethical and political framework that addresses fairness, including issues of responsibility, rights, and structural inequity."
 
-# I THINK THE BELOW IS NO LONGER USED?
-# CHANGED IT ANYWAY TO MAKE SURE IT ALIGNS
-INSTRUCTIONS = """
-    Instructions:
-        1. Read through the passage carefully, thinking about the concept and different ways it is used in documents, including acronyms, jargon and global differences.
-        2. Identify any mentions of the concept, including direct references and indirect descriptions of the concept which match the definition. Use the criteria to inform whether the reference meets the threshold.
-        3. Surround each identified mention with <concept> tags.
-        4. If the passage contains multiple instances, each one should be tagged separately.
-        5. If the passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
-        6. If the entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag.
-        7. The input text must be reproduced exactly, down to the last character, even if this means typos or other minor formatting issues, only adding concept tags.
-        8. Double check that you have tagged all instances of the concept according to the provided definition, and that every tagged part contains enough information to show why this is relevant.
-    """
-
 
 def get_concept_description() -> str:
     """
-    Build the concept description by fetching related justice concepts from Wikibase.
+    Build the concept description for distributive justice.
 
-    :returns: The full concept description with criteria for procedural justice.
+    :returns: The concept description without criteria.
+    :rtype: str
+    """
+    description_q911 = """Distributive justice asks 'Who gets what?' based on Equity (need/vulnerability), Responsibility (causal), and Reparation (historical).
+In the context of climate change, nature and development, this means ensuring the fair distribution of risks and opportunities of resource exploitation, climate change and the transition to a regenerative economy, cognisant in particular of disproportionate impacts on vulnerable communities and the working class."""
+
+    return description_q911
+
+
+def get_labelling_guidelines() -> str:
+    """
+    Build the labelling guidelines by fetching related justice concepts from Wikibase.
+
+    :returns: The labelling guidelines with criteria for distributive justice annotation.
     :rtype: str
     """
     console.log("Connecting to Wikibase")
     wikibase = WikibaseSession()
 
-    console.log("Fetching 3 related justice concepts from Wikibase")
+    console.log("Fetching 2 related justice concepts from Wikibase")
     procedural = wikibase.get_concept(WikibaseID("Q912"))
     recognition = wikibase.get_concept(WikibaseID("Q1731"))
 
     criteria_q911 = f"""
-		### THE ALLOCATION TEST
-    Before tagging, ask: Is this passage meaningful for the fair distribution of
-    resources, costs, or risks based on equity, responsibility, or 
-    historical debt? 
-    ONLY tag if it specifies at least two of the following:
-			a) an action (payment, programme, policy, etc) that has redistributional effects
-			b) a named marginalized, vulnerable or disproportionally impacted group
-			c) an ethical argument or analysis in favour of a fairer distribution of risks, impacts or benefits. 
+Use the following inclusion/exclusion criteria, in addition to the definition:
 
-    **Examples that FAIL the allocation test:**
-    - "providing electricity to all citizens" — equality is not necessarily distributive justice; it lacks a targeted equity logic.
-    - "the project will create 500 jobs" — generic economic benefit without a "Just Transition" framing for specific workers.
-    - "investing in green technology" — technical investment without an allocation focus.
-		- "compensating businesses for affected revenue" - absent more context, this could mean small businesses but also big multinationals and their CEOs
-		- "capacity building for youth" - named group, but no evidence or argument that this will lead to a fairer distribution.
+### THE ALLOCATION TEST
+Before tagging, ask: Is this passage meaningful for the fair distribution of
+resources, costs, or risks based on equity, responsibility, or
+historical debt?
+ONLY tag if it specifies at least two of the following:
+	a) an action (payment, programme, policy, etc) that has redistributional effects
+	b) a named marginalized, vulnerable or disproportionally impacted group
+	c) an ethical argument or analysis in favour of a fairer distribution of risks, impacts or benefits.
 
-    **Examples that PASS the allocation test:**
-    - "capacity building for youth has led to improved access to finance" - now the benefit for the named group has concrete distributional effects
-    - "targeted subsidies for low-income households to offset carbon taxes" — addressing disproportionate burdens (Equity).
-    - "allocation of Loss and Damage funds to Small Island Developing States" — Global North/South spatial justice and historical climate debt.
-    - "restoration of ancestral lands to communities displaced by coal mining" — Reparative justice/Restoration.
-    - "ensuring that the costs of climate mitigation do not fall on future generations" — Intergenerational justice.
-    - "investing in rural cooling centers to protect left-behind agricultural areas" — Spatial justice (Urban/Rural).
+**Examples that FAIL the allocation test:**
+- "providing electricity to all citizens" — equality is not necessarily distributive justice; it lacks a targeted equity logic.
+- "the project will create 500 jobs" — generic economic benefit without a "Just Transition" framing for specific workers.
+- "investing in green technology" — technical investment without an allocation focus.
+- "compensating businesses for affected revenue" - absent more context, this could mean small businesses but also big multinationals and their CEOs
+- "capacity building for youth" - named group, but no evidence or argument that this will lead to a fairer distribution.
 
-    ### 1. SPATIAL JUSTICE
-    - **INCLUDE**: Resource allocation that prioritizes specific vulnerable geographies: Global South, rural vs. urban, or "left-behind" regions.
-    - **INCLUDE**: Moral arguments on the need for fair distributions of harms and benefits between regions or countries.
-    - **EXCLUDE**: General infrastructure or "aid" that is distributed broadly without a focus on correcting an imbalance.
+**Examples that PASS the allocation test:**
+- "capacity building for youth has led to improved access to finance" - now the benefit for the named group has concrete distributional effects
+- "targeted subsidies for low-income households to offset carbon taxes" — addressing disproportionate burdens (Equity).
+- "allocation of Loss and Damage funds to Small Island Developing States" — Global North/South spatial justice and historical climate debt.
+- "restoration of ancestral lands to communities displaced by coal mining" — Reparative justice/Restoration.
+- "ensuring that the costs of climate mitigation do not fall on future generations" — Intergenerational justice.
+- "investing in rural cooling centers to protect left-behind agricultural areas" — Spatial justice (Urban/Rural).
 
-    ### 2. INTERGENERATIONAL JUSTICE
-    - **INCLUDE**: Intergenerational equity—actions taken specifically to protect the rights or resources of future generations.
-    - **INCLUDE**: Moral arguments on what present generations owe to futuere generations. 
-		- **EXCLUDE**: Generic inclusion of youth or future generations without any mention of distributive effects.
-    
-    ### 3. HISTORICAL RESPONSIBILITY & REPARATIONS
-    - **INCLUDE**: "Polluter Pays" mechanisms, climate debt, and reparations/restoration for historical harms.
-    - **INCLUDE**: Financial transfers from high-emitting countries/entities to those most impacted, as long as some justice-related justification is given
-    - **EXCLUDE**: Standard commercial insurance or market-rate loans that do not account for historical responsibility.
-    - **EXCLUDE**: Financial support and project funds where there is no explicit link to justice, fairer distribution or specific targeting of vulnerable groups.
+### 1. SPATIAL JUSTICE
+- **INCLUDE**: Resource allocation that prioritizes specific vulnerable geographies: Global South, rural vs. urban, or "left-behind" regions.
+- **INCLUDE**: Moral arguments on the need for fair distributions of harms and benefits between regions or countries.
+- **EXCLUDE**: General infrastructure or "aid" that is distributed broadly without a focus on correcting an imbalance.
 
-    ### 4. BURDENS & JUST TRANSITION
-    - **INCLUDE**: Provisions for workers in declining industries (e.g., "re-skilling for coal miners").
-    - **INCLUDE**: Measures to prevent "energy poverty" or the "working class" from bearing transition costs.
-    - **EXCLUDE**: General "poverty reduction" if not linked to climate transition or environmental risks.
-    - **EXCLUDE**: Generic descriptions of burdens and unfair situations that lack an explicit link to justice or justice-aligned solutions. 
+### 2. INTERGENERATIONAL JUSTICE
+- **INCLUDE**: Intergenerational equity—actions taken specifically to protect the rights or resources of future generations.
+- **INCLUDE**: Moral arguments on what present generations owe to future generations.
+- **EXCLUDE**: Generic inclusion of youth or future generations without any mention of distributive effects.
 
-    ### 5. JUSTICE TYPE DIFFERENTIATION
-    - **EXCLUDE** passages that fit better under:
-        - Procedural Justice: {procedural.definition} (Focus on *how* decisions are made).
-        - Recognition Justice: {recognition.definition} (Focus on *identity/dignity*).
-    - **EXCLUDE**: generic mentions of justice and justice policies where there is no explicit distributional element.
-    """
+### 3. HISTORICAL RESPONSIBILITY & REPARATIONS
+- **INCLUDE**: "Polluter Pays" mechanisms, climate debt, and reparations/restoration for historical harms.
+- **INCLUDE**: Financial transfers from high-emitting countries/entities to those most impacted, as long as some justice-related justification is given
+- **EXCLUDE**: Standard commercial insurance or market-rate loans that do not account for historical responsibility.
+- **EXCLUDE**: Financial support and project funds where there is no explicit link to justice, fairer distribution or specific targeting of vulnerable groups.
 
-    description_q911 = f"""Distributive justice asks 'Who gets what?' based on Equity (need/vulnerability), Responsibility (causal), and Reparation (historical). 
-			In the context of climate change, nature and development, this means ensuring the fair distribution of risks and opportunities of resource exploitation, climate change and the transition to a regenerative economy, cognisant in particular of disproportionate impacts on vulnerable communities and the working class. 
-			
-			In addition to the above definition, use the following criteria to inform your judgement:
-			\n{criteria_q911}"""
+### 4. BURDENS & JUST TRANSITION
+- **INCLUDE**: Provisions for workers in declining industries (e.g., "re-skilling for coal miners").
+- **INCLUDE**: Measures to prevent "energy poverty" or the "working class" from bearing transition costs.
+- **EXCLUDE**: General "poverty reduction" if not linked to climate transition or environmental risks.
+- **EXCLUDE**: Generic descriptions of burdens and unfair situations that lack an explicit link to justice or justice-aligned solutions.
 
-    return description_q911
+### 5. JUSTICE TYPE DIFFERENTIATION
+- **EXCLUDE** passages that fit better under:
+    - Procedural Justice: {procedural.definition} (Focus on *how* decisions are made).
+    - Recognition Justice: {recognition.definition} (Focus on *identity/dignity*).
+- **EXCLUDE**: generic mentions of justice and justice policies where there is no explicit distributional element.
+"""
 
-
-def get_concept_overrides() -> list[str]:
-    """
-    Get the concept override list for training and sampling.
-
-    :returns: List of concept property overrides in key=value format.
-    :rtype: list[str]
-    """
-    concept_description = get_concept_description()
-    return [
-        f"definition={CONCEPT_DEFINITION}",
-        f"description={concept_description}",
-    ]
+    return criteria_q911
 
 
 @app.command()
 def train() -> None:
-    """Run training for the procedural justice classifier."""
-    concept_overrides = get_concept_overrides()
+    """Run training for the distributive justice classifier."""
+    concept_overrides_dict = {
+        "definition": CONCEPT_DEFINITION,
+        "description": get_concept_description(),
+    }
 
-    console.print("Training model with default template")
-    train_cli(
-        wikibase_id=WIKIBASE_ID,
-        track_and_upload=True,
-        aws_env=AwsEnv.labs,
-        classifier_type="LLMClassifier",
-        classifier_override=[
-            f"model_name={MODEL_NAME}",
-        ],
-        concept_override=concept_overrides,
+    # Build the LLM classifier prompt with labelling guidelines
+    labelling_guidelines = get_labelling_guidelines()
+    system_prompt_template = LLMClassifierPrompt(
+        system_prompt_template=DEFAULT_SYSTEM_PROMPT,
+        labelling_guidelines=labelling_guidelines,
+    )
+
+    classifier_kwargs = {
+        "model_name": MODEL_NAME,
+        "system_prompt_template": system_prompt_template,
+    }
+
+    console.print("Training model with custom labelling guidelines")
+    asyncio.run(
+        run_training(
+            wikibase_id=WIKIBASE_ID,
+            track_and_upload=True,
+            aws_env=AwsEnv.labs,
+            classifier_type="LLMClassifier",
+            classifier_kwargs=classifier_kwargs,
+            concept_overrides=concept_overrides_dict,
+        )
     )
 
 
@@ -166,8 +168,11 @@ def sample(
         help="Whether to track the run and upload the labelled passages to W&B",
     ),
 ) -> None:
-    """Sample passages for the procedural justice concept with custom definition."""
-    concept_overrides = get_concept_overrides()
+    """Sample passages for the distributive justice concept with custom definition."""
+    concept_overrides = [
+        f"definition={CONCEPT_DEFINITION}",
+        f"description={get_concept_description()}",
+    ]
     sample_cli(
         wikibase_id=WIKIBASE_ID,
         sample_size=sample_size,
