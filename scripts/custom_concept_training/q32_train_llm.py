@@ -26,8 +26,8 @@ MODEL_NAME = "openrouter:google/gemini-3-pro-preview"
 
 CONCEPT_DEFINITION = "Justice is the ethical and political framework that addresses fairness, including issues of responsibility, rights, and structural inequity."
 
-#I THINK THE BELOW IS NO LONGER USED?
-#CHANGED IT ANYWAY TO MAKE SURE IT ALIGNS
+# I THINK THE BELOW IS NO LONGER USED?
+# CHANGED IT ANYWAY TO MAKE SURE IT ALIGNS
 INSTRUCTIONS = """
     Instructions:
         1. Read through the passage carefully, thinking about the concept and different ways it is used in documents, including acronyms, jargon and global differences.
@@ -39,6 +39,7 @@ INSTRUCTIONS = """
         7. The input text must be reproduced exactly, down to the last character, even if this means typos or other minor formatting issues, only adding concept tags.
         8. Double check that you have tagged all instances of the concept according to the provided definition, and that every tagged part contains enough information to show why this is relevant.
     """
+
 
 def get_concept_description() -> str:
     """
@@ -114,7 +115,6 @@ def get_concept_description() -> str:
         {criteria_q32}"""
 
     return description_q32
-
 
 
 def get_concept_overrides() -> list[str]:
