@@ -86,16 +86,20 @@ class AutoLLMClassifier(LLMClassifier):
 
     def fit(
         self,
+        labelled_passages: list | None = None,
         meta_prompt: str | None = None,
         optimiser_model_name: str = "openrouter:google/gemini-3-pro-preview",
         final_classifier_model_name: str | None = None,
         n_trials: int = 3,
         beta: float = 1.0,
         batch_size: int = 16,
+        **kwargs,
     ) -> Self:
         """
         Iterate on a prompt for the underlying classifier.
 
+        :param labelled_passages: no-op. Makes this interface compatible with the train
+            script.
         :param meta_prompt: The meta-prompt for the optimiser model. If None, uses default.
         :param optimiser_model_name: The model name for the optimiser
         :param final_classifier_model_name: The model name for the final classifier.
@@ -110,7 +114,6 @@ class AutoLLMClassifier(LLMClassifier):
 
         labelled_passages = self.concept.labelled_passages
         gold_standard = create_gold_standard_labelled_passages(labelled_passages)
-
         trial_results: list[TrialResult] = []
 
         print("=" * 60)
