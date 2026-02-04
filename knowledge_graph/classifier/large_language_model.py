@@ -3,6 +3,7 @@ import json
 import logging
 import random
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Annotated, Optional, Sequence
 
 import httpx
@@ -24,6 +25,7 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span, SpanXMLConceptFormattingError
+from knowledge_graph.wikibase import WikibaseSession
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,26 @@ Instructions:
 """
 
 
+@dataclass
+class ConceptSettings:
+    """Settings for determining how a concept is used in an LLMClassifier"""
+
+    include_direct_subconcepts: bool = Field(
+        description="Whether to include direct subconcepts and their definitions in the prompt"
+    )
+    labelling_guidelines: Optional[str] = Field(
+        description="An optional set of labelling guidelines. Will be prefixed by the phrase 'labelling guidelines for this concept' in the system prompt"
+    )
+
+    @property
+    def requires_wikibase(self) -> bool:
+        """Whether the settings selected require Wikibase to be passed to the classifier"""
+
+        fields_requiring_wikibase = [self.include_direct_subconcepts]
+
+        return any(fields_requiring_wikibase)
+
+
 class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier, ABC):
     """
     A classifier that uses an LLM to predict the presence of a concept in a text.
@@ -100,6 +122,18 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 )
             ),
         ] = 42,
+        concept_settings: Annotated[
+            Optional[ConceptSettings],
+            Field(
+                description="Optional settings for how the concept is used in the system prompt."
+            ),
+        ] = None,
+        wikibase: Annotated[
+            Optional[WikibaseSession],
+            Field(
+                description="Optional Wikibase session. Might be required if concept_settings is set.",
+            ),
+        ] = None,
     ):
         super().__init__(concept)
         self.concept = concept
@@ -107,15 +141,81 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         self.system_prompt_template = system_prompt_template
         self.random_seed = random_seed
 
-        assert "{concept_description}" in system_prompt_template, (
-            "System prompt must contain {concept_description}"
-        )
-
-        self.system_prompt = system_prompt_template.format(
-            concept_description=self.concept.to_markdown()
+        self.system_prompt = self.create_system_prompt(
+            system_prompt_template=system_prompt_template,
+            concept_settings=concept_settings,
+            wikibase=wikibase,
         )
 
         self.agent = self._create_agent()
+
+    def create_system_prompt(
+        self,
+        system_prompt_template: str,
+        concept_settings: Optional[ConceptSettings],
+        wikibase: Optional[WikibaseSession],
+    ) -> str:
+        """
+        Create a system prompt from the prompt template, and optional settings.
+
+        The features of Concept.to_markdown() which rely on Wikibase (i.e. concept
+        neighbourhood) are not used, even if wikibase is not None. This is to keep the
+        behaviour consistent.
+        """
+
+        if "{concept_description}" not in system_prompt_template:
+            raise ValueError("System prompt must contain {concept_description}")
+
+        if concept_settings is None:
+            concept_description = self.concept.to_markdown(wikibase=None)
+
+        elif concept_settings.requires_wikibase and wikibase is None:
+            raise ValueError(
+                "Wikibase session must be provided to LLMClassifier if ConceptSettings are set."
+            )
+
+        else:
+            concept_description = self.concept.to_markdown()
+
+            if concept_settings.include_direct_subconcepts:
+                # Based on the logic in ConceptSettings and the elif statement above
+                # this should always be true, so this is for the type checker.
+                assert wikibase is not None
+
+                # Re-fetch the concept, as it could've been provided with recursive
+                # subconcepts
+                concept_non_recursive = wikibase.get_concept(
+                    self.concept.wikibase_id,
+                    include_labels_from_subconcepts=False,
+                    include_recursive_subconcept_of=False,
+                    include_recursive_has_subconcept=False,
+                )
+
+                direct_subconcepts = wikibase.get_concepts(
+                    concept_non_recursive.has_subconcept
+                )
+                _n = "\n"
+                direct_subconcepts_string = _n.join(
+                    [
+                        f" - {subconcept.preferred_label}: {subconcept.definition}"
+                        for subconcept in direct_subconcepts
+                    ]
+                )
+
+                direct_subconcepts_description = f"""## Direct subconcepts
+                
+                The concept has the following direct subconcepts, which are semantically/conceptually part of the concept. Each subconcept is given by its name followed by its description.
+                
+                {direct_subconcepts_string}
+                """
+
+                concept_description = (
+                    concept_description + "\n" + direct_subconcepts_description
+                )
+
+        return system_prompt_template.format(
+            concept_description=self.concept.to_markdown(wikibase=None)
+        )
 
     @abstractmethod
     def _create_agent(self) -> Agent:
