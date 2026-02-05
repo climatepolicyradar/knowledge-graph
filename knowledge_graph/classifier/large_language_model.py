@@ -53,14 +53,14 @@ First, carefully review the following description of the concept:
 
 Instructions:
 
-1. Read through each passage carefully, thinking about the concept and different ways it can be used in documents.
-2. Identify any mentions of the concept, including references that are not included as an example, but which match the definition.
+1. Read through the passage carefully, thinking about the concept and different ways it is used in documents, including acronyms, jargon and global differences.
+2. Identify any mentions of the concept, including direct references and indirect descriptions of the concept which match the definition.
 3. Surround each identified mention with <concept> tags.
-4. If a passage contains multiple instances, each one should be tagged separately.
-5. If a passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
-6. If an entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag. Skip this step if you have tagged any concept mentions so far.
-7. The input text must be reproduced exactly, down to the last character, only adding concept tags.
-8. Double check that you have tagged all mentions of the concept and that every tagged part is describing an actual mention of that concept.
+4. If the passage contains multiple instances, each one should be tagged separately.
+5. If the passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
+6. If the entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag.
+7. The input text must be reproduced exactly, down to the last character, even if this means typos or other minor formatting issues, only adding concept tags.
+8. Double check that you have tagged all instances of the concept according to the provided definition, and that every tagged part contains enough information to show why this is relevant.
 """
 
 
