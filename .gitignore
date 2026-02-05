@@ -167,6 +167,7 @@ artifacts/*
 
 tmp/
 scratch/
+.worktrees/
 
 
 *.DS_Store

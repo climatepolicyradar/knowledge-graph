@@ -34,8 +34,9 @@ class LLMResponse(BaseModel):
     marked_up_text: str = Field(
         description="The input text, reproduced exactly as it was given, with supplemental </ concept> tags where appropriate"
     )
-    reasoning: str = Field(
-        description="Justification for why the concept was identified in the supplied text, or why not"
+    reasoning: str | None = Field(
+        None,
+        description="Justification for why the concept was identified in the supplied text, or why not",
     )
 
 
@@ -52,14 +53,14 @@ First, carefully review the following description of the concept:
 
 Instructions:
 
-1. Read through each passage carefully, thinking about the concept and different ways it can be used in documents.
-2. Identify any mentions of the concept, including references that are not included as an example, but which match the definition.
+1. Read through the passage carefully, thinking about the concept and different ways it is used in documents, including acronyms, jargon and global differences.
+2. Identify any mentions of the concept, including direct references and indirect descriptions of the concept which match the definition.
 3. Surround each identified mention with <concept> tags.
-4. If a passage contains multiple instances, each one should be tagged separately.
-5. If a passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
-6. If an entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag. Skip this step if you have tagged any concept mentions so far.
-7. The input text must be reproduced exactly, down to the last character, only adding concept tags.
-8. Double check that you have tagged all mentions of the concept and that every tagged part is describing an actual mention of that concept.
+4. If the passage contains multiple instances, each one should be tagged separately.
+5. If the passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
+6. If the entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag.
+7. The input text must be reproduced exactly, down to the last character, even if this means typos or other minor formatting issues, only adding concept tags.
+8. Double check that you have tagged all instances of the concept according to the provided definition, and that every tagged part contains enough information to show why this is relevant.
 """
 
 
@@ -147,19 +148,30 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 )
             ),
         ] = 42,
+        structured_output: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Whether the classifier returns reasoning alongside its output. "
+                    "This may need to be disabled when using smaller models, as "
+                    "pydantic-ai uses tool calling to generate structured outputs."
+                )
+            ),
+        ] = True,
     ):
         super().__init__(concept)
         self.concept = concept
         self.model_name = model_name
         self.system_prompt_template = system_prompt_template
         self.random_seed = random_seed
+        self.structured_output = structured_output
 
         self.system_prompt = system_prompt_template.format(concept)
 
-        self.agent = self._create_agent()
+        self.agent = self._create_agent(structured_output)
 
     @abstractmethod
-    def _create_agent(self) -> Agent:
+    def _create_agent(self, structured_output: bool = True) -> Agent:
         """Create the pydantic-ai agent for the classifier."""
         raise NotImplementedError
 
@@ -196,6 +208,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             model_name=self.model_name,
             system_prompt_template=self.system_prompt_template,
             random_seed=random.randint(0, 1000000),
+            structured_output=self.structured_output,
         )
 
     def __getstate__(self):
@@ -208,7 +221,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
     def __setstate__(self, state):
         """Recreate the agent instance when unpickling."""
         self.__dict__.update(state)
-        self.agent = self._create_agent()
+        self.agent = self._create_agent(self.structured_output)
 
     @staticmethod
     def _check_and_nest_event_loop():
@@ -245,10 +258,15 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         self._check_and_nest_event_loop()
 
         try:
-            response: AgentRunResult[LLMResponse] = self.agent.run_sync(  # type: ignore[assignment]
+            response: AgentRunResult[LLMResponse | str] = self.agent.run_sync(  # type: ignore[assignment]
                 text,
                 model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
             )
+            if isinstance(response.output, str):
+                response.output = LLMResponse(  # type: ignore[assignment]
+                    marked_up_text=response.output,
+                    reasoning=None,
+                )
         except UnexpectedModelBehavior as e:
             logger.warning(
                 f"LLM failed to produce valid response after retries: {e}. "
@@ -257,6 +275,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             return []
 
         try:
+            assert isinstance(response.output, LLMResponse)
             return Span.from_xml(
                 xml=response.output.marked_up_text,
                 concept_id=self.concept.wikibase_id,
@@ -302,7 +321,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 
         try:
             # Run all predictions in the batch in parallel
-            responses: list[AgentRunResult[LLMResponse] | Exception] = (
+            responses: list[AgentRunResult[LLMResponse | str] | Exception] = (
                 loop.run_until_complete(  # type: ignore[assignment]
                     run_predictions()
                 )
@@ -329,6 +348,12 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                     )
                 batch_spans.append([])
                 continue
+
+            if isinstance(response.output, str):
+                response.output = LLMResponse(
+                    marked_up_text=response.output,
+                    reasoning=None,
+                )
 
             try:
                 spans = Span.from_xml(
@@ -388,19 +413,32 @@ class LLMClassifier(BaseLLMClassifier):
                 )
             ),
         ] = 42,
+        structured_output: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Whether the classifier returns reasoning alongside its output. "
+                    "This may need to be disabled when using smaller models, as "
+                    "pydantic-ai uses tool calling to generate structured outputs."
+                )
+            ),
+        ] = True,
     ):
         super().__init__(
             concept=concept,
             model_name=model_name,
             system_prompt_template=system_prompt_template,
             random_seed=random_seed,
+            structured_output=structured_output,
         )
 
-    def _create_agent(self) -> Agent:  # type: ignore[type-arg]
+    def _create_agent(self, structured_output: bool = True) -> Agent:
+        output_type = LLMResponse if structured_output else str
+
         return Agent(  # type: ignore[return-value]
             model=self.model_name,
             system_prompt=self.system_prompt,
-            output_type=LLMResponse,
+            output_type=output_type,
         )
 
 
@@ -440,6 +478,16 @@ class LocalLLMClassifier(BaseLLMClassifier):
                 )
             ),
         ] = 42,
+        structured_output: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Whether the classifier returns reasoning alongside its output. "
+                    "This may need to be disabled when using smaller models, as "
+                    "pydantic-ai uses tool calling to generate structured outputs."
+                )
+            ),
+        ] = True,
     ):
         try:
             httpx.get("http://localhost:11434", timeout=1)
@@ -454,9 +502,12 @@ class LocalLLMClassifier(BaseLLMClassifier):
             model_name=model_name,
             system_prompt_template=system_prompt_template,
             random_seed=random_seed,
+            structured_output=structured_output,
         )
 
-    def _create_agent(self) -> Agent:
+    def _create_agent(self, structured_output: bool = True) -> Agent:
+        output_type = LLMResponse if structured_output else str
+
         ollama_model = OpenAIChatModel(
             model_name=self.model_name,
             provider=OpenAIProvider(base_url="http://localhost:11434/v1"),
@@ -464,5 +515,5 @@ class LocalLLMClassifier(BaseLLMClassifier):
         return Agent(  # type: ignore[return-value]
             model=ollama_model,
             system_prompt=self.system_prompt,
-            output_type=LLMResponse,
+            output_type=output_type,
         )
