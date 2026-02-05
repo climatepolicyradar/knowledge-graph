@@ -4,16 +4,25 @@ import logging
 from typing import Optional
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
 class ModelPricing(BaseModel):
-    """Pricing information for a model."""
+    """
+    Pricing information for a model.
 
-    prompt_price: float
-    completion_price: float
+    https://openrouter.ai/docs/guides/overview/models#pricing-object
+    """
+
+    prompt_price: float = Field(
+        description="The price per prompt token in USD.",
+    )
+    completion_price: float = Field(
+        description="The price per completion token in USD."
+    )
+
 
 
 async def get_openrouter_pricing(model_name: str) -> Optional[ModelPricing]:
