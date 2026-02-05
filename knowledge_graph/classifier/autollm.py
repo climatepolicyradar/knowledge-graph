@@ -183,32 +183,12 @@ class AutoLLMClassifier(LLMClassifier):
         )
         print("=" * 60)
 
-        # Create final classifier with the best prompt
-        # Use self.model_name if final_classifier_model_name is not provided
-        model_name = (
+        # Set the model name to the one selected as final_classifier_model_name, if
+        # provided
+        self.model_name = (
             final_classifier_model_name
             if final_classifier_model_name is not None
             else self.model_name
-        )
-        print("Creating final classifier with best prompt")
-        final_classifier = LLMClassifier(
-            concept=self.concept,
-            model_name=model_name,
-            system_prompt_template=best_trial.prompt,
-        )
-
-        # Evaluate final classifier
-        print("=" * 60)
-        print("Evaluating final classifier")
-        print("=" * 60)
-        final_result = self._evaluate_and_store(
-            classifier=final_classifier,
-            labelled_passages=labelled_passages,
-            beta=beta,
-            batch_size=batch_size,
-        )
-        print(
-            f"Final classifier f-beta score (beta={beta}): {final_result.f_beta_score:.4f}"
         )
 
         # Update self with the best prompt
