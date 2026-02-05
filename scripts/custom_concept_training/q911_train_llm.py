@@ -30,7 +30,7 @@ console = Console()
 WIKIBASE_ID = WikibaseID("Q911")
 MODEL_NAME = "openrouter:google/gemini-3-pro-preview"
 
-CONCEPT_DEFINITION = "Justice is the ethical and political framework that addresses fairness, including issues of responsibility, rights, and structural inequity."
+CONCEPT_DEFINITION = """Distributive justice is the fair allocation of the benefits, burdens, and risks, focusing on those most responsible and those most vulnerable. It includes ethical and political arguments, as well as concrete actions."""
 
 
 def get_concept_description() -> str:
