@@ -605,6 +605,20 @@ async def train_classifier(
             enable_wandb=track_and_upload,
         )
 
+        # Log the final prompt to W&B. Useful for AutoLLMClassifier, which
+        # optimises the prompt during fit, meaning the final prompt differs from the
+        # input prompt stored in the run config.
+        if track_and_upload and run:
+            system_prompt = getattr(classifier, "system_prompt", None)
+            if system_prompt is not None:
+                run.summary["final_system_prompt"] = system_prompt
+            prompt_template = getattr(classifier, "system_prompt_template", None)
+            labelling_guidelines = getattr(
+                prompt_template, "labelling_guidelines", None
+            )
+            if labelling_guidelines is not None:
+                run.summary["final_labelling_guidelines"] = labelling_guidelines
+
         move_model_to_cpu(classifier)
 
         target_path = ModelPath(
