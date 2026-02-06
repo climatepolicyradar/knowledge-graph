@@ -3,3 +3,11 @@ flows/          @climatepolicyradar/deng
 automations.py  @climatepolicyradar/deng
 deployments.py  @climatepolicyradar/deng
 *               @climatepolicyradar/deng @climatepolicyradar/datascience
+
+# Dependency updates - only require deng team
+pyproject.toml             @climatepolicyradar/deng
+uv.lock                    @climatepolicyradar/deng
+.github/workflows/*.yml    @climatepolicyradar/deng
+Dockerfile                 @climatepolicyradar/deng
+mcp/Dockerfile             @climatepolicyradar/deng
+docker-compose.yml         @climatepolicyradar/deng
