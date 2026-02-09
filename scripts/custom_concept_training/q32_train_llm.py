@@ -60,58 +60,63 @@ def get_labelling_guidelines() -> str:
     console.log("Fetching 4 related justice concepts from Wikibase")
     distributive = wikibase.get_concept(WikibaseID("Q911"))
     procedural = wikibase.get_concept(WikibaseID("Q912"))
-    transformative = wikibase.get_concept(WikibaseID("Q1730"))
+    # transformative = wikibase.get_concept(WikibaseID("Q1730"))
     recognition = wikibase.get_concept(WikibaseID("Q1731"))
 
     criteria_q32 = f"""
 Use the following inclusion/exclusion criteria, in addition to the definition:
 
-### THE ETHICAL TEST
+THE NORMATIVE REQUIREMENT (Crucial Overall Distinction)
 Before tagging, ask: Does this passage make an argument, either explicit
 or implicit, that is clearly linked to ethics, fairness or human rights,
 for improving the world or the position of vulnerable people?
 ONLY tag if the answer is yes.
 
-**Examples that FAIL the ethical test:**
-- "climate change is a threat to the economy" — technical/economic framing.
-- "we need efficient carbon markets" — utilitarian framing.
-- "reducing emissions by 50%" — purely quantitative target.
-- "women make up only 1/3 of elected officials" - ethical issue, but no argument for why this should be improved.
+- **EXCLUDE (Descriptive):** Passages that simply state that inequality, poverty, gender gaps, or labour abuses exist.
+  *   *Example (NO):* "Women in this sector often earn less than men" (Describes the problem).
+  *   *Example (NO):* "Land tenure insecurity leads to lower agricultural yields for female farmers." (Technical/Impact analysis).
+  *   *Example (NO):* "Child labour is common in informal waste picking." (Statement of fact).
+- **INCLUDE (Normative/Prescriptive):** Passages that explicitly aim to *address*, *solve*, or *prevent* these issues as a matter of strategy, ethics, or rights.
+  *   *Example (YES):* "The policy aims to close the unjust gender pay gap." (Action/Goal).
+  *   *Example (YES):* "We must Ensure activities do not exacerbate existing inequalities." (safeguard/remedy).
+  *   *Example (YES):* "Strategies to eliminate child labour and uphold human rights." (Solution).
+	*   *Example (YES):* "We owe it to our children to ensure they can live fulfilling lives" (ethical argument)
 
-**Examples that PASS the ethical test:**
-- "Climate change is a threat to human rights so urgent action is warranted."
-- "Addressing the structural inequities that drive nature degradation."
-- "Climate solutions should ensure that no one is left behind"
-- "Making decisions through a fair and inclusive process"
-- "A whole-of-society transformation is required"
+1. PROBLEMS VS. FIXING AND JUDGING 
+To be tagged, a passage must not just *describe* an unfair situation; it must *propose* to fix it or *judge* it ethically.
+- **INCLUDE**: justice-aligned actions, safeguards, solutions, proposals and actions that prevent further injustice.
+- **EXCLUDE**: passages that state an impact on a vulnerable group without providing a link to justice. 
 
-### 1. STRUCTURAL & HISTORICAL INEQUITY
-- **INCLUDE**: Passages linking climate change and nature degradation to colonialism, capitalism, systemic racism, or global power imbalances.
-- **INCLUDE**: Discussion of the root causes of vulnerability.
-- **NOTE**: Descriptions of unfair situations more generally can ONLY be included if they make an explicit link to root causes, ethical arguments, or describe how/why this needs to be solved.
-- **EXCLUDE**: General descriptions of problems, risks or impacts that don't point to an underlying systemic unfairness.
+2. ETHICAL ARGUMENTS
+- **INCLUDE**: Passages stating why justice is important or why actions should be taken in a just way.
 
-### 2. HOLISTIC JUSTICE
-- **INCLUDE**: Passages that describe a specific type of justice. Include in particular procedural, distribution, recognition and transformative justice. For this, use the following definitions:
+3. JUSTICE-ALIGNED VS. GENERIC ACTION
+Avoid tagging buzzwords unless they are specifically qualified by justice concepts (for example, fairness, rights, equity).
+  *   *Include:* Meaningful empowerment, especially inclusion/representation in decision making and other actions which meaningfully shift procedural power to marginalised groups.
+  *   *Include:* Phrases with a justice-aligned qualifier, such as "ensure **Equal** representation", "**Equitable** access to finance"
+  *   *Exclude:* Generic phrases such as "Access to resources." 
+  *   *Scrutinize:* Vague and tokenstic language such as "Promoting youth inclusion," "Empowering communities," "Inclusive by design." Tag ONLY if sentence includes information that makes the claim more credible. 
+  
+4. RIGHTS AND SPECIFIC TARGETS
+- **SCRUTINIZE:** Mentions of "The Right to [X]" (e.g., Right to a Healthy Environment) or "Rights of [Group]" (e.g., Rights of Persons with Disabilities). These rights need to be in service of justice or arguing for action on climate, nature, or natural resources.
+- **INCLUDE:** Specific SDG-style targets that mention "Equality," "Equity," or eliminating discrimination for named vulnerable groups.
+- **INCLUDE:** "Do No Harm" frameworks: Explicit requirements to assess and mitigate risks of widening inequality or violating rights.
+
+5. HOLISTIC JUSTICE
+- **INCLUDE**: Passages that describe a specific type of justice. Include in particular procedural justice, distribution, and recognition justice. For this, use the following definitions:
   a) Recognition Justice: {recognition.definition}
   b) Procedural Justice: {procedural.definition}
   c) Distributive Justice: {distributive.definition}
-  d) Transformative Justice: {transformative.definition}
-- **INCLUDE**: arguments on "Intergenerational justice" or "Climate Ethics."
+- **INCLUDE**: Ethical discussions of the root causes of inequality and proposals or arguments to fix these root causes.
 
-### 3. HUMAN RIGHTS & WELL-BEING
-- **INCLUDE**: Framings that emphasise universal human rights, including the rights of children, impacted groups, and the specific legal pricniples of the right to a healthy environment and right to development as a matter of justice.
-- **EXCLUDE**: Generic human rights mentions that are procedural or tokenistic. These rights need to be clearly in service of justice or arguing for action on climate, nature, or natural resources.
+6.  FORMAT AND CONTEXT EXCLUSIONS
+- **SCRUTINIZE:** Ambiguous acronyms (e.g., "JET"). In most cases, you can assume the text comes from a climate- or development context.  INCLUDE if the acronym is likely to be directly and explicitly about justice, but EXCLUDE if justice is only a small component or the context points away from (climate) justice..
+- **EXCLUDE:** Fragmented headers or labels (e.g., "&Green Gender Approach") unless they form a complete thought about justice.
 
-### 4. JUSTICE AS SOLUTION vs. PROBLEM
-- **INCLUDE**: Explicit calls for a "Just Transition" or "Justice-aligned actions."
-- **EXCLUDE**: Descriptions of barriers (e.g., "corruption is high") unless they also propose a justice-based remedy.
-
-### 5. TOKENISM AND CONTEXT
-- **INCLUDE**: Meaningful discussions of- and actions towards a more just world. Draw on your policy knowledge to determine when something is meaningful.
-- **INCLUDE**: Names of programmes and policies that are explicitly about justice or fairness.
-- **EXCLUDE**: Sentences and phrases where you do not have enough knowledge to determine if they are justice-aligned.
-- **EXCLUDE**: Generic policies and programmes, as well as programmes where justice is only a small component.
+7. PRIORITIZE EXPLICIT KEYWORDS
+- **INCLUDE:** Passages that explicitly mention justice, including types of justice such as "Intergenerational justice" or "Climate Ethics."
+- **SCRUTINIZE:** "Gender," "Poor," "Vulnerable," "Inclusive." Tag these ONLY if they are part of a sentence fulfilling The Normative Requirement.
+- **EXCLUDE:** criminal justice and discussions of the justice system, unless they are relevant to climate, development or nature (interpreted broadly). 
 """
 
     return criteria_q32
