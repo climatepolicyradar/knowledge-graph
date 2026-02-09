@@ -24,7 +24,6 @@ class ModelPricing(BaseModel):
     )
 
 
-
 async def get_openrouter_pricing(model_name: str) -> Optional[ModelPricing]:
     """
     Fetch pricing information for an OpenRouter model.
