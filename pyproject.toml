@@ -60,12 +60,18 @@ transformers = [
   "sentence-transformers>=5.1.0",
   "transformers[torch]>=4.55.0",
   "accelerate>=1.6.0",
+  "gliner>=0.2.0",
+  "spacy>=3.7.0",
+  "spacy-entity-linker>=1.0.0",
 ]
 transformers_gpu = [
   "torch>=2.7.1",
   "sentence-transformers>=5.1.0",
   "transformers[torch]>=4.55.0",
   "accelerate>=1.6.0",
+  "gliner>=0.2.0",
+  "spacy>=3.7.0",
+  "spacy-entity-linker>=1.0.0",
 ]
 # https://docs.coiled.io/user_guide/software/docker.html
 # https://docs.coiled.io/user_guide/software/package-sync-advanced.html
