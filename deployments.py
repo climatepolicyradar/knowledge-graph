@@ -11,7 +11,6 @@ import os
 import subprocess
 from typing import Any, ParamSpec, TypeVar
 
-from prefect.blocks.system import JSON
 from prefect.client.schemas.objects import (
     ConcurrencyLimitConfig,
     ConcurrencyLimitStrategy,
@@ -19,6 +18,7 @@ from prefect.client.schemas.objects import (
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
+from prefect.variables import Variable
 
 from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.classifiers_profiles import sync_classifiers_profiles
@@ -114,11 +114,16 @@ def create_deployment(
             aws_env_str = str(aws_env)
 
         work_pool_name = f"coiled-{aws_env_str}"
-        default_job_variables = JSON.load(
+        default_job_variables_name = (
             f"coiled-default-job-variables-prefect-mvp-{aws_env}"
-        ).value
+        )
+        default_job_variables: dict[str, Any] = Variable.get(default_job_variables_name)  # pyright: ignore[reportAssignmentType]
+        if default_job_variables is None:
+            raise ValueError(
+                f"Variable '{default_job_variables_name}' not found in Prefect"
+            )
         default_job_variables["image"] = image
-        # Using a single host with a gpu, see:
+        # Using a single host with a GPU, see:
         # https://docs.coiled.io/user_guide/prefect.html#configure-hardware
         default_job_variables.update(
             {
@@ -130,9 +135,12 @@ def create_deployment(
 
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
-        default_job_variables = JSON.load(
-            f"default-job-variables-prefect-mvp-{aws_env}"
-        ).value
+        default_job_variables_name = f"default-job-variables-prefect-mvp-{aws_env}"
+        default_job_variables: dict[str, Any] = Variable.get(default_job_variables_name)  # pyright: ignore[reportAssignmentType]
+        if default_job_variables is None:
+            raise ValueError(
+                f"Variable '{default_job_variables_name}' not found in Prefect"
+            )
 
     job_variables = {**default_job_variables, **flow_variables}
     tags = [f"repo:{docker_repository}", f"awsenv:{aws_env}"] + extra_tags

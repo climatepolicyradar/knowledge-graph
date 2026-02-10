@@ -12,7 +12,7 @@ import botocore
 import botocore.client
 import typer
 import yaml
-from prefect.blocks.system import JSON
+from prefect.variables import Variable
 from pydantic import BaseModel, Field
 
 from knowledge_graph.identifiers import WikibaseID
@@ -59,9 +59,11 @@ def disallow_latest_alias(classifier_specs: Sequence[ClassifierSpec]):
 async def get_prefect_job_variable(param_name: str) -> str:
     """Get a single variable from the Prefect job variables."""
     aws_env = AwsEnv(os.environ["AWS_ENV"])
-    block_name = f"default-job-variables-prefect-mvp-{aws_env}"
-    workpool_default_job_variables = await JSON.load(block_name)  # pyright: ignore[reportGeneralTypeIssues]
-    return workpool_default_job_variables.value[param_name]
+    variable_name = f"default-job-variables-prefect-mvp-{aws_env}"
+    workpool_default_job_variables: dict[str, Any] = await Variable.aget(variable_name)  # pyright: ignore[reportAssignmentType]
+    if workpool_default_job_variables is None:
+        raise ValueError(f"Variable '{variable_name}' not found in Prefect")
+    return workpool_default_job_variables[param_name]
 
 
 class Namespace(BaseModel):
