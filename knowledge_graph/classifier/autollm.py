@@ -30,30 +30,41 @@ Below is the concept description:
 {concept_description}
 </concept_description>
 
+Labelling guidelines can be used to ensure this description is applied consistently. 
 The current labelling guidelines (if any) are:
 <current_guidelines>
 {current_guidelines}
 </current_guidelines>
 
 Here are the validation results from the current classifier. Each row shows:
-- The passage text
-- Whether the gold standard says it contains the concept
-- Whether the classifier predicted it contains the concept
-- Whether the prediction was correct
+- The passage of text which was classified;
+- Whether the gold standard says it contains the concept;
+- Whether the classifier predicted it contains the concept;
+- Whether the classifier's prediction was correct, based on the gold standard.
 
 <validation_results>
 {validation_results}
 </validation_results>
 
-Based on these results, particularly the INCORRECT predictions, generate improved labelling
-guidelines that will help the classifier perform better.
+Based on these results, generate improved labelling guidelines that will help 
+the classifier perform better. 
 
-Focus on:
+First, take stock of what is working. Based on the CORRECT examples, which rules
+are worth preserving? Keep this in mind as you suggest your changes.
+
+Next, focus on the INCORRECT predictions. These should be the basis for the suggested changes.
+In essence: where are the old guideliness lacking and which emergent rules from the gold labels 
+should be made explicit to help the classifier perform? 
+More practically, look for:
 1. Patterns in false positives (classifier said yes, but should be no) - what should NOT be tagged
 2. Patterns in false negatives (classifier said no, but should be yes) - what SHOULD be tagged
-3. Edge cases and ambiguous situations
+3. Edge cases and ambiguous situations. Clarify where the gold standard draws the line.
 
-The guidelines should be clear, specific, and actionable. Use numbered lists.
+
+The guidelines should be clear, specific, and actionable. 
+Use numbered lists to juxtapose specific inclusion and exclusion criteria.
+The guidelines should be generally applicable; use minimal new examples.
+NEVER use examples directly from the validation results to avoid overfitting.
 """
 
 
