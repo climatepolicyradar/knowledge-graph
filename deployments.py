@@ -135,7 +135,7 @@ def create_deployment(
 
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
-        default_job_variables_name = f"default-job-variables-prefect-mvp-{aws_env}"
+        default_job_variables_name = f"ecs-default-job-variables-prefect-mvp-{aws_env}"
         default_job_variables: dict[str, Any] = Variable.get(default_job_variables_name)  # pyright: ignore[reportAssignmentType]
         if default_job_variables is None:
             raise ValueError(
