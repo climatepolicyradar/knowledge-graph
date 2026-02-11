@@ -1,7 +1,11 @@
+from unittest.mock import patch
+
 import pytest
+from prefect.variables import Variable
 from pydantic import ValidationError
 
 from flows.config import Config
+from knowledge_graph.cloud import AwsEnv, Compute
 
 
 def test_invalid_s3_prefix_without_trailing_slash():
@@ -124,3 +128,22 @@ def test_skip_existing_inference_results_in_to_json():
     config_default = Config(cache_bucket="test-bucket")
     json_dict_default = config_default.to_json()
     assert json_dict_default["skip_existing_inference_results"] is True
+
+
+@pytest.mark.asyncio
+async def test_config_create_fetches_from_prefect_variables():
+    """Test Config.create() actually fetches values from Prefect Variables."""
+
+    # Mock AWS SSM calls to avoid needing real credentials
+    with patch("flows.config.get_aws_ssm_param", return_value="mock-ssm-value"):
+        # Setup required Prefect Variable
+        var_name = f"{Compute.CPU}-default-job-variables-prefect-mvp-{AwsEnv.sandbox}"
+        await Variable.set(
+            var_name,
+            {"pipeline_cache_bucket_name": "test-cache-bucket"},
+            overwrite=True,
+        )
+
+        config = await Config.create()
+
+    assert config.cache_bucket == "test-cache-bucket"
