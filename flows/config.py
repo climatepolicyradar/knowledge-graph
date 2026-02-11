@@ -155,7 +155,7 @@ class Config(BaseModel):
 
         config = cls()
         if not config.cache_bucket:
-            config.cache_bucket = get_prefect_job_variable(
+            config.cache_bucket = await get_prefect_job_variable(
                 param_name="pipeline_cache_bucket_name",
                 # It's okay for now to not be specific on if this is
                 # CPU or GPU since there's a shared foundation

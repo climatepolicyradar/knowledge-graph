@@ -327,27 +327,28 @@ def generate_default_job_variables_name(
     return f"{compute}-default-job-variables-prefect-mvp-{aws_env}"
 
 
-def get_prefect_job_variables(
+async def get_prefect_job_variables(
     compute: Compute,
     aws_env: AwsEnv,
 ) -> dict[str, Any]:
     """Get the default job variables from the Prefect."""
     default_job_variables_name = generate_default_job_variables_name(compute, aws_env)
-    default_job_variables: dict[str, Any] = Variable.get(default_job_variables_name)  # pyright: ignore[reportAssignmentType]
+    default_job_variables = await Variable.get(default_job_variables_name)  # pyright: ignore[reportGeneralTypeIssues]
+
     if default_job_variables is None:
         raise ValueError(
             f"Variable '{default_job_variables_name}' not found in Prefect"
         )
-    return default_job_variables
+    return default_job_variables  # pyright: ignore[reportReturnType]
 
 
-def get_prefect_job_variable(
+async def get_prefect_job_variable(
     param_name: str,
     aws_env: AwsEnv,
     compute: Compute,
 ) -> str:
     """Get a single variable from the Prefect job variables."""
-    variables = get_prefect_job_variables(compute, aws_env)
+    variables = await get_prefect_job_variables(compute, aws_env)
     if param_name not in variables:
         variable_name = generate_default_job_variables_name(compute, aws_env)
         raise ValueError(
