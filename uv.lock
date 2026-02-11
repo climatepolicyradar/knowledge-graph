@@ -1894,7 +1894,7 @@ source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "filelock" },
     { name = "fsspec" },
-    { name = "hf-xet", marker = "platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64'" },
+    { name = "hf-xet", marker = "platform_machine == 'aarch64' or platform_machine == 'amd64' or platform_machine == 'arm64' or platform_machine == 'x86_64' or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
     { name = "packaging" },
     { name = "pyyaml" },
     { name = "requests" },
@@ -2358,7 +2358,6 @@ dependencies = [
     { name = "datasets" },
     { name = "deltalake" },
     { name = "gitpython" },
-    { name = "griffe" },
     { name = "html2text" },
     { name = "httpx" },
     { name = "ipykernel" },
@@ -2457,7 +2456,6 @@ requires-dist = [
     { name = "duckdb", marker = "extra == 'dev'", specifier = ">=1.3.2" },
     { name = "fastmcp", marker = "extra == 'mcp'", specifier = ">=2.12.3" },
     { name = "gitpython", specifier = ">=3.1.45" },
-    { name = "griffe", specifier = "==1.5.7" },
     { name = "html2text", specifier = ">=2025.4.15" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.112.2" },
@@ -2505,7 +2503,7 @@ requires-dist = [
     { name = "tornado", marker = "extra == 'coiled'", specifier = ">=6.5.1" },
     { name = "transformers", extras = ["torch"], marker = "extra == 'transformers'", specifier = ">=4.55.0" },
     { name = "transformers", extras = ["torch"], marker = "extra == 'transformers-gpu'", specifier = ">=4.55.0" },
-    { name = "typer", specifier = "==0.15.1" },
+    { name = "typer", specifier = ">=0.15.1" },
     { name = "types-aioboto3", extras = ["s3"], specifier = ">=14.3.0" },
     { name = "wandb", specifier = ">=0.21.0" },
 ]
@@ -5573,7 +5571,7 @@ name = "tqdm"
 version = "4.67.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "colorama", marker = "sys_platform == 'win32' or (extra == 'extra-15-knowledge-graph-transformers' and extra == 'extra-15-knowledge-graph-transformers-gpu')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/a8/4b/29b4ef32e036bb34e4ab51796dd745cdba7ed47ad142a9f4a1eb8e0c744d/tqdm-4.67.1.tar.gz", hash = "sha256:f8aef9c52c08c13a65f30ea34f4e5aac3fd1a34959879d7e59e63027286627f2", size = 169737, upload-time = "2024-11-24T20:12:22.481Z" }
 wheels = [
@@ -5633,7 +5631,7 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.15.1"
+version = "0.19.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -5641,9 +5639,9 @@ dependencies = [
     { name = "shellingham" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/cb/ce/dca7b219718afd37a0068f4f2530a727c2b74a8b6e8e0c0080a4c0de4fcd/typer-0.15.1.tar.gz", hash = "sha256:a0588c0a7fa68a1978a069818657778f86abe6ff5ea6abf472f940a08bfe4f0a", size = 99789, upload-time = "2024-12-04T17:44:58.956Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/ca/950278884e2ca20547ff3eb109478c6baf6b8cf219318e6bc4f666fad8e8/typer-0.19.2.tar.gz", hash = "sha256:9ad824308ded0ad06cc716434705f691d4ee0bfd0fb081839d2e426860e7fdca", size = 104755, upload-time = "2025-09-23T09:47:48.256Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d0/cc/0a838ba5ca64dc832aa43f727bd586309846b0ffb2ce52422543e6075e8a/typer-0.15.1-py3-none-any.whl", hash = "sha256:7994fb7b8155b64d3402518560648446072864beefd44aa2dc36972a5972e847", size = 44908, upload-time = "2024-12-04T17:44:57.291Z" },
+    { url = "https://files.pythonhosted.org/packages/00/22/35617eee79080a5d071d0f14ad698d325ee6b3bf824fc0467c03b30e7fa8/typer-0.19.2-py3-none-any.whl", hash = "sha256:755e7e19670ffad8283db353267cb81ef252f595aa6834a0d1ca9312d9326cb9", size = 46748, upload-time = "2025-09-23T09:47:46.777Z" },
 ]
 
 [[package]]

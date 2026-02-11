@@ -41,6 +41,8 @@ RUN git lfs install
 # Copy Python packages from builder stage
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy uv from builder stage
+COPY --from=builder /bin/uv /bin/uvx /bin/
 
 # Copy the project into the image
 COPY pyproject.toml README.md ./
