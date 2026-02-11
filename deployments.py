@@ -18,7 +18,6 @@ from prefect.client.schemas.objects import (
 from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
-from prefect.variables import Variable
 
 from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.classifiers_profiles import sync_classifiers_profiles
@@ -37,7 +36,13 @@ from flows.update_neo4j import update_concepts
 from flows.utils import JsonDict, get_logger
 from flows.vibe_check import vibe_check_inference
 from flows.wikibase_to_s3 import wikibase_to_s3
-from knowledge_graph.cloud import PROJECT_NAME, AwsEnv, generate_deployment_name
+from knowledge_graph.cloud import (
+    PROJECT_NAME,
+    AwsEnv,
+    Compute,
+    generate_deployment_name,
+    get_prefect_job_variables,
+)
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {
@@ -114,14 +119,9 @@ def create_deployment(
             aws_env_str = str(aws_env)
 
         work_pool_name = f"coiled-{aws_env_str}"
-        default_job_variables_name = (
-            f"coiled-default-job-variables-prefect-mvp-{aws_env}"
+        default_job_variables: dict[str, Any] = get_prefect_job_variables(
+            Compute.GPU, aws_env
         )
-        default_job_variables: dict[str, Any] = Variable.get(default_job_variables_name)  # pyright: ignore[reportAssignmentType]
-        if default_job_variables is None:
-            raise ValueError(
-                f"Variable '{default_job_variables_name}' not found in Prefect"
-            )
         default_job_variables["image"] = image
         # Using a single host with a GPU, see:
         # https://docs.coiled.io/user_guide/prefect.html#configure-hardware
@@ -135,12 +135,9 @@ def create_deployment(
 
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
-        default_job_variables_name = f"ecs-default-job-variables-prefect-mvp-{aws_env}"
-        default_job_variables: dict[str, Any] = Variable.get(default_job_variables_name)  # pyright: ignore[reportAssignmentType]
-        if default_job_variables is None:
-            raise ValueError(
-                f"Variable '{default_job_variables_name}' not found in Prefect"
-            )
+        default_job_variables: dict[str, Any] = get_prefect_job_variables(
+            Compute.CPU, aws_env
+        )
 
     job_variables = {**default_job_variables, **flow_variables}
     tags = [f"repo:{docker_repository}", f"awsenv:{aws_env}"] + extra_tags
