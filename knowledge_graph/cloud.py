@@ -1,6 +1,6 @@
 import os
 from collections.abc import Callable, Sequence
-from enum import Enum, auto
+from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
@@ -312,12 +312,12 @@ def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
 class Compute(Enum):
     """Where the compute happens for a deployment."""
 
-    CPU = auto()
-    GPU = auto()
+    CPU = "ecs"
+    GPU = "coiled"
 
     def __str__(self):
         """Return a string friendly name."""
-        return self.name.lower()
+        return self.value
 
 
 def generate_default_job_variables_name(
