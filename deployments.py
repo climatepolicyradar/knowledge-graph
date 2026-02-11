@@ -5,6 +5,7 @@ Used to create server side representation of prefect flows, triggers, config, et
 See: https://docs-2.prefect.io/latest/concepts/deployments/
 """
 
+import asyncio
 import importlib.metadata
 import logging
 import os
@@ -92,7 +93,7 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
-def create_deployment(
+async def create_deployment(
     flow: Flow[P, R],
     description: str,
     gpu: bool = False,
@@ -119,7 +120,7 @@ def create_deployment(
             aws_env_str = str(aws_env)
 
         work_pool_name = f"coiled-{aws_env_str}"
-        default_job_variables: dict[str, Any] = get_prefect_job_variables(
+        default_job_variables: dict[str, Any] = await get_prefect_job_variables(
             Compute.GPU, aws_env
         )
         default_job_variables["image"] = image
@@ -135,7 +136,7 @@ def create_deployment(
 
     else:
         work_pool_name = f"mvp-{aws_env}-ecs"
-        default_job_variables: dict[str, Any] = get_prefect_job_variables(
+        default_job_variables: dict[str, Any] = await get_prefect_job_variables(
             Compute.CPU, aws_env
         )
 
@@ -194,11 +195,9 @@ def _version() -> str:
     return importlib.metadata.version(PROJECT_NAME)
 
 
-if __name__ == "__main__":
-    logger.info(f"using version: {_version()}")
-
+async def main() -> None:
     # Train
-    create_deployment(
+    await create_deployment(
         flow=train_on_gpu,
         description="Train concept classifiers with GPU compute",
         gpu=True,
@@ -207,13 +206,13 @@ if __name__ == "__main__":
 
     # Inference
 
-    create_deployment(
+    await create_deployment(
         flow=inference,
         description="Run concept classifier inference on document passages",
         extra_tags=["type:entry"],
     )
 
-    create_deployment(
+    await create_deployment(
         flow=inference_batch_of_documents_cpu,
         description="Run concept classifier inference on a batch of documents with CPU compute",
         extra_tags=["type:sub"],
@@ -226,7 +225,7 @@ if __name__ == "__main__":
         },
     )
 
-    create_deployment(
+    await create_deployment(
         flow=inference_batch_of_documents_gpu,
         description="Run concept classifier inference on a batch of documents with GPU compute",
         extra_tags=["type:sub"],
@@ -240,7 +239,7 @@ if __name__ == "__main__":
 
     # Aggregate inference results
 
-    create_deployment(
+    await create_deployment(
         flow=aggregate_batch_of_documents,
         description="Aggregate inference results for a batch of documents",
         flow_variables={
@@ -251,7 +250,7 @@ if __name__ == "__main__":
         extra_tags=["type:sub"],
     )
 
-    create_deployment(
+    await create_deployment(
         flow=aggregate,
         description="Aggregate inference results, through coordinating batches of documents",
         extra_tags=["type:entry"],
@@ -259,13 +258,13 @@ if __name__ == "__main__":
 
     # Index
 
-    create_deployment(
+    await create_deployment(
         flow=index_batch_of_documents,
         description="Run passage indexing for a batch of documents from S3 to Vespa",
         extra_tags=["type:sub"],
     )
 
-    create_deployment(
+    await create_deployment(
         flow=index,
         description="Run passage indexing for documents from S3 to Vespa",
         extra_tags=["type:entry"],
@@ -273,7 +272,7 @@ if __name__ == "__main__":
 
     # Orchestrate full pipeline
 
-    create_deployment(
+    await create_deployment(
         flow=full_pipeline,
         description="Run the full Knowledge Graph Pipeline",
         extra_tags=["type:end_to_end"],
@@ -300,7 +299,7 @@ if __name__ == "__main__":
 
     # Wikibase
 
-    create_deployment(
+    await create_deployment(
         flow=sync_concepts,
         description="Upload concepts from Wikibase to Vespa",
         concurrency_limit=ConcurrencyLimitConfig(
@@ -314,7 +313,7 @@ if __name__ == "__main__":
         },
     )
 
-    create_deployment(
+    await create_deployment(
         flow=wikibase_to_s3,
         description="Upload concepts from Wikibase to S3",
         # required for application topics in concepts-api
@@ -328,7 +327,7 @@ if __name__ == "__main__":
 
     # Classifiers Profiles Lifecycle
 
-    create_deployment(
+    await create_deployment(
         flow=sync_classifiers_profiles,
         description="Compare Wikibase classifiers profiles with classifiers specs",
         env_schedules={
@@ -359,7 +358,7 @@ if __name__ == "__main__":
 
     # Sync Neo4j with Wikibase
 
-    create_deployment(
+    await create_deployment(
         flow=update_concepts,
         description="Refresh Neo4j with the latest concept graph",
         env_schedules={
@@ -369,7 +368,7 @@ if __name__ == "__main__":
 
     # Deploy static sites
 
-    create_deployment(
+    await create_deployment(
         flow=deploy_static_sites,
         description="Deploy our static sites to S3",
         env_schedules={
@@ -379,7 +378,7 @@ if __name__ == "__main__":
 
     # Data backup
 
-    create_deployment(
+    await create_deployment(
         flow=data_backup,
         description="Deploy all Argilla datasets to Huggingface",
         env_schedules={
@@ -389,7 +388,7 @@ if __name__ == "__main__":
 
     # Vibe Check
 
-    create_deployment(
+    await create_deployment(
         flow=vibe_check_inference,  # pyright: ignore[reportArgumentType]
         description="Run vibe check inference on a set of concepts and push the results to s3. Optionally provide a custom list of Wikibase IDs to process.",
         env_schedules={
@@ -398,7 +397,7 @@ if __name__ == "__main__":
         },
     )
 
-    create_deployment(
+    await create_deployment(
         flow=train_for_vibe_checker,
         description="Train classifiers for all concepts listed in vibe-checker/config.yml. Runs training in parallel and uploads results to Weights & Biases.",
         gpu=False,
@@ -406,3 +405,7 @@ if __name__ == "__main__":
             AwsEnv.labs: "0 8 * * MON-THU",  # Every working day at 8am
         },
     )
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

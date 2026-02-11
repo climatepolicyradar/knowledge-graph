@@ -169,22 +169,29 @@ def test_generate_default_job_variables_name(compute, aws_env, expected):
     assert generate_default_job_variables_name(compute, aws_env) == expected
 
 
-def test_get_prefect_job_variables():
+@pytest.mark.asyncio
+async def test_get_prefect_job_variables():
     test_var_name = "cpu-default-job-variables-prefect-mvp-labs"
-    Variable.set(test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True)
+    await Variable.set(
+        test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True
+    )
 
-    result = get_prefect_job_variables(Compute.CPU, AwsEnv.labs)
+    result = await get_prefect_job_variables(Compute.CPU, AwsEnv.labs)
     assert result == {"KEY1": "value1", "KEY2": "value2"}
 
 
-def test_get_prefect_job_variables_not_found():
+@pytest.mark.asyncio
+async def test_get_prefect_job_variables_not_found():
     with pytest.raises(ValueError, match="Variable '.*' not found in Prefect"):
-        get_prefect_job_variables(Compute.CPU, AwsEnv.staging)
+        await get_prefect_job_variables(Compute.CPU, AwsEnv.staging)
 
 
-def test_get_prefect_job_variable():
+@pytest.mark.asyncio
+async def test_get_prefect_job_variable():
     test_var_name = "cpu-default-job-variables-prefect-mvp-labs"
-    Variable.set(test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True)
+    await Variable.set(
+        test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True
+    )
 
-    result = get_prefect_job_variable("KEY1", AwsEnv.labs, Compute.CPU)
+    result = await get_prefect_job_variable("KEY1", AwsEnv.labs, Compute.CPU)
     assert result == "value1"
