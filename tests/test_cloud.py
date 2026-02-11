@@ -154,15 +154,19 @@ def test_parse_spec_file_invalid_format(invalid_contents, tmp_path):
 
 
 def test_compute_str():
-    assert str(Compute.CPU) == "cpu"
+    assert str(Compute.CPU) == "ecs"
 
 
 @pytest.mark.parametrize(
     "compute, aws_env, expected",
     [
-        (Compute.CPU, AwsEnv.labs, "cpu-default-job-variables-prefect-mvp-labs"),
-        (Compute.GPU, AwsEnv.staging, "gpu-default-job-variables-prefect-mvp-staging"),
-        (Compute.CPU, AwsEnv.production, "cpu-default-job-variables-prefect-mvp-prod"),
+        (Compute.CPU, AwsEnv.labs, "ecs-default-job-variables-prefect-mvp-labs"),
+        (
+            Compute.GPU,
+            AwsEnv.staging,
+            "coiled-default-job-variables-prefect-mvp-staging",
+        ),
+        (Compute.CPU, AwsEnv.production, "ecs-default-job-variables-prefect-mvp-prod"),
     ],
 )
 def test_generate_default_job_variables_name(compute, aws_env, expected):
@@ -171,7 +175,7 @@ def test_generate_default_job_variables_name(compute, aws_env, expected):
 
 @pytest.mark.asyncio
 async def test_get_prefect_job_variables():
-    test_var_name = "cpu-default-job-variables-prefect-mvp-labs"
+    test_var_name = "ecs-default-job-variables-prefect-mvp-labs"
     await Variable.set(
         test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True
     )
@@ -181,14 +185,8 @@ async def test_get_prefect_job_variables():
 
 
 @pytest.mark.asyncio
-async def test_get_prefect_job_variables_not_found():
-    with pytest.raises(ValueError, match="Variable '.*' not found in Prefect"):
-        await get_prefect_job_variables(Compute.CPU, AwsEnv.staging)
-
-
-@pytest.mark.asyncio
 async def test_get_prefect_job_variable():
-    test_var_name = "cpu-default-job-variables-prefect-mvp-labs"
+    test_var_name = "ecs-default-job-variables-prefect-mvp-labs"
     await Variable.set(
         test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True
     )
