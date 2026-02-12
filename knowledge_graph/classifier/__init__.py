@@ -63,6 +63,9 @@ def __getattr__(name):
     elif name in ("BaseLLMClassifier", "LLMClassifier", "LocalLLMClassifier"):
         module = importlib.import_module(".large_language_model", __package__)
         return getattr(module, name)
+    elif name in ("AutoLLMClassifier"):
+        module = importlib.import_module(".autollm", __package__)
+        return getattr(module, name)
     else:
         return globals()[name]
 
@@ -77,6 +80,7 @@ __all__ = [
     "BertBasedClassifier",  # type: ignore
     "LLMClassifier",  # type: ignore
     "LocalLLMClassifier",  # type: ignore
+    "AutoLLMClassifier",  # type: ignore
     "GPUBoundClassifier",
     "ModelPath",
     "get_local_classifier_path",
