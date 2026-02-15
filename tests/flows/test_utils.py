@@ -24,13 +24,13 @@ from flows.utils import (
     fn_is_async,
     gather_and_report,
     get_run_name,
-    iterate_batch,
     map_as_local,
     map_as_sub_flow,
     remove_translated_suffix,
     s3_file_exists,
 )
 from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.utils import iterate_batch
 
 
 @pytest.mark.parametrize(

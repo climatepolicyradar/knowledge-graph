@@ -9,13 +9,13 @@ import typer
 import wandb
 from rich.console import Console
 
-from flows.utils import serialise_pydantic_list_as_jsonl
 from knowledge_graph.classifier import EmbeddingClassifier, KeywordClassifier
 from knowledge_graph.classifier.classifier import Classifier
 from knowledge_graph.config import WANDB_ENTITY, equity_columns, processed_data_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.sampling import create_balanced_sample, split_evenly
+from knowledge_graph.utils import serialise_pydantic_list_as_jsonl
 from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb_run
 from knowledge_graph.wikibase import WikibaseSession
 from scripts.train import parse_kwargs_from_strings
