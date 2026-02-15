@@ -7,7 +7,6 @@ from botocore.exceptions import ClientError
 from pydantic import ValidationError as PydanticValidationError
 from vespa.io import VespaResponse
 
-from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
 from flows.sync_concepts import (
     concepts_to_dataframe,
     create_vespa_sync_summary_artifact,
@@ -22,6 +21,7 @@ from flows.sync_concepts import (
 from flows.utils import S3Uri
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
+from knowledge_graph.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
 from knowledge_graph.wikibase import WikibaseAuth
 
 

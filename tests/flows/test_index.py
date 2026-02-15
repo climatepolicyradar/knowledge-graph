@@ -35,12 +35,12 @@ from flows.index import (
     index_family_document,
     store_metadata,
 )
-from flows.result import is_err, is_ok, unwrap_err
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
     remove_translated_suffix,
 )
+from knowledge_graph.result import is_err, is_ok, unwrap_err
 
 
 @pytest.mark.vespa

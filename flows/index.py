@@ -11,33 +11,22 @@ from typing import Any, Final, NamedTuple, TypeAlias
 import httpx
 from cpr_sdk.models.search import Document as VespaDocument
 from cpr_sdk.models.search import Passage as VespaPassage
-from mypy_boto3_s3.type_defs import (
-    PutObjectOutputTypeDef,
-)
+from mypy_boto3_s3.type_defs import PutObjectOutputTypeDef
 from prefect import flow, task
-from prefect.artifacts import (
-    create_table_artifact,
-)
+from prefect.artifacts import create_table_artifact
 from prefect.client.schemas import FlowRun
 from prefect.context import FlowRunContext, get_run_context
 from prefect.futures import PrefectFuture, PrefectFutureList
 from prefect.task_runners import ThreadPoolTaskRunner
 from prefect.utilities.names import generate_slug
-from pydantic import (
-    BaseModel,
-    PositiveInt,
-)
+from pydantic import BaseModel, PositiveInt
 
 # generate_slug is being used, but in an implicit f-string
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
-from flows.aggregate import (
-    METADATA_FILE_NAME as AGGREGATE_METADATA_FILE_NAME,
-)
-from flows.aggregate import (
-    Metadata as AggregateMetadata,
-)
+from flows.aggregate import METADATA_FILE_NAME as AGGREGATE_METADATA_FILE_NAME
+from flows.aggregate import Metadata as AggregateMetadata
 from flows.aggregate import (
     MiniClassifierSpec,
     SerialisedVespaConcept,
@@ -55,7 +44,6 @@ from flows.boundary import (
     get_vespa_search_adapter_from_aws_secrets,
 )
 from flows.config import Config
-from flows.result import Err, Error, Ok, Result, is_err, unwrap_err
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -67,7 +55,6 @@ from flows.utils import (
     SlackNotify,
     collect_unique_file_stems_under_prefix,
     get_logger,
-    iterate_batch,
     map_as_sub_flow,
     remove_translated_suffix,
     return_with,
@@ -75,6 +62,8 @@ from flows.utils import (
 )
 from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.result import Err, Error, Ok, Result, is_err, unwrap_err
+from knowledge_graph.utils import iterate_batch
 
 # A serialised Vespa span, see cpr_sdk.models.search.Passage.Span
 SerialisedVespaSpan: TypeAlias = list[dict[str, str]]

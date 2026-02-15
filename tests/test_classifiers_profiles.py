@@ -1,12 +1,12 @@
 import pytest
 
-from flows.result import Err, Ok
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
     validate_classifiers_profiles_mappings,
 )
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.result import Err, Ok
 
 
 @pytest.fixture

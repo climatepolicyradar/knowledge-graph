@@ -7,10 +7,6 @@ from pathlib import Path
 import wandb
 from wandb.sdk.wandb_run import Run as WandbRun
 
-from flows.utils import (
-    deserialise_pydantic_list_with_fallback,
-    serialise_pydantic_list_as_jsonl,
-)
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import (
@@ -18,6 +14,10 @@ from knowledge_graph.config import (
     wandb_model_artifact_filename,
 )
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.utils import (
+    deserialise_pydantic_list_with_fallback,
+    serialise_pydantic_list_as_jsonl,
+)
 
 logger = logging.getLogger(__name__)
 

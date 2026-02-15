@@ -955,10 +955,19 @@ def test_whether_format_metadata_lowercases_keys(metadata):
 def test_whether_format_metadata_preserves_values(metadata):
     with patch("knowledge_graph.labelling.Argilla"):
         session = ArgillaSession()
-        result = session._format_metadata_keys_for_argilla(metadata)
-        original_values = sorted(str(v) for v in metadata.values())
-        result_values = sorted(str(v) for v in result.values())
-        assert original_values == result_values
+
+        # Check whether any of the input keys would collide after normalisation
+        normalized_keys = [key.replace(".", "-").lower() for key in metadata.keys()]
+        if len(normalized_keys) != len(set(normalized_keys)):
+            # Should raise ValueError when there are key collisions
+            with pytest.raises(ValueError, match="Metadata key collision"):
+                session._format_metadata_keys_for_argilla(metadata)
+        else:
+            # Should preserve all values when there are no key collisions
+            result = session._format_metadata_keys_for_argilla(metadata)
+            original_values = sorted(str(v) for v in metadata.values())
+            result_values = sorted(str(v) for v in result.values())
+            assert original_values == result_values
 
 
 @given(metadata_dict_strategy)

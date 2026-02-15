@@ -57,13 +57,15 @@ from flows.utils import (
     DocumentStem,
     Fault,
     JsonDict,
-    deserialise_pydantic_list_from_jsonl,
-    deserialise_pydantic_list_with_fallback,
-    serialise_pydantic_list_as_jsonl,
 )
 from knowledge_graph.identifiers import ClassifierID, ConceptID, Identifier, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
+from knowledge_graph.utils import (
+    deserialise_pydantic_list_from_jsonl,
+    deserialise_pydantic_list_with_fallback,
+    serialise_pydantic_list_as_jsonl,
+)
 
 
 @pytest.fixture

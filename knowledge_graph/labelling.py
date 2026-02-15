@@ -754,6 +754,7 @@ class ArgillaSession:
 
         :param metadata: Dictionary of metadata to format
         :return: Dictionary with formatted keys
+        :raises ValueError: If normalizing keys would cause a collision
         """
         if not metadata:
             return {}
@@ -761,6 +762,12 @@ class ArgillaSession:
         formatted = {}
         for key, value in metadata.items():
             normalized_key = key.replace(".", "-").lower()
+            if normalized_key in formatted:
+                raise ValueError(
+                    f"Metadata key collision: both '{key}' and another key "
+                    f"normalize to '{normalized_key}'. Please ensure metadata "
+                    f"keys are unique after lowercasing and replacing dots with hyphens."
+                )
             formatted[normalized_key] = value
 
         return formatted

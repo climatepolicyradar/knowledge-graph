@@ -28,8 +28,9 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from neomodel import db
 from prefect import flow
 
-from flows.utils import get_logger, iterate_batch
+from flows.utils import get_logger
 from knowledge_graph.graph_models import get_neo4j_session
+from knowledge_graph.utils import iterate_batch
 from knowledge_graph.wikibase import WikibaseSession
 
 CONCEPT_BATCH_SIZE = 5000

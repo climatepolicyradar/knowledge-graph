@@ -10,7 +10,6 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from flows.utils import iterate_batch
 from knowledge_graph.classifier.classifier import (
     Classifier,
     VariantEnabledClassifier,
@@ -19,6 +18,7 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span
+from knowledge_graph.utils import iterate_batch
 
 logger = logging.getLogger(__name__)
 

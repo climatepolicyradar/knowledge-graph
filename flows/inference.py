@@ -54,16 +54,15 @@ from flows.utils import (
     build_run_output_identifier,
     filter_non_english_language_file_stems,
     get_logger,
-    iterate_batch,
     map_as_sub_flow,
     return_with,
-    serialise_pydantic_list_as_jsonl,
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.cloud import get_async_session
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
+from knowledge_graph.utils import iterate_batch, serialise_pydantic_list_as_jsonl
 
 # The "parent" AKA the higher level flows that do multiple things
 PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())

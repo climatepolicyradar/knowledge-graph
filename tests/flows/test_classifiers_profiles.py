@@ -31,15 +31,24 @@ from flows.classifiers_profiles import (
     validate_artifact_metadata_rules,
     wandb_validation,
 )
-from flows.result import Err, Error, Ok, Result, is_err, is_ok, unwrap_err, unwrap_ok
+from flows.compare_result_operation import Demote, Ignore, Promote, Update
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
 )
 from knowledge_graph.cloud import AwsEnv
-from knowledge_graph.compare_result_operation import Demote, Ignore, Promote, Update
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.result import (
+    Err,
+    Error,
+    Ok,
+    Result,
+    is_err,
+    is_ok,
+    unwrap_err,
+    unwrap_ok,
+)
 from knowledge_graph.version import Version
 from knowledge_graph.wikibase import StatementRank, WikibaseAuth
 

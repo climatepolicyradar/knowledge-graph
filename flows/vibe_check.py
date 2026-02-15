@@ -39,11 +39,11 @@ from sentence_transformers import SentenceTransformer
 
 from flows.config import Config
 from flows.train import _set_up_training_environment
-from flows.utils import serialise_pydantic_list_as_jsonl
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
+from knowledge_graph.utils import serialise_pydantic_list_as_jsonl
 from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 from scripts.train import run_training
 
