@@ -44,9 +44,7 @@ from flows.utils import (
     build_inference_result_s3_uri,
     build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
-    deserialise_pydantic_list_with_fallback,
     get_logger,
-    iterate_batch,
     map_as_sub_flow,
 )
 from knowledge_graph.cloud import AwsEnv, get_async_session
@@ -54,6 +52,7 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
+from knowledge_graph.utils import deserialise_pydantic_list_with_fallback, iterate_batch
 
 T = TypeVar("T")
 R = TypeVar("R")

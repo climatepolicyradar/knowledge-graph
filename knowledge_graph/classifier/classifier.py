@@ -1,14 +1,7 @@
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import (
-    Optional,
-    Protocol,
-    Sequence,
-    Union,
-    overload,
-    runtime_checkable,
-)
+from typing import Optional, Protocol, Sequence, Union, overload, runtime_checkable
 
 from rich.console import Console
 from rich.progress import (
@@ -20,10 +13,10 @@ from rich.progress import (
 )
 from typing_extensions import Self
 
-from flows.utils import iterate_batch
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.span import Span
+from knowledge_graph.utils import iterate_batch
 from knowledge_graph.version import Version
 
 

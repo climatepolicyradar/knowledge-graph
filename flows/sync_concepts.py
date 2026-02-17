@@ -22,7 +22,6 @@ from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
 from flows.boundary import get_vespa_search_adapter_from_aws_secrets
-from flows.result import Err, Error, Ok, Result
 from flows.utils import (
     JsonDict,
     S3Uri,
@@ -33,6 +32,7 @@ from flows.utils import (
 )
 from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.concept import Concept
+from knowledge_graph.result import Err, Error, Ok, Result
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
 
 VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))

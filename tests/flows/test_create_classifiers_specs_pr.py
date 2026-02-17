@@ -17,8 +17,8 @@ from flows.create_classifiers_specs_pr import (
     extract_pr_details,
     wait_for_pr_merge,
 )
-from flows.result import Err, Error, Ok, is_err, is_ok, unwrap_err
 from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.result import Err, Error, Ok, is_err, is_ok, unwrap_err
 
 
 def test_run_subprocess_with_error_logging__success():

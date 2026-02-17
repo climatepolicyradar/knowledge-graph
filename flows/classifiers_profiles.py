@@ -41,7 +41,12 @@ from flows.classifier_specs.spec_interface import (
     determine_spec_file_path,
     load_classifier_specs,
 )
-from flows.result import Err, Error, Ok, Result, is_err, is_ok, unwrap_err, unwrap_ok
+from flows.compare_result_operation import (
+    CompareResultOperation,
+    Demote,
+    Promote,
+    Update,
+)
 from flows.utils import (
     JsonDict,
     SlackNotify,
@@ -56,14 +61,18 @@ from knowledge_graph.classifiers_profiles import (
     validate_classifiers_profiles_mappings,
 )
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
-from knowledge_graph.compare_result_operation import (
-    CompareResultOperation,
-    Demote,
-    Promote,
-    Update,
-)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, Identifier, WikibaseID
+from knowledge_graph.result import (
+    Err,
+    Error,
+    Ok,
+    Result,
+    is_err,
+    is_ok,
+    unwrap_err,
+    unwrap_ok,
+)
 from knowledge_graph.version import Version, get_latest_model_version
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
 from scripts.update_classifier_spec import refresh_all_available_classifiers
