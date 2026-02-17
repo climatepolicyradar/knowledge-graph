@@ -10,10 +10,6 @@ from pydantic import BaseModel
 from rich.console import Console
 
 import knowledge_graph.ensemble.metrics as ensemble_metrics
-from flows.utils import (
-    deserialise_pydantic_list_with_fallback,
-    serialise_pydantic_list_as_jsonl,
-)
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.ensemble import create_ensemble
@@ -21,6 +17,10 @@ from knowledge_graph.ensemble.metrics import EnsembleMetric, MajorityVote
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span, UnitInterval
+from knowledge_graph.utils import (
+    deserialise_pydantic_list_with_fallback,
+    serialise_pydantic_list_as_jsonl,
+)
 from knowledge_graph.wandb_helpers import (
     load_classifier_from_wandb,
     load_labelled_passages_from_wandb,
