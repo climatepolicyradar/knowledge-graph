@@ -41,6 +41,6 @@ aws_region = os.getenv("AWS_REGION", "eu-west-1")
 
 _equity_columns_str = os.getenv(
     "EQUITY_COLUMNS",
-    "translated,world_bank_region,document_metadata.corpus_type_name",
+    "translated,world_bank_region,document_metadata-corpus_type_name",
 )
 equity_columns: List[str] = [col.strip() for col in _equity_columns_str.split(",")]

@@ -8,10 +8,12 @@ from syrupy.assertion import SnapshotAssertion
 
 from knowledge_graph.config import wandb_model_artifact_filename
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
 from scripts.evaluate import (
     build_metrics_path,
     calculate_performance_metrics,
     create_gold_standard_labelled_passages,
+    group_passages_by_equity_strata,
     load_classifier_local,
     log_metrics_to_wandb,
     print_metrics,
@@ -129,3 +131,24 @@ def test_log_metrics(metrics_df: pd.DataFrame):
         log_calls = mock_run.log.call_args_list
         assert len(log_calls) > 0
         assert any(["performance" in log_call[0][0] for log_call in log_calls])
+
+
+def test_group_passages_by_equity_strata_raises_when_equity_column_missing_from_metadata():
+    """Test that ValueError is raised when equity strata columns have no values in passages."""
+    human_passages = [
+        LabelledPassage(text="passage 1", spans=[], metadata={"other_field": "value1"}),
+        LabelledPassage(text="passage 2", spans=[], metadata={"other_field": "value2"}),
+    ]
+    model_passages = [
+        LabelledPassage(text="passage 1", spans=[], metadata={"other_field": "value1"}),
+        LabelledPassage(text="passage 2", spans=[], metadata={"other_field": "value2"}),
+    ]
+
+    with pytest.raises(ValueError) as exc_info:
+        group_passages_by_equity_strata(
+            human_labelled_passages=human_passages,
+            model_labelled_passages=model_passages,
+            equity_strata=["missing_column"],
+        )
+
+    assert "missing_column" in str(exc_info.value)
