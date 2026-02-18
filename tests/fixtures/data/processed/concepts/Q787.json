@@ -160,7 +160,8 @@
         "author_is_party": "1.0",
         "date": "2019-11-27 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -240,15 +241,16 @@
         "author_is_party": "1.0",
         "date": "2012-02-06 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "ymd7ebxy",
-      "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with Māori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
+      "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with M\u0101ori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
       "spans": [
         {
-          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with Māori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
+          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with M\u0101ori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
           "start_index": 65,
           "end_index": 72,
           "concept_id": "Q787",
@@ -262,7 +264,7 @@
           ]
         },
         {
-          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with Māori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
+          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with M\u0101ori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
           "start_index": 77,
           "end_index": 92,
           "concept_id": "Q787",
@@ -276,7 +278,7 @@
           ]
         },
         {
-          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with Māori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
+          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with M\u0101ori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
           "start_index": 298,
           "end_index": 315,
           "concept_id": "Q787",
@@ -290,7 +292,7 @@
           ]
         },
         {
-          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with Māori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
+          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with M\u0101ori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
           "start_index": 65,
           "end_index": 72,
           "concept_id": "Q787",
@@ -304,7 +306,7 @@
           ]
         },
         {
-          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with Māori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
+          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with M\u0101ori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
           "start_index": 77,
           "end_index": 92,
           "concept_id": "Q787",
@@ -318,7 +320,7 @@
           ]
         },
         {
-          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with Māori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
+          "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with M\u0101ori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
           "start_index": 298,
           "end_index": 315,
           "concept_id": "Q787",
@@ -334,7 +336,7 @@
       ],
       "metadata": {
         "document_id": "UNFCCC.party.1320.0",
-        "document_name": "Te hau mārohi ki anamata - Transitioning to a low-emissions and climate-resilient future: AOTEAROA NEW ZEALAND'S LONG-TERM LOW-EMISSIONS DEVELOPMENT STRATEGY",
+        "document_name": "Te hau m\u0101rohi ki anamata - Transitioning to a low-emissions and climate-resilient future: AOTEAROA NEW ZEALAND'S LONG-TERM LOW-EMISSIONS DEVELOPMENT STRATEGY",
         "document_source_url": "/sites/default/files/resource/NZL_LTS_2021.pdf",
         "document_content_type": "application/pdf",
         "document_md5_sum": "a2846493c569f4dd2f685f0b71b017cf",
@@ -350,7 +352,7 @@
         "type_confidence": "0.9841340780000001",
         "page_number": "58",
         "coords": "[[87.0, 455.0], [293.0, 455.0], [293.0, 575.0], [87.0, 575.0]]",
-        "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with Māori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
+        "text": "provide overarching strategic direction and policies that ensure forests and forest products support a range of outcomes, including biodiversity and sequestration work in close partnership with M\u0101ori and key stakeholders, including territorial authorities and land owners, to develop and implement forestry policies.",
         "block_index": "672",
         "dataset_name": "gst",
         "document_cdn_object": "",
@@ -369,14 +371,15 @@
         "document_languages": "['en']",
         "variant": "nan",
         "role": "MAIN",
-        "family_name": "Te hau mārohi ki anamata - Transitioning to a low-emissions and climate-resilient future: AOTEAROA NEW ZEALAND'S LONG-TERM LOW-EMISSIONS DEVELOPMENT STRATEGY",
+        "family_name": "Te hau m\u0101rohi ki anamata - Transitioning to a low-emissions and climate-resilient future: AOTEAROA NEW ZEALAND'S LONG-TERM LOW-EMISSIONS DEVELOPMENT STRATEGY",
         "types": "['Long-Term Low-Emission Development Strategy']",
         "author": "['New Zealand']",
         "link": "",
         "author_is_party": "1.0",
         "date": "2021-11-04 00:00:00",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -456,7 +459,8 @@
         "author_is_party": "1.0",
         "date": "2019-06-25 00:00:00",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -536,7 +540,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -728,7 +733,8 @@
         "author_is_party": "1.0",
         "date": "2022-12-22 00:00:00",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -892,7 +898,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -1028,7 +1035,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -1108,7 +1116,8 @@
         "author_is_party": "1.0",
         "date": "2021-10-12 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -1370,7 +1379,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -1478,7 +1488,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -1558,7 +1569,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -1638,7 +1650,8 @@
         "author_is_party": "1.0",
         "date": "2018-02-09 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -1788,7 +1801,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -1910,7 +1924,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -1990,7 +2005,8 @@
         "author_is_party": "1.0",
         "date": "2018-09-26 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -2364,7 +2380,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -2444,7 +2461,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -2538,7 +2556,8 @@
         "author_is_party": "0.0",
         "date": "2020-11-13 00:00:00",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -2618,7 +2637,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -2754,7 +2774,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -3058,7 +3079,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -3306,7 +3328,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -3386,15 +3409,16 @@
         "author_is_party": "1.0",
         "date": "2015-11-09 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "txbw4agx",
-      "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO₂ equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
+      "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO\u2082 equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
       "spans": [
         {
-          "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO₂ equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
+          "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO\u2082 equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
           "start_index": 360,
           "end_index": 373,
           "concept_id": "Q787",
@@ -3408,7 +3432,7 @@
           ]
         },
         {
-          "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO₂ equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
+          "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO\u2082 equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
           "start_index": 174,
           "end_index": 221,
           "concept_id": "Q787",
@@ -3422,7 +3446,7 @@
           ]
         },
         {
-          "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO₂ equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
+          "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO\u2082 equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
           "start_index": 204,
           "end_index": 212,
           "concept_id": "Q787",
@@ -3454,7 +3478,7 @@
         "type_confidence": "0.9846032262000001",
         "page_number": "64",
         "coords": "[[71.0, 122.0], [541.0, 122.0], [541.0, 245.0], [71.0, 245.0]]",
-        "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO₂ equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
+        "text": "In 2013, Mexico's GHG emissions from all economic activities in the country totaled 665,304.92 Gg of CO2e. These emissions include energy, industrial processes, agriculture, land use, land use change and forestry (LULUCF), and waste sectors, without including carbon removals. Accounting for removals is important to estimate Mexico's net emissions, since the LULUCF sector acts as a net sink, offsetting approximately 26 percent of greenhouse gas emissions. Thus, net emissions, including removals, were 492,307.31 Gg of CO\u2082 equivalent (see Figure 14 and Table 4). A full description of methodologies and developments to improve the reporting of national emissions can be found in Mexico's First Biennial Report to the UNFCCC (INECC and SEMARNAT, 2015).",
         "block_index": "558",
         "dataset_name": "gst",
         "document_cdn_object": "",
@@ -3480,15 +3504,16 @@
         "author_is_party": "1.0",
         "date": "2016-11-16 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "6chsujts",
-      "text": "49 The NAB board is made up of the Directors of different departments, namely: Vanuatu Meteorology & Geo-hazards, Energy, NDMO, Environment, Climate Change, Foreign Affairs, Department of Strategic Policy Planning and Aid Coordination, Finance, Local Authorities, Women's Affairs, Public Works, Livestock (on behalf of the Ministry of Agriculture, Livestock, Fisheries, Forestry and Biosecurity) the CEO of the Vanuatu Association of Non-Government Organizations (VANGO). The NAB also includes provisions for Observers, who currently are the Secretariat of the Vanuatu Climate Action Network (VCAN) and a Board member of the Vanuatu Chamber of Commerce and Industry (VCCI). 50 Deutsche Gesellschaft für Internationale Zusammenarbeit (GIZ), the Pacific Community, the Pacific Islands Forum Secretariat, USAID Climate Ready, and the United Nations Development Programme, 2018. Vanuatu Climate Change Finance Review - Final Report.",
+      "text": "49 The NAB board is made up of the Directors of different departments, namely: Vanuatu Meteorology & Geo-hazards, Energy, NDMO, Environment, Climate Change, Foreign Affairs, Department of Strategic Policy Planning and Aid Coordination, Finance, Local Authorities, Women's Affairs, Public Works, Livestock (on behalf of the Ministry of Agriculture, Livestock, Fisheries, Forestry and Biosecurity) the CEO of the Vanuatu Association of Non-Government Organizations (VANGO). The NAB also includes provisions for Observers, who currently are the Secretariat of the Vanuatu Climate Action Network (VCAN) and a Board member of the Vanuatu Chamber of Commerce and Industry (VCCI). 50 Deutsche Gesellschaft f\u00fcr Internationale Zusammenarbeit (GIZ), the Pacific Community, the Pacific Islands Forum Secretariat, USAID Climate Ready, and the United Nations Development Programme, 2018. Vanuatu Climate Change Finance Review - Final Report.",
       "spans": [
         {
-          "text": "49 The NAB board is made up of the Directors of different departments, namely: Vanuatu Meteorology & Geo-hazards, Energy, NDMO, Environment, Climate Change, Foreign Affairs, Department of Strategic Policy Planning and Aid Coordination, Finance, Local Authorities, Women's Affairs, Public Works, Livestock (on behalf of the Ministry of Agriculture, Livestock, Fisheries, Forestry and Biosecurity) the CEO of the Vanuatu Association of Non-Government Organizations (VANGO). The NAB also includes provisions for Observers, who currently are the Secretariat of the Vanuatu Climate Action Network (VCAN) and a Board member of the Vanuatu Chamber of Commerce and Industry (VCCI). 50 Deutsche Gesellschaft für Internationale Zusammenarbeit (GIZ), the Pacific Community, the Pacific Islands Forum Secretariat, USAID Climate Ready, and the United Nations Development Programme, 2018. Vanuatu Climate Change Finance Review - Final Report.",
+          "text": "49 The NAB board is made up of the Directors of different departments, namely: Vanuatu Meteorology & Geo-hazards, Energy, NDMO, Environment, Climate Change, Foreign Affairs, Department of Strategic Policy Planning and Aid Coordination, Finance, Local Authorities, Women's Affairs, Public Works, Livestock (on behalf of the Ministry of Agriculture, Livestock, Fisheries, Forestry and Biosecurity) the CEO of the Vanuatu Association of Non-Government Organizations (VANGO). The NAB also includes provisions for Observers, who currently are the Secretariat of the Vanuatu Climate Action Network (VCAN) and a Board member of the Vanuatu Chamber of Commerce and Industry (VCCI). 50 Deutsche Gesellschaft f\u00fcr Internationale Zusammenarbeit (GIZ), the Pacific Community, the Pacific Islands Forum Secretariat, USAID Climate Ready, and the United Nations Development Programme, 2018. Vanuatu Climate Change Finance Review - Final Report.",
           "start_index": 323,
           "end_index": 394,
           "concept_id": "Q787",
@@ -3502,7 +3527,7 @@
           ]
         },
         {
-          "text": "49 The NAB board is made up of the Directors of different departments, namely: Vanuatu Meteorology & Geo-hazards, Energy, NDMO, Environment, Climate Change, Foreign Affairs, Department of Strategic Policy Planning and Aid Coordination, Finance, Local Authorities, Women's Affairs, Public Works, Livestock (on behalf of the Ministry of Agriculture, Livestock, Fisheries, Forestry and Biosecurity) the CEO of the Vanuatu Association of Non-Government Organizations (VANGO). The NAB also includes provisions for Observers, who currently are the Secretariat of the Vanuatu Climate Action Network (VCAN) and a Board member of the Vanuatu Chamber of Commerce and Industry (VCCI). 50 Deutsche Gesellschaft für Internationale Zusammenarbeit (GIZ), the Pacific Community, the Pacific Islands Forum Secretariat, USAID Climate Ready, and the United Nations Development Programme, 2018. Vanuatu Climate Change Finance Review - Final Report.",
+          "text": "49 The NAB board is made up of the Directors of different departments, namely: Vanuatu Meteorology & Geo-hazards, Energy, NDMO, Environment, Climate Change, Foreign Affairs, Department of Strategic Policy Planning and Aid Coordination, Finance, Local Authorities, Women's Affairs, Public Works, Livestock (on behalf of the Ministry of Agriculture, Livestock, Fisheries, Forestry and Biosecurity) the CEO of the Vanuatu Association of Non-Government Organizations (VANGO). The NAB also includes provisions for Observers, who currently are the Secretariat of the Vanuatu Climate Action Network (VCAN) and a Board member of the Vanuatu Chamber of Commerce and Industry (VCCI). 50 Deutsche Gesellschaft f\u00fcr Internationale Zusammenarbeit (GIZ), the Pacific Community, the Pacific Islands Forum Secretariat, USAID Climate Ready, and the United Nations Development Programme, 2018. Vanuatu Climate Change Finance Review - Final Report.",
           "start_index": 323,
           "end_index": 394,
           "concept_id": "Q787",
@@ -3534,7 +3559,7 @@
         "type_confidence": "1.0",
         "page_number": "23",
         "coords": "[[70.1712, 712.9944], [518.616, 712.9944], [518.616, 770.3712], [70.1712, 770.3712]]",
-        "text": "49 The NAB board is made up of the Directors of different departments, namely: Vanuatu Meteorology & Geo-hazards, Energy, NDMO, Environment, Climate Change, Foreign Affairs, Department of Strategic Policy Planning and Aid Coordination, Finance, Local Authorities, Women's Affairs, Public Works, Livestock (on behalf of the Ministry of Agriculture, Livestock, Fisheries, Forestry and Biosecurity) the CEO of the Vanuatu Association of Non-Government Organizations (VANGO). The NAB also includes provisions for Observers, who currently are the Secretariat of the Vanuatu Climate Action Network (VCAN) and a Board member of the Vanuatu Chamber of Commerce and Industry (VCCI). 50 Deutsche Gesellschaft für Internationale Zusammenarbeit (GIZ), the Pacific Community, the Pacific Islands Forum Secretariat, USAID Climate Ready, and the United Nations Development Programme, 2018. Vanuatu Climate Change Finance Review - Final Report.",
+        "text": "49 The NAB board is made up of the Directors of different departments, namely: Vanuatu Meteorology & Geo-hazards, Energy, NDMO, Environment, Climate Change, Foreign Affairs, Department of Strategic Policy Planning and Aid Coordination, Finance, Local Authorities, Women's Affairs, Public Works, Livestock (on behalf of the Ministry of Agriculture, Livestock, Fisheries, Forestry and Biosecurity) the CEO of the Vanuatu Association of Non-Government Organizations (VANGO). The NAB also includes provisions for Observers, who currently are the Secretariat of the Vanuatu Climate Action Network (VCAN) and a Board member of the Vanuatu Chamber of Commerce and Industry (VCCI). 50 Deutsche Gesellschaft f\u00fcr Internationale Zusammenarbeit (GIZ), the Pacific Community, the Pacific Islands Forum Secretariat, USAID Climate Ready, and the United Nations Development Programme, 2018. Vanuatu Climate Change Finance Review - Final Report.",
         "block_index": "741",
         "dataset_name": "green-climate-fund",
         "document_cdn_object": "",
@@ -3560,7 +3585,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -3640,15 +3666,16 @@
         "author_is_party": "1.0",
         "date": "2021-02-10 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "znmshm8j",
-      "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO₂ eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
+      "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO\u2082 eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
       "spans": [
         {
-          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO₂ eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
+          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO\u2082 eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
           "start_index": 0,
           "end_index": 41,
           "concept_id": "Q787",
@@ -3662,7 +3689,7 @@
           ]
         },
         {
-          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO₂ eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
+          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO\u2082 eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
           "start_index": 114,
           "end_index": 125,
           "concept_id": "Q787",
@@ -3676,7 +3703,7 @@
           ]
         },
         {
-          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO₂ eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
+          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO\u2082 eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
           "start_index": 256,
           "end_index": 263,
           "concept_id": "Q787",
@@ -3690,7 +3717,7 @@
           ]
         },
         {
-          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO₂ eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
+          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO\u2082 eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
           "start_index": 13,
           "end_index": 21,
           "concept_id": "Q787",
@@ -3704,7 +3731,7 @@
           ]
         },
         {
-          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO₂ eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
+          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO\u2082 eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
           "start_index": 114,
           "end_index": 125,
           "concept_id": "Q787",
@@ -3718,7 +3745,7 @@
           ]
         },
         {
-          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO₂ eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
+          "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country's forest mass in 2017, quantified at -139 Gg CO\u2082 eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
           "start_index": 235,
           "end_index": 263,
           "concept_id": "Q787",
@@ -3750,7 +3777,7 @@
         "type_confidence": "0.9934358597",
         "page_number": "6",
         "coords": "[[105.0, 520.0], [524.0, 520.0], [524.0, 640.0], [105.0, 640.0]]",
-        "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country&#39;s forest mass in 2017, quantified at -139 Gg CO₂ eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
+        "text": "Agriculture, forestry and land use sector: it is expected to maintain at least the sink capacity of the country&#39;s forest mass in 2017, quantified at -139 Gg CO\u2082 eq. annual. For this it is important to have a good quantification of the sink capacity of our forests as a solution based on nature of vital importance, for this reason we have improved our GHG inventory based on an analysis of land use through the collection and evaluation of satellite images. The result of this improvement is analyzed in the BUR to be communicated this year 2020.",
         "block_index": "47",
         "dataset_name": "gst",
         "document_cdn_object": "",
@@ -3776,15 +3803,16 @@
         "author_is_party": "1.0",
         "date": "2020-05-20 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "4hd8rwbg",
-      "text": "This will result in a reduction of the annual emissions from the timber industry from 3.5M tCO₂ to 2.3M tCO2, a 20% reduction from historic levels for this driver, and an 11% reduction in the overall historic level.",
+      "text": "This will result in a reduction of the annual emissions from the timber industry from 3.5M tCO\u2082 to 2.3M tCO2, a 20% reduction from historic levels for this driver, and an 11% reduction in the overall historic level.",
       "spans": [
         {
-          "text": "This will result in a reduction of the annual emissions from the timber industry from 3.5M tCO₂ to 2.3M tCO2, a 20% reduction from historic levels for this driver, and an 11% reduction in the overall historic level.",
+          "text": "This will result in a reduction of the annual emissions from the timber industry from 3.5M tCO\u2082 to 2.3M tCO2, a 20% reduction from historic levels for this driver, and an 11% reduction in the overall historic level.",
           "start_index": 65,
           "end_index": 80,
           "concept_id": "Q787",
@@ -3798,7 +3826,7 @@
           ]
         },
         {
-          "text": "This will result in a reduction of the annual emissions from the timber industry from 3.5M tCO₂ to 2.3M tCO2, a 20% reduction from historic levels for this driver, and an 11% reduction in the overall historic level.",
+          "text": "This will result in a reduction of the annual emissions from the timber industry from 3.5M tCO\u2082 to 2.3M tCO2, a 20% reduction from historic levels for this driver, and an 11% reduction in the overall historic level.",
           "start_index": 65,
           "end_index": 80,
           "concept_id": "Q787",
@@ -3830,7 +3858,7 @@
         "type_confidence": "0.9437835813000001",
         "page_number": "7",
         "coords": "[[107.0, 636.0], [533.0, 636.0], [533.0, 675.0], [107.0, 675.0]]",
-        "text": "This will result in a reduction of the annual emissions from the timber industry from 3.5M tCO₂ to 2.3M tCO2, a 20% reduction from historic levels for this driver, and an 11% reduction in the overall historic level.",
+        "text": "This will result in a reduction of the annual emissions from the timber industry from 3.5M tCO\u2082 to 2.3M tCO2, a 20% reduction from historic levels for this driver, and an 11% reduction in the overall historic level.",
         "block_index": "57",
         "dataset_name": "gst",
         "document_cdn_object": "",
@@ -3856,7 +3884,8 @@
         "author_is_party": "1.0",
         "date": "2016-05-20 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -3950,7 +3979,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -4030,15 +4060,16 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "787n9tzy",
-      "text": "9. Jordan provided information on its total GHG emissions from 2010 to 2012. The total GHG emissions including agriculture, forestry and other land use were reported as 23,140 Gg of carbon dioxide equivalent (CO₂ eq) and 27,997.73 Gg CO₂ eq for 2010 and 2012, respectively. The energy sector contributed the most significant emissions for both years, which were 84 per cent and 81 per cent of the total GHG emissions, respectively, with fuel combustion being the main source of GHG emissions.",
+      "text": "9. Jordan provided information on its total GHG emissions from 2010 to 2012. The total GHG emissions including agriculture, forestry and other land use were reported as 23,140 Gg of carbon dioxide equivalent (CO\u2082 eq) and 27,997.73 Gg CO\u2082 eq for 2010 and 2012, respectively. The energy sector contributed the most significant emissions for both years, which were 84 per cent and 81 per cent of the total GHG emissions, respectively, with fuel combustion being the main source of GHG emissions.",
       "spans": [
         {
-          "text": "9. Jordan provided information on its total GHG emissions from 2010 to 2012. The total GHG emissions including agriculture, forestry and other land use were reported as 23,140 Gg of carbon dioxide equivalent (CO₂ eq) and 27,997.73 Gg CO₂ eq for 2010 and 2012, respectively. The energy sector contributed the most significant emissions for both years, which were 84 per cent and 81 per cent of the total GHG emissions, respectively, with fuel combustion being the main source of GHG emissions.",
+          "text": "9. Jordan provided information on its total GHG emissions from 2010 to 2012. The total GHG emissions including agriculture, forestry and other land use were reported as 23,140 Gg of carbon dioxide equivalent (CO\u2082 eq) and 27,997.73 Gg CO\u2082 eq for 2010 and 2012, respectively. The energy sector contributed the most significant emissions for both years, which were 84 per cent and 81 per cent of the total GHG emissions, respectively, with fuel combustion being the main source of GHG emissions.",
           "start_index": 124,
           "end_index": 132,
           "concept_id": "Q787",
@@ -4052,7 +4083,7 @@
           ]
         },
         {
-          "text": "9. Jordan provided information on its total GHG emissions from 2010 to 2012. The total GHG emissions including agriculture, forestry and other land use were reported as 23,140 Gg of carbon dioxide equivalent (CO₂ eq) and 27,997.73 Gg CO₂ eq for 2010 and 2012, respectively. The energy sector contributed the most significant emissions for both years, which were 84 per cent and 81 per cent of the total GHG emissions, respectively, with fuel combustion being the main source of GHG emissions.",
+          "text": "9. Jordan provided information on its total GHG emissions from 2010 to 2012. The total GHG emissions including agriculture, forestry and other land use were reported as 23,140 Gg of carbon dioxide equivalent (CO\u2082 eq) and 27,997.73 Gg CO\u2082 eq for 2010 and 2012, respectively. The energy sector contributed the most significant emissions for both years, which were 84 per cent and 81 per cent of the total GHG emissions, respectively, with fuel combustion being the main source of GHG emissions.",
           "start_index": 124,
           "end_index": 132,
           "concept_id": "Q787",
@@ -4084,7 +4115,7 @@
         "type_confidence": "0.9829471707",
         "page_number": "1",
         "coords": "[[112.0, 207.0], [538.0, 207.0], [538.0, 263.0], [112.0, 263.0]]",
-        "text": "9. Jordan provided information on its total GHG emissions from 2010 to 2012. The total GHG emissions including agriculture, forestry and other land use were reported as 23,140 Gg of carbon dioxide equivalent (CO₂ eq) and 27,997.73 Gg CO₂ eq for 2010 and 2012, respectively. The energy sector contributed the most significant emissions for both years, which were 84 per cent and 81 per cent of the total GHG emissions, respectively, with fuel combustion being the main source of GHG emissions.",
+        "text": "9. Jordan provided information on its total GHG emissions from 2010 to 2012. The total GHG emissions including agriculture, forestry and other land use were reported as 23,140 Gg of carbon dioxide equivalent (CO\u2082 eq) and 27,997.73 Gg CO\u2082 eq for 2010 and 2012, respectively. The energy sector contributed the most significant emissions for both years, which were 84 per cent and 81 per cent of the total GHG emissions, respectively, with fuel combustion being the main source of GHG emissions.",
         "block_index": "23",
         "dataset_name": "gst",
         "document_cdn_object": "",
@@ -4110,7 +4141,8 @@
         "author_is_party": "0.0",
         "date": "2019-02-26 00:00:00",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -4190,7 +4222,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -4270,7 +4303,8 @@
         "author_is_party": "1.0",
         "date": "2021-01-18 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -4350,7 +4384,8 @@
         "author_is_party": "1.0",
         "date": "2018-11-28 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -4430,7 +4465,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -4622,7 +4658,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -4758,7 +4795,8 @@
         "author_is_party": "1.0",
         "date": "2019-06-05 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -4838,7 +4876,8 @@
         "author_is_party": "1.0",
         "date": "2020-12-09 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -4946,7 +4985,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "South Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -5026,7 +5066,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -5162,7 +5203,8 @@
         "author_is_party": "1.0",
         "date": "2022-11-08 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -5242,7 +5284,8 @@
         "author_is_party": "0.0",
         "date": "2022-04-04 00:00:00",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -5406,7 +5449,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -5472,7 +5516,7 @@
       ],
       "metadata": {
         "document_id": "CCLW.executive.9969.4476",
-        "document_name": "Law  Nº20.283 on Native Forest Recovery and Forest Promotion",
+        "document_name": "Law  N\u00ba20.283 on Native Forest Recovery and Forest Promotion",
         "document_source_url": "/wp-content/files_mf/1368741650LibroLey_Bosque_NativoReglamentos.pdf",
         "document_content_type": "application/pdf",
         "document_md5_sum": "33cfea857482d64599cffc71726e9398",
@@ -5507,14 +5551,15 @@
         "document_languages": "['en']",
         "variant": "nan",
         "role": "MAIN",
-        "family_name": "Law  Nº20.283 on Native Forest Recovery and Forest Promotion",
+        "family_name": "Law  N\u00ba20.283 on Native Forest Recovery and Forest Promotion",
         "types": "",
         "author": "",
         "link": "",
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -5664,15 +5709,16 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "7dsgcvkf",
-      "text": "→ Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
+      "text": "\u2192 Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
       "spans": [
         {
-          "text": "→ Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
+          "text": "\u2192 Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
           "start_index": 2,
           "end_index": 45,
           "concept_id": "Q787",
@@ -5686,7 +5732,7 @@
           ]
         },
         {
-          "text": "→ Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
+          "text": "\u2192 Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
           "start_index": 495,
           "end_index": 533,
           "concept_id": "Q787",
@@ -5700,7 +5746,7 @@
           ]
         },
         {
-          "text": "→ Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
+          "text": "\u2192 Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
           "start_index": 623,
           "end_index": 628,
           "concept_id": "Q787",
@@ -5714,7 +5760,7 @@
           ]
         },
         {
-          "text": "→ Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
+          "text": "\u2192 Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
           "start_index": 15,
           "end_index": 23,
           "concept_id": "Q787",
@@ -5728,7 +5774,7 @@
           ]
         },
         {
-          "text": "→ Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
+          "text": "\u2192 Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
           "start_index": 495,
           "end_index": 501,
           "concept_id": "Q787",
@@ -5760,7 +5806,7 @@
         "type_confidence": "0.9788453579",
         "page_number": "25",
         "coords": "[[81.0, 415.0], [523.0, 415.0], [523.0, 591.0], [81.0, 591.0]]",
-        "text": "→ Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
+        "text": "\u2192 Agriculture, Forestry and Other Land sector: In the agriculture sector, data is collected through a questionnaire which is sent to the various administrations (see list in Error! Source of reference not found. below). Currently for agriculture, only data on lime, synthetic nitrogen fertilizers and sugar cane areas are available at the national level. Some information gathering activities are underway and will provide more national information in the future (see improvement plan). For the Forest and Other Land Use (FAT) sector: several institutions actively participate in the creation of specific data for IGES and REDD+ for which the National Climate Council is in charge. In particular for this iteration, AGEOS worked in close collaboration with SIRS to prepare land use maps for the entire time series following the recommendations of the IPCC (see section on Methodology for sector emissions/removals). AFAT).",
         "block_index": "148",
         "dataset_name": "gst",
         "document_cdn_object": "",
@@ -5786,7 +5832,8 @@
         "author_is_party": "1.0",
         "date": "2021-12-29 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -5866,7 +5913,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -5960,7 +6008,8 @@
         "author_is_party": "1.0",
         "date": "2017-09-12 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -6032,7 +6081,7 @@
         "block_index": "591",
         "dataset_name": "cclw",
         "document_cdn_object": "",
-        "document_description": "\"\"The Act sets up a basic framework for the conservation of forests and (consequently) the support of the functions of ‘forest areas', which include 'climate regulation and carbon absorption'. Especially relevant for forest restoration and indirectly for CO2 absorption is the chapter on 'Afforestation and protection of forest areas against erosion and floods'.<br>&nbsp;<br>&nbsp;The Act further mandates elaboration of the National Strategy for Development of the Forestry Sector.\"",
+        "document_description": "\"\"The Act sets up a basic framework for the conservation of forests and (consequently) the support of the functions of \u2018forest areas', which include 'climate regulation and carbon absorption'. Especially relevant for forest restoration and indirectly for CO2 absorption is the chapter on 'Afforestation and protection of forest areas against erosion and floods'.<br>&nbsp;<br>&nbsp;The Act further mandates elaboration of the National Strategy for Development of the Forestry Sector.\"",
         "source": "CPR",
         "collection_name": "nan",
         "collection_id": "nan",
@@ -6054,15 +6103,16 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "ds6g7pvz",
-      "text": "Dynamics of accumulation of reductions in total greenhouse gas emissions in 1990-2015 (excluding the sector “Land use, land use change and forestry”)",
+      "text": "Dynamics of accumulation of reductions in total greenhouse gas emissions in 1990-2015 (excluding the sector \u201cLand use, land use change and forestry\u201d)",
       "spans": [
         {
-          "text": "Dynamics of accumulation of reductions in total greenhouse gas emissions in 1990-2015 (excluding the sector “Land use, land use change and forestry”)",
+          "text": "Dynamics of accumulation of reductions in total greenhouse gas emissions in 1990-2015 (excluding the sector \u201cLand use, land use change and forestry\u201d)",
           "start_index": 109,
           "end_index": 147,
           "concept_id": "Q787",
@@ -6076,7 +6126,7 @@
           ]
         },
         {
-          "text": "Dynamics of accumulation of reductions in total greenhouse gas emissions in 1990-2015 (excluding the sector “Land use, land use change and forestry”)",
+          "text": "Dynamics of accumulation of reductions in total greenhouse gas emissions in 1990-2015 (excluding the sector \u201cLand use, land use change and forestry\u201d)",
           "start_index": 139,
           "end_index": 147,
           "concept_id": "Q787",
@@ -6108,7 +6158,7 @@
         "type_confidence": "0.9381941557000001",
         "page_number": "12",
         "coords": "[[76.2030944824, 629.9565429688], [515.2694091797, 629.9565429688], [515.2694091797, 670.1180419922], [76.2030944824, 670.1180419922]]",
-        "text": "Dynamics of accumulation of reductions in total greenhouse gas emissions in 1990-2015 (excluding the sector “Land use, land use change and forestry”)",
+        "text": "Dynamics of accumulation of reductions in total greenhouse gas emissions in 1990-2015 (excluding the sector \u201cLand use, land use change and forestry\u201d)",
         "block_index": "82",
         "dataset_name": "gst",
         "document_cdn_object": "",
@@ -6134,7 +6184,8 @@
         "author_is_party": "1.0",
         "date": "2017-12-29 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -6214,7 +6265,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -6294,7 +6346,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -6374,15 +6427,16 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "3edpa5m2",
-      "text": "A copy of the timber scheme\ncertificate (including CoC)\n• BES6001 certificate (or compliant\nsector standard certificate)\n• EMAS certificate\n• ISO14001 certificate.\n• For small companies, (see Relevant\nDefinitions) confirmation that the\ncompany EMS is structured in\ncompliance with BS 8555 2003\n(or equivalent) and the EMS has\ncompleted phase audits one to four\nas outlined in BS 8555. This can be\nfound in company documentation\ndemonstrating the process and\ntypical outputs from phase four\naudits such as an EMS manual/\npaperwork and guidance to staff.\nWhere independent certification\nexists to demonstrate these phases, it",
+      "text": "A copy of the timber scheme\ncertificate (including CoC)\n\u2022 BES6001 certificate (or compliant\nsector standard certificate)\n\u2022 EMAS certificate\n\u2022 ISO14001 certificate.\n\u2022 For small companies, (see Relevant\nDefinitions) confirmation that the\ncompany EMS is structured in\ncompliance with BS 8555 2003\n(or equivalent) and the EMS has\ncompleted phase audits one to four\nas outlined in BS 8555. This can be\nfound in company documentation\ndemonstrating the process and\ntypical outputs from phase four\naudits such as an EMS manual/\npaperwork and guidance to staff.\nWhere independent certification\nexists to demonstrate these phases, it",
       "spans": [
         {
-          "text": "A copy of the timber scheme\ncertificate (including CoC)\n• BES6001 certificate (or compliant\nsector standard certificate)\n• EMAS certificate\n• ISO14001 certificate.\n• For small companies, (see Relevant\nDefinitions) confirmation that the\ncompany EMS is structured in\ncompliance with BS 8555 2003\n(or equivalent) and the EMS has\ncompleted phase audits one to four\nas outlined in BS 8555. This can be\nfound in company documentation\ndemonstrating the process and\ntypical outputs from phase four\naudits such as an EMS manual/\npaperwork and guidance to staff.\nWhere independent certification\nexists to demonstrate these phases, it",
+          "text": "A copy of the timber scheme\ncertificate (including CoC)\n\u2022 BES6001 certificate (or compliant\nsector standard certificate)\n\u2022 EMAS certificate\n\u2022 ISO14001 certificate.\n\u2022 For small companies, (see Relevant\nDefinitions) confirmation that the\ncompany EMS is structured in\ncompliance with BS 8555 2003\n(or equivalent) and the EMS has\ncompleted phase audits one to four\nas outlined in BS 8555. This can be\nfound in company documentation\ndemonstrating the process and\ntypical outputs from phase four\naudits such as an EMS manual/\npaperwork and guidance to staff.\nWhere independent certification\nexists to demonstrate these phases, it",
           "start_index": 14,
           "end_index": 39,
           "concept_id": "Q787",
@@ -6396,7 +6450,7 @@
           ]
         },
         {
-          "text": "A copy of the timber scheme\ncertificate (including CoC)\n• BES6001 certificate (or compliant\nsector standard certificate)\n• EMAS certificate\n• ISO14001 certificate.\n• For small companies, (see Relevant\nDefinitions) confirmation that the\ncompany EMS is structured in\ncompliance with BS 8555 2003\n(or equivalent) and the EMS has\ncompleted phase audits one to four\nas outlined in BS 8555. This can be\nfound in company documentation\ndemonstrating the process and\ntypical outputs from phase four\naudits such as an EMS manual/\npaperwork and guidance to staff.\nWhere independent certification\nexists to demonstrate these phases, it",
+          "text": "A copy of the timber scheme\ncertificate (including CoC)\n\u2022 BES6001 certificate (or compliant\nsector standard certificate)\n\u2022 EMAS certificate\n\u2022 ISO14001 certificate.\n\u2022 For small companies, (see Relevant\nDefinitions) confirmation that the\ncompany EMS is structured in\ncompliance with BS 8555 2003\n(or equivalent) and the EMS has\ncompleted phase audits one to four\nas outlined in BS 8555. This can be\nfound in company documentation\ndemonstrating the process and\ntypical outputs from phase four\naudits such as an EMS manual/\npaperwork and guidance to staff.\nWhere independent certification\nexists to demonstrate these phases, it",
           "start_index": 14,
           "end_index": 39,
           "concept_id": "Q787",
@@ -6428,7 +6482,7 @@
         "type_confidence": "0.9313216805000001",
         "page_number": "116",
         "coords": "[[74.6549911499, 290.4042053223], [310.4049987793, 290.4042053223], [310.4049987793, 615.3812255859], [74.6549911499, 615.3812255859]]",
-        "text": "A copy of the timber scheme\ncertificate (including CoC)\n• BES6001 certificate (or compliant\nsector standard certificate)\n• EMAS certificate\n• ISO14001 certificate.\n• For small companies, (see Relevant\nDefinitions) confirmation that the\ncompany EMS is structured in\ncompliance with BS 8555 2003\n(or equivalent) and the EMS has\ncompleted phase audits one to four\nas outlined in BS 8555. This can be\nfound in company documentation\ndemonstrating the process and\ntypical outputs from phase four\naudits such as an EMS manual/\npaperwork and guidance to staff.\nWhere independent certification\nexists to demonstrate these phases, it",
+        "text": "A copy of the timber scheme\ncertificate (including CoC)\n\u2022 BES6001 certificate (or compliant\nsector standard certificate)\n\u2022 EMAS certificate\n\u2022 ISO14001 certificate.\n\u2022 For small companies, (see Relevant\nDefinitions) confirmation that the\ncompany EMS is structured in\ncompliance with BS 8555 2003\n(or equivalent) and the EMS has\ncompleted phase audits one to four\nas outlined in BS 8555. This can be\nfound in company documentation\ndemonstrating the process and\ntypical outputs from phase four\naudits such as an EMS manual/\npaperwork and guidance to staff.\nWhere independent certification\nexists to demonstrate these phases, it",
         "block_index": "1019",
         "dataset_name": "cclw",
         "document_cdn_object": "",
@@ -6454,7 +6508,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -6548,7 +6603,8 @@
         "author_is_party": "1.0",
         "date": "2018-12-31 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -6642,15 +6698,16 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
       "id": "be7qnc7s",
-      "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+      "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
       "spans": [
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 98,
           "end_index": 104,
           "concept_id": "Q787",
@@ -6664,7 +6721,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 179,
           "end_index": 189,
           "concept_id": "Q787",
@@ -6678,7 +6735,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 223,
           "end_index": 240,
           "concept_id": "Q787",
@@ -6692,7 +6749,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 257,
           "end_index": 276,
           "concept_id": "Q787",
@@ -6706,7 +6763,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 353,
           "end_index": 376,
           "concept_id": "Q787",
@@ -6720,7 +6777,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 805,
           "end_index": 826,
           "concept_id": "Q787",
@@ -6734,7 +6791,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 98,
           "end_index": 104,
           "concept_id": "Q787",
@@ -6748,7 +6805,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 179,
           "end_index": 189,
           "concept_id": "Q787",
@@ -6762,7 +6819,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 223,
           "end_index": 240,
           "concept_id": "Q787",
@@ -6776,7 +6833,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 257,
           "end_index": 276,
           "concept_id": "Q787",
@@ -6790,7 +6847,7 @@
           ]
         },
         {
-          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( § 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
+          "text": "(2) In the case of projects that serve the purposes specified in paragraph 1 nos. 1 and 2, if the forest is to be converted into another type of use (Section 9), an area is to be afforested for the first time (Section 10), protective forest (Section 12) or recreational forest ( \u00a7 13) are used for the purposes specified in Paragraph 1 No. 1 and 2, the higher forest authority is to be heard. If it is necessary to deviate from the opinion of this authority, the competent federal ministry decides on this in agreement with the federal ministries involved and in consultation with the supreme state authority responsible under state law. If a hearing takes place in accordance with Section 1 of the Land Procurement Act, Section 1 of the Protection Areas Act or Section 30 (3) of the Air Traffic Act, the forestry requirements are to be finally discussed in this process.",
           "start_index": 353,
           "end_index": 376,
           "concept_id": "Q787",
@@ -6862,7 +6919,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -6942,7 +7000,8 @@
         "author_is_party": "1.0",
         "date": "2022-09-12 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -7092,7 +7151,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -7186,7 +7246,8 @@
         "author_is_party": "1.0",
         "date": "2021-05-03 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -7266,7 +7327,8 @@
         "author_is_party": "1.0",
         "date": "2021-12-30 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -7346,7 +7408,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -7426,7 +7489,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -7646,7 +7710,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -7740,7 +7805,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -7848,7 +7914,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -7956,7 +8023,8 @@
         "author_is_party": "1.0",
         "date": "2017-12-20 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -8092,7 +8160,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -8172,7 +8241,8 @@
         "author_is_party": "0.0",
         "date": "2021-09-17 00:00:00",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -8252,7 +8322,8 @@
         "author_is_party": "1.0",
         "date": "2012-09-24 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -8332,7 +8403,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -8412,7 +8484,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -8520,7 +8593,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -8796,7 +8870,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -9100,7 +9175,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -9208,7 +9284,8 @@
         "author_is_party": "1.0",
         "date": "2018-02-09 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -9330,7 +9407,8 @@
         "author_is_party": "1.0",
         "date": "2021-02-20 00:00:00",
         "world_bank_region": "South Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -9494,7 +9572,8 @@
         "author_is_party": "1.0",
         "date": "2022-11-05 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -9658,7 +9737,8 @@
         "author_is_party": "1.0",
         "date": "2019-12-20 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -9724,7 +9804,8 @@
         "author_is_party": "1.0",
         "date": "2020-12-09 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -9804,7 +9885,8 @@
         "author_is_party": "1.0",
         "date": "2020-04-30 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -9968,7 +10050,8 @@
         "author_is_party": "1.0",
         "date": "2021-02-15 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10048,7 +10131,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10142,7 +10226,8 @@
         "author_is_party": "1.0",
         "date": "2021-05-05 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10250,7 +10335,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10386,7 +10472,8 @@
         "author_is_party": "1.0",
         "date": "2014-10-29 00:00:00",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10564,7 +10651,8 @@
         "author_is_party": "1.0",
         "date": "2019-11-13 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10644,7 +10732,8 @@
         "author_is_party": "0.0",
         "date": "2018-10-01 00:00:00",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10724,7 +10813,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10846,7 +10936,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10926,7 +11017,8 @@
         "author_is_party": "1.0",
         "date": "2022-10-28 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -10992,7 +11084,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -11086,7 +11179,8 @@
         "author_is_party": "1.0",
         "date": "2018-08-29 00:00:00",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -11137,7 +11231,8 @@
         "author_is_party": "1.0",
         "date": "2017-12-29 00:00:00",
         "world_bank_region": "North America",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -11315,7 +11410,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -11395,7 +11491,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -11587,7 +11684,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -11667,7 +11765,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -11747,7 +11846,8 @@
         "author_is_party": "0.0",
         "date": "2022-02-01 00:00:00",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -11855,7 +11955,8 @@
         "author_is_party": "1.0",
         "date": "2019-06-25 00:00:00",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -11949,7 +12050,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "North America",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12029,7 +12131,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12109,7 +12212,8 @@
         "author_is_party": "1.0",
         "date": "2015-11-09 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12189,7 +12293,8 @@
         "author_is_party": "0.0",
         "date": "2020-11-13 00:00:00",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12269,7 +12374,8 @@
         "author_is_party": "1.0",
         "date": "2022-02-10 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12377,7 +12483,8 @@
         "author_is_party": "1.0",
         "date": "2018-07-19 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12471,7 +12578,8 @@
         "author_is_party": "1.0",
         "date": "2022-12-21 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12551,7 +12659,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12631,7 +12740,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12711,7 +12821,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -12861,7 +12972,8 @@
         "author_is_party": "1.0",
         "date": "2021-07-17 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13011,7 +13123,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "South Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13147,7 +13260,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13255,7 +13369,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13335,7 +13450,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13386,7 +13502,8 @@
         "author_is_party": "1.0",
         "date": "2018-12-22 00:00:00",
         "world_bank_region": "South Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13466,7 +13583,8 @@
         "author_is_party": "1.0",
         "date": "2018-08-31 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13546,7 +13664,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13626,7 +13745,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13734,7 +13854,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -13856,7 +13977,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -14188,7 +14310,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -14268,7 +14391,8 @@
         "author_is_party": "1.0",
         "date": "2022-08-03 00:00:00",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -14348,7 +14472,8 @@
         "author_is_party": "1.0",
         "date": "2023-02-06 00:00:00",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -14470,7 +14595,8 @@
         "author_is_party": "1.0",
         "date": "2019-06-25 00:00:00",
         "world_bank_region": "East Asia & Pacific",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -14564,7 +14690,8 @@
         "author_is_party": "1.0",
         "date": "2020-01-02 00:00:00",
         "world_bank_region": "Latin America & Caribbean",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -14644,7 +14771,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Europe & Central Asia",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -14724,7 +14852,8 @@
         "author_is_party": "0.0",
         "date": "2020-11-13 00:00:00",
         "world_bank_region": "",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     },
     {
@@ -14804,7 +14933,8 @@
         "author_is_party": "",
         "date": "NaT",
         "world_bank_region": "Sub-Saharan Africa",
-        "prediction": "True"
+        "prediction": "True",
+        "document_metadata-corpus_type_name": "UNFCCC"
       }
     }
   ]
