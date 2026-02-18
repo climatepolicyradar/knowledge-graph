@@ -5,7 +5,12 @@ from typing import Annotated, Optional
 from pydantic import AfterValidator, BaseModel, Field, SecretStr
 
 from flows.utils import get_logger
-from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param, get_prefect_job_variable
+from knowledge_graph.cloud import (
+    AwsEnv,
+    Compute,
+    get_aws_ssm_param,
+    get_prefect_job_variable,
+)
 
 # Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results/"
@@ -151,7 +156,13 @@ class Config(BaseModel):
         config = cls()
         if not config.cache_bucket:
             config.cache_bucket = await get_prefect_job_variable(
-                "pipeline_cache_bucket_name"
+                param_name="pipeline_cache_bucket_name",
+                # It's okay for now to not be specific on if this is
+                # CPU or GPU since there's a shared foundation
+                # between them. That's why this was previously
+                # implicitly okay, and now it's explicit.
+                compute=Compute.CPU,
+                aws_env=config.aws_env,
             )
 
         if not config.wandb_api_key:

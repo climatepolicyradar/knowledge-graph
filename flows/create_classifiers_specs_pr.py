@@ -11,9 +11,9 @@ from typing import Protocol
 from prefect import task
 from pydantic import SecretStr
 
-from flows.result import Err, Error, Ok, Result, is_err
 from flows.utils import get_logger, total_minutes
 from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.result import Err, Error, Ok, Result, is_err
 
 
 def _run_subprocess_with_error_logging(

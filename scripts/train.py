@@ -36,6 +36,7 @@ from knowledge_graph.config import WANDB_ENTITY, wandb_model_artifact_filename
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
+from knowledge_graph.openrouter_pricing import get_openrouter_pricing
 from knowledge_graph.version import Version
 from knowledge_graph.wandb_helpers import (
     load_labelled_passages_from_wandb,
@@ -547,6 +548,14 @@ async def train_classifier(
         "concept_id": classifier.concept.id,
     }
     wandb_config |= extra_wandb_config
+
+    if hasattr(classifier, "model_name") and classifier.model_name.startswith(  # type: ignore
+        "openrouter:"
+    ):
+        pricing = await get_openrouter_pricing(classifier.model_name)  # type: ignore
+        if pricing:
+            wandb_config["prompt_price_usd"] = pricing.prompt_price
+            wandb_config["completion_price_usd"] = pricing.completion_price
 
     with (
         wandb.init(

@@ -8,17 +8,15 @@ import wandb
 from dotenv import load_dotenv
 from rich.console import Console
 
-from flows.utils import (
-    deserialise_pydantic_list_with_fallback,
-    serialise_pydantic_list_as_jsonl,
-)
 from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import WANDB_ENTITY, predictions_dir
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.labelled_passage import (
-    LabelledPassage,
-)
+from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import label_passages_with_classifier
+from knowledge_graph.utils import (
+    deserialise_pydantic_list_with_fallback,
+    serialise_pydantic_list_as_jsonl,
+)
 from knowledge_graph.wandb_helpers import (
     _load_labelled_passages_from_artifact_dir,
     load_classifier_from_wandb,

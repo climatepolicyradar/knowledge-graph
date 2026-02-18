@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, List, Set
 
 from pydantic import BaseModel, Field
 
-from flows.result import Err, Error, Ok, Result
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.result import Err, Error, Ok, Result
 from knowledge_graph.wikibase import StatementRank
 
 if TYPE_CHECKING:
