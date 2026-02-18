@@ -3,7 +3,7 @@ import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, cast
 
 import pandas as pd
 import typer
@@ -253,6 +253,50 @@ def group_passages_by_equity_strata(
     return groups
 
 
+def calculate_std_by_equity_strata(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate standard deviation of metrics per equity strata column for each agreement level.
+
+    Groups are named like "equity_column: value" (e.g., "translated: false"). This function
+    calculates std across all values within each equity column.
+
+    :param df: DataFrame containing metrics with columns Group, Agreement at,
+        Precision, Recall, Accuracy, F1 score
+    :return: DataFrame with standard deviation metrics per equity strata and agreement level
+    """
+    std_rows = []
+
+    # Extract equity strata column from group names (format: "column: value")
+    # Exclude the "all" group
+    df_with_strata = df[df["Group"] != "all"].copy()
+    group_series = cast(pd.Series, df_with_strata["Group"])
+    equity_strata_series = group_series.apply(
+        lambda g: g.split(":")[0].strip() if isinstance(g, str) and ":" in g else None
+    )
+    df_with_strata["Equity strata"] = equity_strata_series
+    equity_strata_column = cast(pd.Series, df_with_strata["Equity strata"])
+    df_with_strata = df_with_strata[equity_strata_column.notna()]
+
+    for equity_strata in sorted(
+        cast(pd.Series, df_with_strata["Equity strata"]).unique()
+    ):
+        strata_df = df_with_strata[df_with_strata["Equity strata"] == equity_strata]
+        agreement_at_series = cast(pd.Series, strata_df["Agreement at"])
+        for agreement_level in sorted(agreement_at_series.unique()):
+            agreement_df = strata_df[strata_df["Agreement at"] == agreement_level]
+            std_rows.append(
+                {
+                    "Equity strata": equity_strata,
+                    "Agreement at": agreement_level,
+                    "Precision std": agreement_df["Precision"].std(),
+                    "Recall std": agreement_df["Recall"].std(),
+                    "Accuracy std": agreement_df["Accuracy"].std(),
+                    "F1 score std": agreement_df["F1 score"].std(),
+                }
+            )
+    return pd.DataFrame(std_rows)
+
+
 def log_metrics_to_wandb(
     run: Run,
     df: pd.DataFrame,
@@ -272,6 +316,28 @@ def log_metrics_to_wandb(
             f"metrics/{group}/{agreement}/support": float(row["Support"]),
         }
         run.log(metrics_payload)
+
+    # Log standard deviation metrics per equity strata
+    std_df = calculate_std_by_equity_strata(df)
+    std_table = wandb.Table(
+        data=std_df.values.tolist(), columns=std_df.columns.tolist()
+    )
+    run.log({"std_by_equity_strata": std_table})
+
+    for _, row in std_df.iterrows():
+        strata = str(row["Equity strata"])
+        agreement = str(row["Agreement at"])
+        std_payload = {
+            f"metrics/std/{strata}/{agreement}/precision": float(row["Precision std"]),
+            f"metrics/std/{strata}/{agreement}/recall": float(row["Recall std"]),
+            f"metrics/std/{strata}/{agreement}/accuracy": float(row["Accuracy std"]),
+            f"metrics/std/{strata}/{agreement}/f1": float(row["F1 score std"]),
+        }
+        run.log(std_payload)
+        # Also add to summary for easy comparison
+        run.summary[f"std_precision_{strata}_{agreement}"] = float(row["Precision std"])
+        run.summary[f"std_recall_{strata}_{agreement}"] = float(row["Recall std"])
+        run.summary[f"std_f1_{strata}_{agreement}"] = float(row["F1 score std"])
 
     summary_row = df[(df["Group"] == "all") & (df["Agreement at"] == "Passage level")]
     if not summary_row.empty:
@@ -413,6 +479,12 @@ def evaluate_classifier(
     df = pd.DataFrame(metrics)
 
     print_metrics(df)
+
+    # Print standard deviation metrics per equity strata
+    std_df = calculate_std_by_equity_strata(df)
+    if not std_df.empty:
+        console.log("📊 Standard deviation across equity strata:")
+        print_metrics(std_df)
 
     passage_level_cm = count_passage_level_metrics(
         gold_standard_labelled_passages, model_labelled_passages
