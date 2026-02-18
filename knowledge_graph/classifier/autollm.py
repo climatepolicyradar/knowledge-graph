@@ -65,7 +65,7 @@ The guidelines should be clear, specific, and actionable.
 Use numbered lists to provide clarity and structure in the guidelines.
 The guidelines should provide clear rules for inclusion and exclusion.
 The guidelines will be used to make replicable decisions across many passages of text,
-so they should generalise well and provide clarity in ambiguous situations.
+so they should generalise well, but be specific enough to provide clarity in ambiguous situations.
 NEVER use examples directly from the validation results to avoid overfitting to the validation set. 
 Instead, add new examples you think illustrate the core decision well. Use these sparingly.
 """
