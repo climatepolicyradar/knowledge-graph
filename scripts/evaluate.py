@@ -217,11 +217,17 @@ def group_passages_by_equity_strata(
     # passages' metadata
     equity_strata_values = {
         equity_stratum: set(
-            passage.metadata.get(equity_stratum, "")
-            for passage in human_labelled_passages
+            passage.metadata.get(equity_stratum) for passage in human_labelled_passages
         )
         for equity_stratum in equity_strata
     }
+
+    if missing_equity_strata := [
+        name for name, values in equity_strata_values.items() if values == {None}
+    ]:
+        raise ValueError(
+            f"Equity columns provided to evaluate don't have values in the human labelled passages: {missing_equity_strata}."
+        )
 
     # group the passages according to their values
     for equity_stratum, values in equity_strata_values.items():
