@@ -103,7 +103,7 @@ class LLMClassifierPrompt(BaseModel):
     def format(self, concept: Concept) -> str:
         """Return the prompt formatted with details from the concept, with labelling guidelines appended if available."""
         formatted = self.system_prompt_template.format(
-            concept_description=concept.to_markdown()
+            concept_description=concept.to_markdown(include_example_passages=False)
         )
         if self.labelling_guidelines:
             formatted += f"\n\n<labelling_guidelines>\n{self.labelling_guidelines}\n</labelling_guidelines>"
