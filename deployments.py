@@ -172,7 +172,7 @@ async def create_deployment(
         env_parameters,
     )
 
-    _ = flow.deploy(
+    _ = await flow.deploy(
         generate_deployment_name(flow_name, aws_env),
         work_pool_name=work_pool_name,
         version=version,
