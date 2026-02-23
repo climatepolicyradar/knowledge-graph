@@ -63,7 +63,7 @@ transformers = [
 transformers_gpu = [
   "torch>=2.7.1",
   "sentence-transformers>=5.1.0",
-  "transformers[torch]>=4.55.0",
+  "transformers[torch]==4.49.0",
   "accelerate>=1.6.0",
 ]
 # https://docs.coiled.io/user_guide/software/docker.html
