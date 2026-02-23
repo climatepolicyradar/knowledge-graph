@@ -32,7 +32,7 @@ from flows.inference import (
     inference_batch_of_documents_gpu,
 )
 from flows.sync_concepts import sync_concepts
-from flows.train import train_for_vibe_checker, train_on_gpu
+from flows.train import train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import JsonDict, get_logger
 from flows.vibe_check import vibe_check_inference
@@ -390,17 +390,7 @@ async def main() -> None:
 
     await create_deployment(
         flow=vibe_check_inference,  # pyright: ignore[reportArgumentType]
-        description="Run vibe check inference on a set of concepts and push the results to s3. Optionally provide a custom list of Wikibase IDs to process.",
-        env_schedules={
-            # Once a week, at midday on Sunday
-            AwsEnv.labs: "0 12 * * SUN",
-        },
-    )
-
-    await create_deployment(
-        flow=train_for_vibe_checker,
-        description="Train classifiers for all concepts listed in vibe-checker/config.yml. Runs training in parallel and uploads results to Weights & Biases.",
-        gpu=False,
+        description="Train classifiers and run vibe check inference for all concepts in vibe-checker/config.yml. Optionally provide a custom list of Wikibase IDs to process.",
         env_schedules={
             AwsEnv.labs: "0 8 * * MON-THU",  # Every working day at 8am
         },
