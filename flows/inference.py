@@ -59,7 +59,7 @@ from flows.utils import (
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
-from knowledge_graph.cloud import get_async_session
+from knowledge_graph.cloud import get_async_session, get_aws_ssm_param
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 from knowledge_graph.utils import iterate_batch, serialise_pydantic_list_as_jsonl
@@ -964,16 +964,14 @@ async def _inference_batch_of_documents(
     # check installed transformers version
     logger.info(f"Transformers version: {transformers.__version__}")
 
-    config_json["wandb_api_key"] = (
-        SecretStr(config_json["wandb_api_key"])
-        if config_json["wandb_api_key"]
-        else None
-    )
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
+    wandb_api_key = SecretStr(
+        get_aws_ssm_param("WANDB_API_KEY", aws_env=config.aws_env)
+    )
 
     # Load classifier
-    wandb.login(key=config.wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+    wandb.login(key=wandb_api_key.get_secret_value())  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
     run = wandb.init(  # pyright: ignore[reportAttributeAccessIssue]
         entity=config.wandb_entity,
         job_type="concept_inference",
