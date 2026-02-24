@@ -19,10 +19,10 @@ from flows.classifier_specs.spec_interface import (
     WikibaseID,
 )
 from flows.config import Config
-from flows.full_pipeline import topic_pipeline
 from flows.inference import (
     INFERENCE_BATCH_SIZE_DEFAULT,
 )
+from flows.topic_pipeline import topic_pipeline
 from flows.utils import DocumentImportId, DocumentStem, Fault
 
 
@@ -37,23 +37,23 @@ async def test_topic_pipeline_no_config_provided(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference",
+            "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.full_pipeline.aggregate",
+            "flows.topic_pipeline.aggregate",
             new_callable=AsyncMock,
         ) as mock_aggregate,
         patch(
-            "flows.full_pipeline.index",
+            "flows.topic_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
         patch(
-            "flows.full_pipeline.Config.create",
+            "flows.topic_pipeline.Config.create",
             new_callable=AsyncMock,
         ) as mock_pipeline_config_create,
         patch(
-            "flows.full_pipeline.get_async_session",
+            "flows.topic_pipeline.get_async_session",
         ) as mock_get_session,
     ):
         # Setup mocks
@@ -143,19 +143,19 @@ async def test_topic_pipeline_with_full_config(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference",
+            "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.full_pipeline.aggregate",
+            "flows.topic_pipeline.aggregate",
             new_callable=AsyncMock,
         ) as mock_aggregate,
         patch(
-            "flows.full_pipeline.index",
+            "flows.topic_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
         patch(
-            "flows.full_pipeline.get_async_session",
+            "flows.topic_pipeline.get_async_session",
         ) as mock_get_session,
     ):
         classifier_spec = ClassifierSpec(
@@ -250,12 +250,12 @@ async def test_topic_pipeline_with_full_config(
         )
 
         # Assert that the summary artifact was created
-        summary_artifact = await Artifact.get("full-pipeline-results-summary-sandbox")
+        summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
         assert summary_artifact and summary_artifact.description
         assert (
             summary_artifact.description
-            == "Summary of the full pipeline successful run."
+            == "Summary of the topic pipeline successful run."
         )
 
 
@@ -269,15 +269,15 @@ async def test_topic_pipeline_with_inference_failure(
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference",
+            "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.full_pipeline.aggregate",
+            "flows.topic_pipeline.aggregate",
             new_callable=AsyncMock,
         ) as mock_aggregate,
         patch(
-            "flows.full_pipeline.index",
+            "flows.topic_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
     ):
@@ -403,15 +403,15 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
     # Mock the sub-flows
     with (
         patch(
-            "flows.full_pipeline.inference",
+            "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.full_pipeline.aggregate",
+            "flows.topic_pipeline.aggregate",
             new_callable=AsyncMock,
         ) as mock_aggregate,
         patch(
-            "flows.full_pipeline.index",
+            "flows.topic_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
     ):
@@ -511,12 +511,12 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
         )
 
         # Assert that the summary artifact was created
-        summary_artifact = await Artifact.get("full-pipeline-results-summary-sandbox")
+        summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
         assert summary_artifact and summary_artifact.description
         assert (
             summary_artifact.description
-            == "Summary of the full pipeline successful run."
+            == "Summary of the topic pipeline successful run."
         )
 
         # assert pipeline completed all three flows despite inference and aggregation failures
@@ -557,19 +557,19 @@ async def test_topic_pipeline_with_document_ids_s3_path(
 
     with (
         patch(
-            "flows.full_pipeline.inference",
+            "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.full_pipeline.aggregate",
+            "flows.topic_pipeline.aggregate",
             new_callable=AsyncMock,
         ) as mock_aggregate,
         patch(
-            "flows.full_pipeline.index",
+            "flows.topic_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
         patch(
-            "flows.full_pipeline.get_async_session",
+            "flows.topic_pipeline.get_async_session",
         ) as mock_get_session,
     ):
         # Mock S3 loading for document stems
@@ -651,19 +651,19 @@ async def test_topic_pipeline_uses_aggregation_run_output_identifier_for_indexin
 
     with (
         patch(
-            "flows.full_pipeline.inference",
+            "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.full_pipeline.aggregate",
+            "flows.topic_pipeline.aggregate",
             new_callable=AsyncMock,
         ) as mock_aggregate,
         patch(
-            "flows.full_pipeline.index",
+            "flows.topic_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
         patch(
-            "flows.full_pipeline.get_async_session",
+            "flows.topic_pipeline.get_async_session",
         ) as mock_get_session,
     ):
         # Mock S3 loading for document stems from inference

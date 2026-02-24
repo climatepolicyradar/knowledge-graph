@@ -44,7 +44,7 @@ async def create_topic_pipeline_summary_artifact(
     config: Config,
     successful_document_stems: set[DocumentStem],
 ) -> None:
-    """Create an artifact with summary information about the full pipeline successful run."""
+    """Create an artifact with summary information about the topic pipeline successful run."""
 
     # Format the overview information as a string for the description
     topic_pipeline_report = f"""# Topic Pipeline Summary
@@ -82,9 +82,9 @@ async def topic_pipeline(
     enable_v2_concepts: bool | None = None,
 ) -> None:
     """
-    Full KG topic pipeline.
+    KG topic pipeline.
 
-    This flow orchestrates the full KG topic pipeline, including:
+    This flow orchestrates the KG topic pipeline, including:
     1. Inference
     2. Aggregation
     3. Indexing
@@ -117,7 +117,7 @@ async def topic_pipeline(
         logger.info("No pipeline config provided, creating default...")
         config = await Config.create()
 
-    logger.info(f"Running the full pipeline with the config: {config}, ")
+    logger.info(f"Running the topic pipeline with the config: {config}, ")
 
     inference_run: State = await inference(
         classifier_specs=classifier_specs,
