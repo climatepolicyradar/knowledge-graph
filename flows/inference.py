@@ -959,6 +959,11 @@ async def _inference_batch_of_documents(
     """
     logger = get_logger()
 
+    import transformers
+
+    # check installed transformers version
+    logger.info(f"Transformers version: {transformers.__version__}")
+
     config_json["wandb_api_key"] = (
         SecretStr(config_json["wandb_api_key"])
         if config_json["wandb_api_key"]
