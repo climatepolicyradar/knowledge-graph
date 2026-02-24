@@ -113,7 +113,7 @@ If you experience test failures for target transformer tests in [test_targets.py
 
 ## Pipelines
 
-Within this Knowledge Graph repo we have a full pipeline at [flows/full_pipeline.py:full_pipeline](./flows/full_pipeline.py) that brings together three distinct steps into one parent pipeline. This is to enable a fully automated end to end run.
+Within this Knowledge Graph repo we have a full topic pipeline at [flows/full_pipeline.py:topic_pipeline](./flows/full_pipeline.py) that brings together three distinct steps into one parent pipeline. This is to enable a fully automated end to end run.
 
 This solution calls inference -> aggregation -> indexing in series for all documents in the run as opposed to running single documents through concurrently. Eg. we wait for all inference jobs to complete before progressing. This was chosen for simplicity and to rely on the concurrency functionality and limits already integrated in to the sub flows / pipelines.
 
