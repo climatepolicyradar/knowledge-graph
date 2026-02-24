@@ -18,7 +18,7 @@ from prefect.exceptions import ObjectNotFound
 from prefect_slack.credentials import SlackWebhook
 
 from flows.classifiers_profiles import SYNC_FINISHED_EVENT_NAME, SYNC_RESOURCE_ID
-from flows.full_pipeline import topic_pipeline
+from flows.topic_pipeline import topic_pipeline
 from knowledge_graph.cloud import AwsEnv, generate_deployment_name
 
 # Create logger
@@ -248,7 +248,7 @@ async def main() -> None:
 
     sync_automation = Automation(
         name=f"sync-classifiers-profiles-triggers-{topic_pipeline_deployment.name}",
-        description=f"Trigger full pipeline when syncing classifiers profiles finishes in {aws_env.value}.",
+        description=f"Trigger topic pipeline when syncing classifiers profiles finishes in {aws_env.value}.",
         enabled=True,
         trigger=automations.EventTrigger(
             expect={SYNC_FINISHED_EVENT_NAME},

@@ -24,7 +24,6 @@ from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
-from flows.full_pipeline import topic_pipeline
 from flows.index import index, index_batch_of_documents
 from flows.inference import (
     inference,
@@ -32,6 +31,7 @@ from flows.inference import (
     inference_batch_of_documents_gpu,
 )
 from flows.sync_concepts import sync_concepts
+from flows.topic_pipeline import topic_pipeline
 from flows.train import train_for_vibe_checker, train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import JsonDict, get_logger
@@ -270,11 +270,11 @@ async def main() -> None:
         extra_tags=["type:entry"],
     )
 
-    # Orchestrate full pipeline
+    # Orchestrate topic pipeline
 
     await create_deployment(
         flow=topic_pipeline,
-        description="Run the full Knowledge Graph Topic Pipeline",
+        description="Run the Knowledge Graph Topic Pipeline",
         extra_tags=["type:end_to_end"],
         env_schedules={
             # Run it daily, on work days, to validate it works, or to
