@@ -33,6 +33,10 @@ test-with-vespa +OPTS="":
 test-without-vespa +OPTS="":
     uv run pytest -n logical --dist loadfile --disable-pytest-warnings --color=yes -m 'not vespa' {{OPTS}}
 
+# test the project, excluding tests that rely on a local Vespa instance
+test-without-vespa-and-transformers +OPTS="":
+    uv run pytest -n logical --dist loadfile --disable-pytest-warnings --color=yes -m 'not vespa and not transformers' {{OPTS}}
+
 # update the snapshots for the tests
 test-snapshot-update +OPTS="":
     uv run pytest --snapshot-update {{OPTS}}
