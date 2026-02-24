@@ -1,3 +1,10 @@
+"""
+Illustrates how to upload the results of a custom classifier to the vibe-checker.
+
+Changing the path to the classifier.pkl and the sample of passages should be enough
+to get you started.
+"""
+
 import json
 from datetime import date
 from pathlib import Path
@@ -32,7 +39,7 @@ labelled_passages = [
         spans=spans,
         metadata={str(k): str(v) for k, v in row.to_dict().items()},
     )
-    for text, spans, (_, row) in zip(texts, predicted_spans_list, sample.iterrows())
+    for text, spans, (_, row) in zip(texts, predicted_spans_list, sample.iterrows())  # type: ignore[union-attr]
 ]
 
 # Add HTML markup to the labelled passages and serialize to JSONL

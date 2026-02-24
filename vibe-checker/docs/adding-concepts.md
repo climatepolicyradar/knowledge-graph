@@ -18,12 +18,12 @@ To remove a concept from the inference schedule, delete its ID from `config.yml`
 
 The `vibe_check_inference` flow runs automatically on a week-daily schedule (Monday to Thursday at 8am). You can also trigger it manually from the Prefect UI.
 
-To run inference on a specific subset of concepts without modifying `config.yml`, trigger the flow with a `wikibase_ids` parameter via the Prefect UI.
+To run inference on a specific set of concepts without modifying `config.yml`, you can trigger the `vibe_check_inference` flow with a `wikibase_ids` parameter via the Prefect UI.
 
 The flow:
 
 1. Loads the passages dataset and pre-computed embeddings from S3
-2. For each concept, selects the most semantically similar passages
+2. For each concept, selects a reasonably-sized set of the most semantically similar passages
 3. Gets or trains the concept's classifier via W&B using `run_training()` (fetches an existing model if one exists, otherwise trains a new one)
 4. Runs inference and pushes the results to S3
 

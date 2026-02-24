@@ -79,6 +79,7 @@ wandb/
 vibe-checker/webapp/
 vibe-checker/infra/
 vibe-checker/docs/
+vibe-checker/scripts/
 
 # Node.js
 **/node_modules/
