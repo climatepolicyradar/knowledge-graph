@@ -703,12 +703,12 @@ async def create_indexing_batch_summary_artifact(
     total_errors = sum(
         (
             len(
-                fault.metadata.get(  # pyright: ignore[reportOptionalMemberAccess]
+                fault.data.get(  # pyright: ignore[reportOptionalMemberAccess]
                     "errors", []
                 )
             )
             if isinstance(
-                fault.metadata.get("errors"),  # pyright: ignore[reportOptionalMemberAccess]
+                fault.data.get("errors"),  # pyright: ignore[reportOptionalMemberAccess]
                 list,
             )
             else 1
@@ -821,7 +821,11 @@ async def index_all(
             if errors:
                 raise Fault(
                     msg="Failed to index document passages or family document",
-                    metadata={
+                    loggable_data={
+                        "document_stem": document_stem,
+                        "error_count": len(errors),
+                    },
+                    data={
                         "document_stem": document_stem,
                         "errors": errors,
                     },
@@ -831,7 +835,10 @@ async def index_all(
     except Exception as e:
         raise Fault(
             msg="Unexpected exception during document indexing",
-            metadata={
+            loggable_data={
+                "document_stem": document_stem,
+            },
+            data={
                 "document_stem": document_stem,
                 "exception": e,
                 "context": repr(e),
@@ -901,7 +908,7 @@ async def index_batch_of_documents(
     fault_per_document: dict[DocumentStem, Fault] = {}
     for result in results:
         if isinstance(result, Fault):
-            fault_per_document[result.metadata.get("document_stem")] = result  # pyright: ignore[reportOptionalMemberAccess, reportArgumentType]
+            fault_per_document[result.data.get("document_stem")] = result  # pyright: ignore[reportOptionalMemberAccess, reportArgumentType]
 
     await create_indexing_batch_summary_artifact(
         config=config,
