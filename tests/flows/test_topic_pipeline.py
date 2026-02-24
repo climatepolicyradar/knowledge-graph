@@ -297,7 +297,7 @@ async def test_topic_pipeline_with_inference_failure(
             message="Some inference batches had failures!",
             data=Fault(
                 msg="Some inference batches had failures!",
-                metadata={},
+                loggable_data={},
                 data={
                     "successful_document_stems": set(document_stems_successful),
                     "run_output_identifier": mock_run_output_identifier_str,
@@ -440,7 +440,7 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
             type=StateType.COMPLETED,
             data=Fault(
                 msg="1/2 Documents failed",
-                metadata={},
+                loggable_data={},
                 data=AggregateResult(
                     run_output_identifier=mock_run_output_identifier_str,
                     errors="1/2 Documents failed",

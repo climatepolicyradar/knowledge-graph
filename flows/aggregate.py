@@ -600,7 +600,7 @@ async def aggregate_batch_of_documents(
         message = f"Saw {len(failures)} failures when aggregating inference results"
         logger.error(message)
         aggregate_result.errors = message
-        raise Fault(msg=message, metadata={}, data=aggregate_result)
+        raise Fault(msg=message, loggable_data={}, data=aggregate_result)
 
     return aggregate_result
 
@@ -970,6 +970,6 @@ async def aggregate(
         message = f"{len(failures)}/{len(failures) + len(successes)} failed."
         logger.error(message)
         aggregate_result.errors = message
-        raise Fault(msg=message, metadata={}, data=aggregate_result)
+        raise Fault(msg=message, loggable_data={}, data=aggregate_result)
 
     return aggregate_result
