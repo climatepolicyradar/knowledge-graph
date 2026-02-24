@@ -795,15 +795,15 @@ async def map_as_sub_flow(
 
 @dataclass
 class Fault(Exception):
-    """A simple and generic exception with optional, helpful metadata"""
+    """A generic exception with optional loggable metadata"""
 
     msg: str
-    metadata: dict[str, Any] | None
+    loggable_data: dict[str, str | int] | None
     data: Any | None = None
 
     def __str__(self) -> str:
         """Return a string representation"""
-        text = f"{self.msg} | Metadata: {json.dumps(self.metadata, indent=2)}"
+        text = f"{self.msg} | Metadata: {json.dumps(self.loggable_data, indent=2)}"
         return text if len(text) <= 24_997 else f"{text[:24_994]}..."
 
 

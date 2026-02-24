@@ -567,7 +567,7 @@ def test_fault() -> None:
 
     fault = Fault(
         msg="test_msg",
-        metadata={"key": "value", "other_key": "value"},
+        loggable_data={"key": "value", "other_key": "value"},
         data="test_data",
     )
     assert (

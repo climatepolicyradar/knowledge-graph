@@ -8,7 +8,6 @@ import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -37,9 +36,8 @@ from flows.inference import (
     document_passages,
     filter_document_batch,
     filter_existing_inference_results,
-    gather_successful_document_stems,
+    gather_document_stems,
     get_existing_inference_results,
-    get_inference_fault_metadata,
     inference,
     inference_batch_of_documents_cpu,
     list_bucket_file_stems,
@@ -1787,8 +1785,8 @@ def test_did_inference_fail() -> None:
     assert inference_run_failed is False
 
 
-def test_gather_successful_document_stems() -> None:
-    """Test the gather_successful_document_stems function."""
+def test_gather_document_stems() -> None:
+    """Test the gather_document_stems function."""
 
     # Setup: 5 documents, 2 classifiers, 2 batches
     requested_document_stems = [
@@ -1831,12 +1829,13 @@ def test_gather_successful_document_stems() -> None:
     ]
 
     # No results from any batches
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[],  # No results
     )
     assert successful_document_stems == set(), "No results should return an empty set"
+    assert failed_document_stems == set(requested_document_stems)
 
     # No documents successful for any batches
     all_failed_batch_1 = BatchInferenceResult(
@@ -1849,7 +1848,7 @@ def test_gather_successful_document_stems() -> None:
         successful_document_stems=[],  # No success
         classifier_spec=q101_classifier_spec,
     )
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[all_failed_batch_1, all_failed_batch_2],
@@ -1857,6 +1856,7 @@ def test_gather_successful_document_stems() -> None:
     assert successful_document_stems == set(), (
         "All failures should return no successful documents"
     )
+    assert len(failed_document_stems) == len(requested_document_stems)
 
     # Only some batch results
     q101_batch_success = BatchInferenceResult(
@@ -1864,7 +1864,7 @@ def test_gather_successful_document_stems() -> None:
         successful_document_stems=requested_document_stems,
         classifier_spec=q101_classifier_spec,
     )
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[q101_batch_success],  # No results for q100
@@ -1872,6 +1872,7 @@ def test_gather_successful_document_stems() -> None:
     assert successful_document_stems == set(), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
+    assert len(failed_document_stems) == len(requested_document_stems)
 
     # Not all documents successful for all batches
     q100_batch_success = BatchInferenceResult(
@@ -1884,7 +1885,7 @@ def test_gather_successful_document_stems() -> None:
         successful_document_stems=requested_document_stems[1:],  # Partial success
         classifier_spec=q101_classifier_spec,
     )
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[q100_batch_success, q101_batch_partial_success],
@@ -1892,6 +1893,7 @@ def test_gather_successful_document_stems() -> None:
     assert successful_document_stems == set(requested_document_stems[1:]), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
+    assert failed_document_stems == set(requested_document_stems[:1])
 
     # All documents successful for all batches
     q100_batch_success = BatchInferenceResult(
@@ -1899,7 +1901,7 @@ def test_gather_successful_document_stems() -> None:
         successful_document_stems=requested_document_stems,
         classifier_spec=q100_classifier_spec,
     )
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[q100_batch_success, q101_batch_success],
@@ -1907,44 +1909,7 @@ def test_gather_successful_document_stems() -> None:
     assert successful_document_stems == set(requested_document_stems), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
-
-
-def test_get_inference_fault_metadata() -> None:
-    """Test the get_inference_fault_metadata function."""
-
-    metadata_json: dict[str, Any] = get_inference_fault_metadata(
-        all_successes=[
-            BatchInferenceResult(
-                batch_document_stems=[DocumentStem("TEST.executive.1.1")],
-                successful_document_stems=[DocumentStem("TEST.executive.1.1")],
-                classifier_spec=ClassifierSpec(
-                    wikibase_id=WikibaseID("Q100"),
-                    classifier_id=ClassifierID("aaaa2222"),
-                    wandb_registry_version="v1",
-                ),
-            ),
-        ],
-        all_raw_failures=[
-            FlowRun(
-                id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
-                flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
-                name="test-flow-run",
-                state=Completed(),
-            ),
-            BaseException(),
-        ],
-        requested_document_stems=set([DocumentStem("TEST.executive.1.1")]),
-    )
-
-    assert metadata_json.keys() == {
-        "all_successes",
-        "all_raw_failures",
-        "requested_document_stems",
-    }
-
-    # Assert that we can dump the result to a string as this is a requirement of the
-    # fault metadata.
-    json.dumps(metadata_json)
+    assert failed_document_stems == set()
 
 
 def test_process_single_document_inference():
