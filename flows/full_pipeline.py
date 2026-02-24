@@ -40,14 +40,14 @@ from flows.utils import (
 from knowledge_graph.cloud import AwsEnv, get_async_session
 
 
-async def create_full_pipeline_summary_artifact(
+async def create_topic_pipeline_summary_artifact(
     config: Config,
     successful_document_stems: set[DocumentStem],
 ) -> None:
     """Create an artifact with summary information about the full pipeline successful run."""
 
     # Format the overview information as a string for the description
-    full_pipeline_report = f"""# Full Pipeline Summary
+    topic_pipeline_report = f"""# Topic Pipeline Summary
 
 ## Overview
 - **Environment**: {config.aws_env.value}
@@ -55,9 +55,9 @@ async def create_full_pipeline_summary_artifact(
 """
 
     await create_markdown_artifact(  # pyright: ignore[reportGeneralTypeIssues]
-        key=f"full-pipeline-results-summary-{config.aws_env.value}",
-        description="Summary of the full pipeline successful run.",
-        markdown=full_pipeline_report,
+        key=f"topic-pipeline-results-summary-{config.aws_env.value}",
+        description="Summary of the topic pipeline successful run.",
+        markdown=topic_pipeline_report,
     )
 
 
@@ -66,7 +66,7 @@ async def create_full_pipeline_summary_artifact(
     on_failure=[SlackNotify.message],
     on_crashed=[SlackNotify.message],
 )
-async def full_pipeline(
+async def topic_pipeline(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     document_ids_s3_path: str | None = None,
@@ -82,9 +82,9 @@ async def full_pipeline(
     enable_v2_concepts: bool | None = None,
 ) -> None:
     """
-    Full KG pipeline.
+    Full KG topic pipeline.
 
-    This flow orchestrates the full KG pipeline, including:
+    This flow orchestrates the full KG topic pipeline, including:
     1. Inference
     2. Aggregation
     3. Indexing
@@ -235,7 +235,7 @@ async def full_pipeline(
         if isinstance(indexing_result_raw, Exception):
             raise indexing_result_raw
 
-    await create_full_pipeline_summary_artifact(
+    await create_topic_pipeline_summary_artifact(
         config=config,
         successful_document_stems=successful_document_stems,
     )
@@ -246,4 +246,4 @@ async def full_pipeline(
     if isinstance(aggregation_result_raw, Fault):
         raise aggregation_result_raw
 
-    logger.info("Full pipeline run completed successfully!")
+    logger.info("Topic pipeline run completed successfully!")

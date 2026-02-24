@@ -19,7 +19,7 @@ from flows.classifier_specs.spec_interface import (
     WikibaseID,
 )
 from flows.config import Config
-from flows.full_pipeline import full_pipeline
+from flows.full_pipeline import topic_pipeline
 from flows.inference import (
     INFERENCE_BATCH_SIZE_DEFAULT,
 )
@@ -27,7 +27,7 @@ from flows.utils import DocumentImportId, DocumentStem, Fault
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_no_config_provided(
+async def test_topic_pipeline_no_config_provided(
     test_config: Config,
     mock_run_output_identifier_str,
     aggregate_inference_results_document_stems,
@@ -92,7 +92,7 @@ async def test_full_pipeline_no_config_provided(
         mock_indexing.return_value = mock_indexing_state
 
         # Run the flow
-        await full_pipeline()
+        await topic_pipeline()
 
         # Verify default configs were created
         mock_pipeline_config_create.assert_called_once()
@@ -123,17 +123,17 @@ async def test_full_pipeline_no_config_provided(
         assert call_args.kwargs["batch_size"] == DEFAULT_DOCUMENTS_BATCH_SIZE
 
         # Assert that the summary artifact was created
-        summary_artifact = await Artifact.get("full-pipeline-results-summary-sandbox")
+        summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
         assert summary_artifact and summary_artifact.description
         assert (
             summary_artifact.description
-            == "Summary of the full pipeline successful run."
+            == "Summary of the topic pipeline successful run."
         )
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_with_full_config(
+async def test_topic_pipeline_with_full_config(
     test_config,
     aggregate_inference_results_document_stems,
     mock_run_output_identifier_str,
@@ -198,7 +198,7 @@ async def test_full_pipeline_with_full_config(
         mock_indexing.return_value = mock_indexing_state
 
         # Run the flow
-        await full_pipeline(
+        await topic_pipeline(
             config=test_config,
             classifier_specs=[classifier_spec],
             document_ids=[
@@ -260,7 +260,7 @@ async def test_full_pipeline_with_full_config(
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_with_inference_failure(
+async def test_topic_pipeline_with_inference_failure(
     test_config,
     mock_run_output_identifier_str,
 ):
@@ -317,7 +317,7 @@ async def test_full_pipeline_with_inference_failure(
 
         # Run the flow expecting aggregation and indexing to run on successful documents.
         with pytest.raises(Fault, match="Some inference batches had failures!"):
-            await full_pipeline(
+            await topic_pipeline(
                 config=test_config,
                 classifier_specs=[classifier_spec],
                 document_ids=document_ids,
@@ -374,7 +374,7 @@ async def test_full_pipeline_with_inference_failure(
         )
 
         with pytest.raises(FailedRun, match="Test error"):
-            await full_pipeline(
+            await topic_pipeline(
                 config=test_config,
                 classifier_specs=[classifier_spec],
                 document_ids=document_ids,
@@ -394,7 +394,7 @@ async def test_full_pipeline_with_inference_failure(
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggregation(
+async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggregation(
     test_config,
     mock_run_output_identifier_str,
 ):
@@ -458,7 +458,7 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
             Fault,
             match="Some inference batches had failures!",
         ):
-            await full_pipeline(
+            await topic_pipeline(
                 config=test_config,
                 classifier_specs=[classifier_spec],
                 document_ids=[
@@ -526,14 +526,14 @@ async def test_full_pipeline_completes_after_some_docs_fail_inference_and_aggreg
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_with_document_ids_s3_path(
+async def test_topic_pipeline_with_document_ids_s3_path(
     test_config,
     mock_run_output_identifier_str,
     aggregate_inference_results_document_stems,
     mock_async_bucket,
     mock_s3_async_client,
 ):
-    """Test full_pipeline flow with document_ids_s3_path parameter."""
+    """Test topic_pipeline flow with document_ids_s3_path parameter."""
     classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q100"),
         classifier_id="zzzz9999",
@@ -605,7 +605,7 @@ async def test_full_pipeline_with_document_ids_s3_path(
         mock_indexing.return_value = mock_indexing_state
 
         # Run the flow with document_ids_s3_path
-        await full_pipeline(
+        await topic_pipeline(
             config=test_config,
             classifier_specs=[classifier_spec],
             document_ids_s3_path=s3_path,
@@ -633,7 +633,7 @@ async def test_full_pipeline_with_document_ids_s3_path(
 
 
 @pytest.mark.asyncio
-async def test_full_pipeline_uses_aggregation_run_output_identifier_for_indexing(
+async def test_topic_pipeline_uses_aggregation_run_output_identifier_for_indexing(
     test_config,
     mock_run_output_identifier_str,
 ):
@@ -704,7 +704,7 @@ async def test_full_pipeline_uses_aggregation_run_output_identifier_for_indexing
         mock_indexing.return_value = mock_indexing_state
 
         # Run the flow
-        await full_pipeline(config=test_config)
+        await topic_pipeline(config=test_config)
 
         # Verify that aggregation was called with inference's run_output_identifier
         aggregate_call_args = mock_aggregate.call_args

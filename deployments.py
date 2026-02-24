@@ -24,7 +24,7 @@ from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
-from flows.full_pipeline import full_pipeline
+from flows.full_pipeline import topic_pipeline
 from flows.index import index, index_batch_of_documents
 from flows.inference import (
     inference,
@@ -273,8 +273,8 @@ async def main() -> None:
     # Orchestrate full pipeline
 
     await create_deployment(
-        flow=full_pipeline,
-        description="Run the full Knowledge Graph Pipeline",
+        flow=topic_pipeline,
+        description="Run the full Knowledge Graph Topic Pipeline",
         extra_tags=["type:end_to_end"],
         env_schedules={
             # Run it daily, on work days, to validate it works, or to
