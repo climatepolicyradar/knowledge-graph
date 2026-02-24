@@ -959,11 +959,6 @@ async def _inference_batch_of_documents(
     """
     logger = get_logger()
 
-    import transformers
-
-    # check installed transformers version
-    logger.info(f"Transformers version: {transformers.__version__}")
-
     config_json["local_classifier_dir"] = Path(config_json["local_classifier_dir"])
     config = Config(**config_json)
     wandb_api_key = SecretStr(
