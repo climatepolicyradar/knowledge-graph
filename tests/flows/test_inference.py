@@ -8,7 +8,6 @@ import uuid
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -25,6 +24,7 @@ from prefect.states import Completed, Running
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
+    INFERENCE_BATCH_RETRIES,
     BatchInferenceResult,
     FilterResult,
     Metadata,
@@ -37,9 +37,8 @@ from flows.inference import (
     document_passages,
     filter_document_batch,
     filter_existing_inference_results,
-    gather_successful_document_stems,
+    gather_document_stems,
     get_existing_inference_results,
-    get_inference_fault_metadata,
     inference,
     inference_batch_of_documents_cpu,
     list_bucket_file_stems,
@@ -659,6 +658,9 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
         )
 
         mock_inference_run_deployment.assert_called_once()
+        call_params = mock_inference_run_deployment.call_args.kwargs["parameters"]
+        assert "config_json" in call_params
+        assert "wandb_api_key" not in call_params["config_json"]
 
         assert type(inference_result) is set
 
@@ -761,7 +763,6 @@ async def test_inference_batch_of_documents_cpu(
             "cache_bucket": test_config.cache_bucket,
             "wandb_model_registry": test_config.wandb_model_registry,
             "wandb_entity": test_config.wandb_entity,
-            "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
             "aws_env": test_config.aws_env.value,
             "local_classifier_dir": str(test_config.local_classifier_dir),
         }
@@ -771,12 +772,15 @@ async def test_inference_batch_of_documents_cpu(
     inference_batch_of_documents_cpu.flow_run_name = (
         "test-inference-batch-of-documents-cpu"
     )
-    result_state = await inference_batch_of_documents_cpu(
-        batch=batch,
-        config_json=config_json,
-        classifier_spec_json=JsonDict(classifier_spec.model_dump()),
-        return_state=True,
-    )
+    with patch(
+        "flows.inference.get_aws_ssm_param", return_value="retrieved-wandb-api-key"
+    ) as mock_get_aws_ssm_param:
+        result_state = await inference_batch_of_documents_cpu(
+            batch=batch,
+            config_json=config_json,
+            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+            return_state=True,
+        )
 
     result = await result_state.result()
     assert isinstance(result, BatchInferenceResult)
@@ -789,6 +793,9 @@ async def test_inference_batch_of_documents_cpu(
     mock_wandb_init.assert_called_once_with(
         entity=test_config.wandb_entity,
         job_type="concept_inference",
+    )
+    mock_get_aws_ssm_param.assert_called_once_with(
+        "WANDB_API_KEY", aws_env=test_config.aws_env
     )
 
     # Verify that a batch inference artifact was created
@@ -868,24 +875,33 @@ async def test_inference_batch_of_documents_cpu_with_failures(
             "cache_bucket": test_config.cache_bucket,
             "wandb_model_registry": test_config.wandb_model_registry,
             "wandb_entity": test_config.wandb_entity,
-            "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
             "aws_env": test_config.aws_env.value,
             "local_classifier_dir": str(test_config.local_classifier_dir),
         }
     )
 
-    with pytest.raises(Fault) as exc_info:
-        inference_batch_of_documents_cpu.flow_run_name = (
-            "test-inference-batch-of-documents-cpu-with-failures"
-        )
-        _ = await inference_batch_of_documents_cpu(
-            batch=batch,
-            config_json=config_json,
-            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
-        )
+    with patch(
+        "flows.inference.get_aws_ssm_param", return_value="retrieved-wandb-api-key"
+    ) as mock_get_aws_ssm_param:
+        with pytest.raises(Fault) as exc_info:
+            inference_batch_of_documents_cpu.flow_run_name = (
+                "test-inference-batch-of-documents-cpu-with-failures"
+            )
+            _ = await inference_batch_of_documents_cpu(
+                batch=batch,
+                config_json=config_json,
+                classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+            )
 
-        assert exc_info.value.msg == "Failed to run inference on 2/2 documents."
-        assert isinstance(exc_info.value.data, BatchInferenceResult)
+    assert (
+        exc_info.value.msg == "Failed to run inference on all documents in the batch."
+    )
+    assert isinstance(exc_info.value.data, BatchInferenceResult)
+    # Initial attempt + configured retries
+    assert mock_get_aws_ssm_param.call_count == (1 + INFERENCE_BATCH_RETRIES)
+    mock_get_aws_ssm_param.assert_called_with(
+        "WANDB_API_KEY", aws_env=test_config.aws_env
+    )
 
     # Even with failures, an artifact should be created to track the failures
     from prefect.client.orchestration import get_client
@@ -946,7 +962,6 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
             "cache_bucket": test_config.cache_bucket,
             "wandb_model_registry": test_config.wandb_model_registry,
             "wandb_entity": test_config.wandb_entity,
-            "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
             "aws_env": test_config.aws_env.value,
             "local_classifier_dir": str(test_config.local_classifier_dir),
         }
@@ -956,14 +971,20 @@ async def test_inference_batch_of_documents_cpu_empty_batch(
     inference_batch_of_documents_cpu.flow_run_name = (
         "test-inference-batch-of-documents-cpu-empty-batch"
     )
-    _ = await inference_batch_of_documents_cpu(
-        batch=batch,
-        config_json=config_json,
-        classifier_spec_json=JsonDict(classifier_spec.model_dump()),
-    )
+    with patch(
+        "flows.inference.get_aws_ssm_param", return_value="retrieved-wandb-api-key"
+    ) as mock_get_aws_ssm_param:
+        _ = await inference_batch_of_documents_cpu(
+            batch=batch,
+            config_json=config_json,
+            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+        )
 
     # Verify W&B was still initialized
     mock_wandb_init.assert_called_once()
+    mock_get_aws_ssm_param.assert_called_once_with(
+        "WANDB_API_KEY", aws_env=test_config.aws_env
+    )
 
     # Verify artifact creation even for empty batch
     from prefect.client.orchestration import get_client
@@ -1012,7 +1033,6 @@ async def test__inference_batch_of_documents(
             "cache_bucket": test_config.cache_bucket,
             "wandb_model_registry": test_config.wandb_model_registry,
             "wandb_entity": test_config.wandb_entity,
-            "wandb_api_key": str(test_config.wandb_api_key.get_secret_value()),
             "aws_env": test_config.aws_env.value,
             "local_classifier_dir": str(test_config.local_classifier_dir),
         }
@@ -1024,7 +1044,12 @@ async def test__inference_batch_of_documents(
     mock_context = MagicMock(spec=FlowRunContext)
     mock_context.flow_run = mock_flow_run
 
-    with patch("flows.inference.get_run_context", return_value=mock_context):
+    with (
+        patch("flows.inference.get_run_context", return_value=mock_context),
+        patch(
+            "flows.inference.get_aws_ssm_param", return_value="retrieved-wandb-api-key"
+        ),
+    ):
         # Should not raise any exceptions for successful processing
         result = await _inference_batch_of_documents(
             batch=batch,
@@ -1052,7 +1077,12 @@ async def test__inference_batch_of_documents(
         DocumentStem("NonExistent.doc.1"),  # Will fail
     ]
 
-    with patch("flows.inference.get_run_context", return_value=mock_context):
+    with (
+        patch("flows.inference.get_run_context", return_value=mock_context),
+        patch(
+            "flows.inference.get_aws_ssm_param", return_value="retrieved-wandb-api-key"
+        ) as mock_get_aws_ssm_param,
+    ):
         result_partial = await _inference_batch_of_documents(
             batch=batch,
             config_json=config_json,
@@ -1064,6 +1094,9 @@ async def test__inference_batch_of_documents(
         assert len(result_partial.successful_document_stems) == 1
         assert result_partial.failed is False  # Not failed because some succeeded
         assert result_partial.failed_document_count > 0
+    mock_get_aws_ssm_param.assert_called_once_with(
+        "WANDB_API_KEY", aws_env=test_config.aws_env
+    )
 
 
 def test_batch_inference_result_failed_property():
@@ -1756,8 +1789,8 @@ def test_did_inference_fail() -> None:
     assert inference_run_failed is False
 
 
-def test_gather_successful_document_stems() -> None:
-    """Test the gather_successful_document_stems function."""
+def test_gather_document_stems() -> None:
+    """Test the gather_document_stems function."""
 
     # Setup: 5 documents, 2 classifiers, 2 batches
     requested_document_stems = [
@@ -1800,12 +1833,13 @@ def test_gather_successful_document_stems() -> None:
     ]
 
     # No results from any batches
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[],  # No results
     )
     assert successful_document_stems == set(), "No results should return an empty set"
+    assert failed_document_stems == set(requested_document_stems)
 
     # No documents successful for any batches
     all_failed_batch_1 = BatchInferenceResult(
@@ -1818,7 +1852,7 @@ def test_gather_successful_document_stems() -> None:
         successful_document_stems=[],  # No success
         classifier_spec=q101_classifier_spec,
     )
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[all_failed_batch_1, all_failed_batch_2],
@@ -1826,6 +1860,7 @@ def test_gather_successful_document_stems() -> None:
     assert successful_document_stems == set(), (
         "All failures should return no successful documents"
     )
+    assert len(failed_document_stems) == len(requested_document_stems)
 
     # Only some batch results
     q101_batch_success = BatchInferenceResult(
@@ -1833,7 +1868,7 @@ def test_gather_successful_document_stems() -> None:
         successful_document_stems=requested_document_stems,
         classifier_spec=q101_classifier_spec,
     )
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[q101_batch_success],  # No results for q100
@@ -1841,6 +1876,7 @@ def test_gather_successful_document_stems() -> None:
     assert successful_document_stems == set(), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
+    assert len(failed_document_stems) == len(requested_document_stems)
 
     # Not all documents successful for all batches
     q100_batch_success = BatchInferenceResult(
@@ -1853,7 +1889,7 @@ def test_gather_successful_document_stems() -> None:
         successful_document_stems=requested_document_stems[1:],  # Partial success
         classifier_spec=q101_classifier_spec,
     )
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[q100_batch_success, q101_batch_partial_success],
@@ -1861,6 +1897,7 @@ def test_gather_successful_document_stems() -> None:
     assert successful_document_stems == set(requested_document_stems[1:]), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
+    assert failed_document_stems == set(requested_document_stems[:1])
 
     # All documents successful for all batches
     q100_batch_success = BatchInferenceResult(
@@ -1868,7 +1905,7 @@ def test_gather_successful_document_stems() -> None:
         successful_document_stems=requested_document_stems,
         classifier_spec=q100_classifier_spec,
     )
-    successful_document_stems: set[DocumentStem] = gather_successful_document_stems(
+    successful_document_stems, failed_document_stems = gather_document_stems(
         parameterised_batches=parameterised_batches,
         requested_document_stems=set(requested_document_stems),
         batch_inference_results=[q100_batch_success, q101_batch_success],
@@ -1876,44 +1913,7 @@ def test_gather_successful_document_stems() -> None:
     assert successful_document_stems == set(requested_document_stems), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
-
-
-def test_get_inference_fault_metadata() -> None:
-    """Test the get_inference_fault_metadata function."""
-
-    metadata_json: dict[str, Any] = get_inference_fault_metadata(
-        all_successes=[
-            BatchInferenceResult(
-                batch_document_stems=[DocumentStem("TEST.executive.1.1")],
-                successful_document_stems=[DocumentStem("TEST.executive.1.1")],
-                classifier_spec=ClassifierSpec(
-                    wikibase_id=WikibaseID("Q100"),
-                    classifier_id=ClassifierID("aaaa2222"),
-                    wandb_registry_version="v1",
-                ),
-            ),
-        ],
-        all_raw_failures=[
-            FlowRun(
-                id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
-                flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
-                name="test-flow-run",
-                state=Completed(),
-            ),
-            BaseException(),
-        ],
-        requested_document_stems=set([DocumentStem("TEST.executive.1.1")]),
-    )
-
-    assert metadata_json.keys() == {
-        "all_successes",
-        "all_raw_failures",
-        "requested_document_stems",
-    }
-
-    # Assert that we can dump the result to a string as this is a requirement of the
-    # fault metadata.
-    json.dumps(metadata_json)
+    assert failed_document_stems == set()
 
 
 def test_process_single_document_inference():

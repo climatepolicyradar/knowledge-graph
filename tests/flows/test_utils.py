@@ -565,12 +565,15 @@ async def test_map_as_sub_flow__on_flow_failure(
 def test_fault() -> None:
     """Test the Fault class."""
 
-    fault = Fault(msg="test_msg", metadata={"key": "value"}, data="test_data")
-    assert str(fault) == 'test_msg | metadata: {"key": "value"} | data: test_data'
-
-    fault.data = "a" * 30_000  # 30_000 characters
-    assert len(str(fault)) <= 25_000
-    assert str(fault).endswith("...")
+    fault = Fault(
+        msg="test_msg",
+        loggable_data={"key": "value", "other_key": "value"},
+        data="test_data",
+    )
+    assert (
+        str(fault)
+        == 'test_msg | Metadata: {\n  "key": "value",\n  "other_key": "value"\n}'
+    )
 
 
 def test_build_run_output_identifier():

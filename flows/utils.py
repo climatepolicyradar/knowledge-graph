@@ -795,37 +795,16 @@ async def map_as_sub_flow(
 
 @dataclass
 class Fault(Exception):
-    """A simple and generic exception with optional, helpful metadata"""
+    """A generic exception with optional loggable metadata"""
 
     msg: str
-    metadata: dict[str, Any] | None
+    loggable_data: dict[str, str | int] | None
     data: Any | None = None
 
     def __str__(self) -> str:
         """Return a string representation"""
-        logger = get_logger()
-        if self.metadata is None:
-            return self.msg
-        try:
-            data_str = str(self.data)
-        except Exception as e:
-            logger.warning(f"could not represent fault's data as a string: {e}")
-            data_str = ""
-
-        # Prefect logs should have no more than 25,000 characters, so truncate
-        # the fault string if it's too long.
-        message_str = textwrap.shorten(self.msg, width=8_000, placeholder="...")
-        metadata_str = textwrap.shorten(
-            json.dumps(self.metadata, default=str), width=8_000, placeholder="..."
-        )
-        data_str = textwrap.shorten(data_str, width=8_000, placeholder="...")
-
-        fault_str = f"{message_str} | metadata: {metadata_str} | data: {data_str}"
-
-        # Also truncate the total string as a safety precaution.
-        fault_str = textwrap.shorten(fault_str, width=24_997, placeholder="...")
-
-        return fault_str
+        text = f"{self.msg} | Metadata: {json.dumps(self.loggable_data, indent=2)}"
+        return text if len(text) <= 24_997 else f"{text[:24_994]}..."
 
 
 def default_desc(tasks, results) -> str:

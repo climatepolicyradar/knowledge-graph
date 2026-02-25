@@ -84,7 +84,7 @@ def test_parse_aws_env_invalid(invalid_input):
         ("inference", AwsEnv.labs, "kg-inference-labs"),
         ("aggregate", AwsEnv.sandbox, "kg-aggregate-sandbox"),
         ("index", AwsEnv.staging, "kg-index-staging"),
-        ("full-pipeline", AwsEnv.production, "kg-full-pipeline-prod"),
+        ("topic-pipeline", AwsEnv.production, "kg-topic-pipeline-prod"),
     ],
 )
 def test_generate_deployment_name(flow_name, aws_env, expected):

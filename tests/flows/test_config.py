@@ -128,6 +128,7 @@ def test_skip_existing_inference_results_in_to_json():
     config_default = Config(cache_bucket="test-bucket")
     json_dict_default = config_default.to_json()
     assert json_dict_default["skip_existing_inference_results"] is True
+    assert "wandb_api_key" not in json_dict_default
 
 
 @pytest.mark.asyncio

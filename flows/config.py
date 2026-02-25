@@ -165,14 +165,6 @@ class Config(BaseModel):
                 aws_env=config.aws_env,
             )
 
-        if not config.wandb_api_key:
-            config.wandb_api_key = SecretStr(
-                get_aws_ssm_param(
-                    "WANDB_API_KEY",
-                    aws_env=config.aws_env,
-                )
-            )
-
         if not config.wikibase_password:
             config.wikibase_password = SecretStr(
                 get_aws_ssm_param(
@@ -247,9 +239,6 @@ class Config(BaseModel):
             "wandb_model_org": self.wandb_model_org,
             "wandb_model_registry": self.wandb_model_registry,
             "wandb_entity": self.wandb_entity,
-            "wandb_api_key": (
-                self.wandb_api_key.get_secret_value() if self.wandb_api_key else None
-            ),
             "aws_env": self.aws_env,
             "s3_concurrency_limit": self.s3_concurrency_limit,
             "skip_existing_inference_results": self.skip_existing_inference_results,
