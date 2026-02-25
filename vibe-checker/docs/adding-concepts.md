@@ -16,7 +16,7 @@ To remove a concept from the inference schedule, delete its ID from `config.yml`
 
 ## Running inference
 
-The `vibe_check_inference` flow runs automatically on a week-daily schedule (Monday to Thursday at 8am). You can also trigger it manually from the Prefect UI.
+The `vibe_check_inference` flow runs automatically on Monday to Thursday at 8am. You can also trigger it manually from the Prefect UI.
 
 To run inference on a specific set of concepts without modifying `config.yml`, you can trigger the `vibe_check_inference` flow with a `wikibase_ids` parameter via the Prefect UI.
 
