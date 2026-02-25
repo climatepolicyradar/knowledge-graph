@@ -306,7 +306,7 @@ export default function PredictionFilters({
               ]}
               value={localFilters.corpus_type || ""}
               onValueChange={(value) =>
-                immediateUpdateFilter("corpus_type", value)
+                immediateUpdateFilter("corpus_type", value ?? undefined)
               }
             >
               <Select.Trigger className="input flex w-full items-center justify-between text-sm">
@@ -358,7 +358,7 @@ export default function PredictionFilters({
               ]}
               value={localFilters.world_bank_region || ""}
               onValueChange={(value) =>
-                immediateUpdateFilter("world_bank_region", value)
+                immediateUpdateFilter("world_bank_region", value ?? undefined)
               }
             >
               <Select.Trigger className="input flex w-full items-center justify-between text-sm">

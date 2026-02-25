@@ -9,7 +9,7 @@ build-webapp:
     #!/usr/bin/env bash
     set -euo pipefail
     repository_url=$(cd infra && pulumi stack output repository_url --stack labs)
-    docker build -t "${repository_url}:latest" webapp/
+    docker build --platform linux/amd64 -t "${repository_url}:latest" webapp/
 
 # Push the webapp image to ECR
 push-webapp:
