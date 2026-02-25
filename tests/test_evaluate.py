@@ -12,6 +12,7 @@ from knowledge_graph.labelled_passage import LabelledPassage
 from scripts.evaluate import (
     build_metrics_path,
     calculate_performance_metrics,
+    calculate_std_by_equity_strata,
     create_gold_standard_labelled_passages,
     group_passages_by_equity_strata,
     load_classifier_local,
@@ -123,10 +124,13 @@ def test_log_metrics(metrics_df: pd.DataFrame):
 
         log_metrics_to_wandb(mock_run, metrics_df)
 
-        mock_wandb_table.assert_called_once_with(
-            data=metrics_df.values.tolist(),
-            columns=metrics_df.columns.tolist(),
-        )
+        # wandb.Table is called twice: once for main metrics, once for std metrics
+        assert mock_wandb_table.call_count == 2
+
+        # First call should be for main metrics
+        first_call = mock_wandb_table.call_args_list[0]
+        assert first_call.kwargs["data"] == metrics_df.values.tolist()
+        assert first_call.kwargs["columns"] == metrics_df.columns.tolist()
 
         log_calls = mock_run.log.call_args_list
         assert len(log_calls) > 0
@@ -152,3 +156,51 @@ def test_group_passages_by_equity_strata_raises_when_equity_column_missing_from_
         )
 
     assert "missing_column" in str(exc_info.value)
+
+
+def test_calculate_std_by_equity_strata(metrics_df: pd.DataFrame):
+    """Test that calculate_std_by_equity_strata returns correct structure."""
+    result = calculate_std_by_equity_strata(metrics_df)
+
+    # Check that result is a DataFrame with expected columns
+    expected_columns = [
+        "Equity strata",
+        "Agreement at",
+        "Precision std",
+        "Recall std",
+        "Accuracy std",
+        "F1 score std",
+    ]
+    assert list(result.columns) == expected_columns
+
+    # Check that we have results for each equity strata in the fixture
+    # The fixture has: translated, world_bank_region, dataset_name
+    equity_strata = result["Equity strata"].unique()
+    assert "translated" in equity_strata
+    assert "world_bank_region" in equity_strata
+    assert "dataset_name" in equity_strata
+
+
+def test_log_metrics_to_wandb_logs_std_metrics(metrics_df: pd.DataFrame):
+    """Test that log_metrics_to_wandb logs std metrics to wandb."""
+    with patch("wandb.Table") as mock_wandb_table:
+        mock_run = Mock()
+        mock_run.summary = {}
+
+        log_metrics_to_wandb(mock_run, metrics_df)
+
+        # Check that wandb.Table was called at least twice
+        # (once for main metrics, once for std metrics)
+        assert mock_wandb_table.call_count >= 2
+
+        # Check that std metrics were logged
+        log_calls = mock_run.log.call_args_list
+        std_payload_calls = [
+            call for call in log_calls if "std_by_equity_strata" in str(call)
+        ]
+        assert len(std_payload_calls) > 0
+
+        # Check that summary includes std metrics
+        summary_keys = list(mock_run.summary.keys())
+        std_summary_keys = [k for k in summary_keys if k.startswith("std_")]
+        assert len(std_summary_keys) > 0
