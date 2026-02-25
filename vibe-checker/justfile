@@ -1,0 +1,39 @@
+aws_region := "eu-west-1"
+aws_profile := "labs"
+
+default:
+    @just --list
+
+# Build the webapp Docker image
+build-webapp:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repository_url=$(cd infra && pulumi stack output repository_url --stack labs)
+    docker build --platform linux/amd64 -t "${repository_url}:latest" webapp/
+
+# Push the webapp image to ECR
+push-webapp:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repository_url=$(cd infra && pulumi stack output repository_url --stack labs)
+    registry=$(echo "$repository_url" | cut -d'/' -f1)
+    aws ecr get-login-password --region {{aws_region}} --profile {{aws_profile}} \
+        | docker login --username AWS --password-stdin "$registry"
+    docker push "${repository_url}:latest"
+
+# Force ECS to pick up the latest image
+refresh-webapp-task:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cluster_name=$(cd infra && pulumi stack output cluster_name --stack labs)
+    service_name=$(cd infra && pulumi stack output service_name --stack labs)
+    aws ecs update-service \
+        --cluster "$cluster_name" \
+        --service "$service_name" \
+        --force-new-deployment \
+        --region {{aws_region}} \
+        --profile {{aws_profile}} \
+        --no-cli-pager
+
+# Build, push, and refresh in one step
+deploy-webapp: build-webapp push-webapp refresh-webapp-task
