@@ -24,6 +24,7 @@ from prefect.states import Completed, Running
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
+    INFERENCE_BATCH_RETRIES,
     BatchInferenceResult,
     FilterResult,
     Metadata,
@@ -892,10 +893,13 @@ async def test_inference_batch_of_documents_cpu_with_failures(
                 classifier_spec_json=JsonDict(classifier_spec.model_dump()),
             )
 
-            assert exc_info.value.msg == "Failed to run inference on 2/2 documents."
-            assert isinstance(exc_info.value.data, BatchInferenceResult)
-
-    mock_get_aws_ssm_param.assert_called_once_with(
+    assert (
+        exc_info.value.msg == "Failed to run inference on all documents in the batch."
+    )
+    assert isinstance(exc_info.value.data, BatchInferenceResult)
+    # Initial attempt + configured retries
+    assert mock_get_aws_ssm_param.call_count == (1 + INFERENCE_BATCH_RETRIES)
+    mock_get_aws_ssm_param.assert_called_with(
         "WANDB_API_KEY", aws_env=test_config.aws_env
     )
 

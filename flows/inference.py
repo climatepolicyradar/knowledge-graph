@@ -68,6 +68,9 @@ from knowledge_graph.utils import iterate_batch, serialise_pydantic_list_as_json
 PARENT_TIMEOUT_S: int = int(timedelta(hours=12).total_seconds())
 # A singular task doing one thing
 TASK_TIMEOUT_S: int = int(timedelta(minutes=60).total_seconds())
+# Retries for transient sub-flow infrastructure startup failures
+INFERENCE_BATCH_RETRIES: Final[int] = 2
+INFERENCE_BATCH_RETRY_DELAY_S: Final[int] = int(timedelta(minutes=2).total_seconds())
 
 # NOTE: Comparable list being maintained at https://github.com/climatepolicyradar/navigator-search-indexer/blob/91e341b8a20affc38cd5ce90c7d5651f21a1fd7a/src/config.py#L13.
 BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
@@ -1100,7 +1103,11 @@ async def _inference_batch_of_documents(
 # then a custom serialiser should be considered.
 
 
-@flow(result_storage=S3_BLOCK_RESULTS_CACHE)
+@flow(
+    result_storage=S3_BLOCK_RESULTS_CACHE,
+    retries=INFERENCE_BATCH_RETRIES,
+    retry_delay_seconds=INFERENCE_BATCH_RETRY_DELAY_S,
+)
 async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -1113,7 +1120,11 @@ async def inference_batch_of_documents_cpu(
     )
 
 
-@flow(result_storage=S3_BLOCK_RESULTS_CACHE)
+@flow(
+    result_storage=S3_BLOCK_RESULTS_CACHE,
+    retries=INFERENCE_BATCH_RETRIES,
+    retry_delay_seconds=INFERENCE_BATCH_RETRY_DELAY_S,
+)
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
