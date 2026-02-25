@@ -31,7 +31,7 @@ AWS_PROFILE = "labs"
 AWS_REGION = "eu-west-1"
 
 
-def generate(dataset_path: Path) -> None:
+def generate_and_upload_vibe_checker_input_files(dataset_path: Path) -> None:
     """Build and upload the vibe-checker S3 input files from a sampled passages feather."""
     session = boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
     bucket_name = session.client("ssm").get_parameter(Name="/vibe-checker/bucket-name")[
@@ -93,4 +93,4 @@ def generate(dataset_path: Path) -> None:
 
 
 if __name__ == "__main__":
-    typer.run(generate)
+    typer.run(generate_and_upload_vibe_checker_input_files)
