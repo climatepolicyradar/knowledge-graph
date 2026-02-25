@@ -1,7 +1,6 @@
 import math
-import re
 from contextlib import nullcontext
-from typing import Annotated, Optional
+from typing import Annotated, Optional, cast
 
 import click
 import pandas as pd
@@ -23,6 +22,14 @@ from scripts.train import parse_kwargs_from_strings
 app = typer.Typer()
 console = Console()
 
+CORPUS_TYPES = [
+    "litigation",
+    "corporate-disclosures",
+    "Laws and Policies",
+    "Intl. agreements",
+    "GCF",
+]
+
 
 @app.command()
 def main(
@@ -43,10 +50,18 @@ def main(
         help="Dataset to use",
         click_type=click.Choice(["balanced", "combined"]),
     ),
-    corpus_type: Annotated[
-        Optional[str],
+    corpus_types_include: Annotated[
+        Optional[list[str]],
         typer.Option(
-            help="Filter to a specific corpus type (e.g., 'Sabin', 'Litigation')"
+            help="Corpus types to include. Can be specified multiple times. If not set, all types are included.",
+            click_type=click.Choice(CORPUS_TYPES),
+        ),
+    ] = None,
+    corpus_types_exclude: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            help="Corpus types to exclude. Can be specified multiple times.",
+            click_type=click.Choice(CORPUS_TYPES),
         ),
     ] = None,
     max_size_to_sample_from: int = typer.Option(
@@ -88,40 +103,51 @@ def main(
     negative_sample_size = math.floor(sample_size * min_negative_proportion)
     positive_sample_size = sample_size - negative_sample_size
 
-    # Build corpus suffix for filename
-    corpus_suffix = ""
-    if corpus_type:
-        # Normalize: lowercase, spaces to underscores, remove punctuation
-        normalized = re.sub(r"[^\w\s]", "", corpus_type.lower()).replace(" ", "_")
-        corpus_suffix = f"_{normalized}"
-
     if dataset_name == "balanced":
-        dataset_filename = f"sampled_dataset{corpus_suffix}.feather"
+        dataset_filename = "sampled_dataset.feather"
     elif dataset_name == "combined":
-        dataset_filename = f"combined_dataset{corpus_suffix}.feather"
+        dataset_filename = "combined_dataset.feather"
     else:
         raise ValueError(f"Unknown dataset_name: {dataset_name}")
 
-    with console.status(
-        f"Loading the {dataset_name} passage dataset for inference and sampling"
-    ):
+    with nullcontext():
         dataset_path = processed_data_dir / dataset_filename
 
         try:
             dataset = pd.read_feather(dataset_path)
-            console.log(f"✅ Loaded {len(dataset)} passages from {dataset_path}")
+            console.log(f"Loaded {len(dataset)} passages from {dataset_path}")
         except FileNotFoundError as e:
             raise FileNotFoundError(
                 f"{dataset_path} not found. If you haven't already, you should run:\n"
                 f"  just build-dataset"
             ) from e
 
+    corpus_type_col = "document_metadata.corpus_type_name"
+
+    if corpus_types_include:
+        dataset = cast(
+            pd.DataFrame, dataset[dataset[corpus_type_col].isin(corpus_types_include)]
+        )
+        console.log(
+            f"Filtered to corpus types {corpus_types_include}: "
+            f"{len(dataset)} passages remain"
+        )
+
+    if corpus_types_exclude:
+        dataset = cast(
+            pd.DataFrame, dataset[~dataset[corpus_type_col].isin(corpus_types_exclude)]
+        )
+        console.log(
+            f"Excluded corpus types {corpus_types_exclude}: "
+            f"{len(dataset)} passages remain"
+        )
+
     # Limit dataset size if needed
     if len(dataset) > max_size_to_sample_from:
         console.log(
             f"Limiting input data from {len(dataset)} rows to {max_size_to_sample_from}"
         )
-        dataset = dataset.iloc[:max_size_to_sample_from]
+        dataset = cast(pd.DataFrame, dataset.iloc[:max_size_to_sample_from])
 
     # Get the concept metadata from wikibase
     wikibase = WikibaseSession()
@@ -252,7 +278,6 @@ def main(
         for column in equity_columns:
             console.log(sampled_passages[column].value_counts(), end="\n\n")
 
-        # Convert sampled passage rows to LabelledPassage objects and save them
         # Convert sampled passage rows to LabelledPassage objects and save them
         labelled_passages = []
         for _, row in sampled_passages.iterrows():
