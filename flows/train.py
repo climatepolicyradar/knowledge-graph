@@ -1,4 +1,5 @@
 import asyncio
+import os
 from pathlib import Path
 from typing import Any, Optional
 
@@ -52,8 +53,9 @@ async def _set_up_training_environment(
         url=config.argilla_api_url,
     )
 
+    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
     session = boto3.session.Session(
-        profile_name=aws_env.value,
+        profile_name=aws_env.value if use_aws_profiles else None,
         region_name=config.bucket_region,
     )
     s3_client = session.client("s3")

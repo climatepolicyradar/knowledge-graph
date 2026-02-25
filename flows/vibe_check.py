@@ -48,7 +48,11 @@ from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 from scripts.train import run_training
 
 aws_region = os.getenv("AWS_REGION", "eu-west-1")
-aws_profile = os.getenv("AWS_PROFILE", "labs")
+aws_profile = (
+    os.getenv("AWS_PROFILE")
+    if os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
+    else None
+)
 
 
 class LabelledPassageWithMarkup(LabelledPassage):

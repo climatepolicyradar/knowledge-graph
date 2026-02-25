@@ -74,3 +74,11 @@ argilla_data/
 
 # Wandb
 wandb/
+
+# Vibe checker webapp and infra (not needed in Python container)
+vibe-checker/webapp/
+vibe-checker/infra/
+vibe-checker/docs/
+
+# Node.js
+**/node_modules/
