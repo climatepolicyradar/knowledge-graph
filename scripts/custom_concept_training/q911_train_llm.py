@@ -63,57 +63,86 @@ def get_labelling_guidelines() -> str:
     criteria_q911 = f"""
 Use the following inclusion/exclusion criteria, in addition to the definition:
 
-### THE ALLOCATION TEST
-Before tagging, ask: Is this passage meaningful for the fair distribution of
-resources, costs, or risks based on equity, responsibility, or
-historical debt?
-ONLY tag if it specifies at least two of the following:
-	a) an action (payment, programme, policy, etc) that has redistributional effects
-	b) a named marginalized, vulnerable or disproportionally impacted group
-	c) an ethical argument or analysis in favour of a fairer distribution of risks, impacts or benefits.
+**Core test:** Distributive justice is the *active* fair allocation of benefits, burdens, and risks. It is not merely the existence of inequality or vulnerability.
+ ONLY tag if the phrase contains a mechanism or argument for a fairer distribution.
+ 
+  **Examples that FAIL the test:**
+    - "providing electricity to all citizens" — equality is not necessarily distributive justice; it lacks a targeted equity logic.
+    - "the project will create 500 jobs" — generic economic benefit without a "Just Transition" framing for specific workers.  
+		- "compensating businesses for affected revenue" - absent more context, this could mean small businesses but also big multinationals and their CEOs
+		- "capacity building for youth" - named group, but no evidence or argument that this will lead to a fairer distribution.
 
-**Examples that FAIL the allocation test:**
-- "providing electricity to all citizens" — equality is not necessarily distributive justice; it lacks a targeted equity logic.
-- "the project will create 500 jobs" — generic economic benefit without a "Just Transition" framing for specific workers.
-- "investing in green technology" — technical investment without an allocation focus.
-- "compensating businesses for affected revenue" - absent more context, this could mean small businesses but also big multinationals and their CEOs
-- "capacity building for youth" - named group, but no evidence or argument that this will lead to a fairer distribution.
+    **Examples that PASS the test:**
+    - "capacity building for youth has led to improved access to finance" - now the benefit for the named group has concrete distributional effects
+    - "allocation of Loss and Damage funds to Small Island Developing States" — Global North/South spatial justice and historical climate debt.
+    - "restoration of ancestral lands to communities displaced by coal mining" — Reparative justice/Restoration.
+    - "fairness demands that the costs of climate mitigation do not fall on future generations" — ethical argument for intergenerational justice.
 
-**Examples that PASS the allocation test:**
-- "capacity building for youth has led to improved access to finance" - now the benefit for the named group has concrete distributional effects
-- "targeted subsidies for low-income households to offset carbon taxes" — addressing disproportionate burdens (Equity).
-- "allocation of Loss and Damage funds to Small Island Developing States" — Global North/South spatial justice and historical climate debt.
-- "restoration of ancestral lands to communities displaced by coal mining" — Reparative justice/Restoration.
-- "ensuring that the costs of climate mitigation do not fall on future generations" — Intergenerational justice.
-- "investing in rural cooling centers to protect left-behind agricultural areas" — Spatial justice (Urban/Rural).
+To operationlise this further, consider the below rules: 
 
-### 1. SPATIAL JUSTICE
-- **INCLUDE**: Resource allocation that prioritizes specific vulnerable geographies: Global South, rural vs. urban, or "left-behind" regions.
-- **INCLUDE**: Moral arguments on the need for fair distributions of harms and benefits between regions or countries.
-- **EXCLUDE**: General infrastructure or "aid" that is distributed broadly without a focus on correcting an imbalance.
+### 1. THE ACTION/ARGUMENT REQUIREMENT
+To be tagged, the passage must do more than mention a vulnerable group or a "Just Transition" keyword. It must contain a **proposition**—either a concrete policy action or a normative argument.
+*   **Action:** INCLUDE if the text describes a transfer of resources, rights, or opportunities *specifically to* a vulnerable group or region, and/or redistribution *away from* a party that has caused harm?
+*   **Argument:** INCLUDE if the text claims that such a distribution *ought* to happen based on fairness, equity, or historical responsibility?
 
-### 2. INTERGENERATIONAL JUSTICE
-- **INCLUDE**: Intergenerational equity—actions taken specifically to protect the rights or resources of future generations.
-- **INCLUDE**: Moral arguments on what present generations owe to future generations.
-- **EXCLUDE**: Generic inclusion of youth or future generations without any mention of distributive effects.
+### 2. INCLUSION CRITERIA
+Tag the passage if it matches any of the following:
 
-### 3. HISTORICAL RESPONSIBILITY & REPARATIONS
-- **INCLUDE**: "Polluter Pays" mechanisms, climate debt, and reparations/restoration for historical harms.
-- **INCLUDE**: Financial transfers from high-emitting countries/entities to those most impacted, as long as some justice-related justification is given
-- **EXCLUDE**: Standard commercial insurance or market-rate loans that do not account for historical responsibility.
-- **EXCLUDE**: Financial support and project funds where there is no explicit link to justice, fairer distribution or specific targeting of vulnerable groups.
+**A. Active Redistribution & Targeting**
+*   **INCLUDE** specific measures to support groups disproportionately impacted by climate change or transition (e.g., "providing grants to coal communities," "social protection for women farmers").
+*   **INCLUDE** allocations of funding or technology that explicitly prioritize "left-behind" regions or marginalized demographics (e.g. Global South, rural poor) to correct an imbalance.
+*   **Note:** The text MUST link the support to the group's vulnerability or the transition context.
 
-### 4. BURDENS & JUST TRANSITION
-- **INCLUDE**: Provisions for workers in declining industries (e.g., "re-skilling for coal miners").
-- **INCLUDE**: Measures to prevent "energy poverty" or the "working class" from bearing transition costs.
-- **EXCLUDE**: General "poverty reduction" if not linked to climate transition or environmental risks.
-- **EXCLUDE**: Generic descriptions of burdens and unfair situations that lack an explicit link to justice or justice-aligned solutions.
+**B. Burden Sharing & Compensation**
+*   **INCLUDE** mechanisms to mitigate the negative social impacts of green transition (e.g., "compensation for lost livelihoods," "retraining funds for miners").
+*   **INCLUDE** arguments for- or policies enforcing "Polluter Pays" (making high-emitters bear the costs) or "Common But Differentiated Responsibilities" (fair sharing of global climate effort).
 
-### 5. JUSTICE TYPE DIFFERENTIATION
-- **EXCLUDE** passages that fit better under:
-    - Procedural Justice: {procedural.definition} (Focus on *how* decisions are made).
-    - Recognition Justice: {recognition.definition} (Focus on *identity/dignity*).
-- **EXCLUDE**: generic mentions of justice and justice policies where there is no explicit distributional element.
+**C. Ethical imperatives**
+*   **INCLUDE** statements dealing with *requirements* or *imperatives* for justice (e.g., "Significant concessionary funds will be *required* for the region to participate," "Programmes *must* target vulnerable groups").
+*   **INCLUDE** arguments for a fairer distribution of support, resources or burdens that appeal to ethics or justice. The ethical argument here can be descriptive, as long as the distributive component is clearly present.
+
+**D. Distributive justice sub-types**
+*   **INCLUDE** more specific versions of distributive justice, including:
+	- Intergenerational justice (fair distribution between present and future generations)
+	- Spatial justice (fair distribution between areas and countries)
+	- Restorative justice (compensation, reparations or systemic change from parties that historically caused harm towards parties that have been harmed).   
+
+### 3. EXCLUSION CRITERIA
+Do **NOT** tag the passage if it falls into these categories, even if it contains keywords like "women," "vulnerable," "inequality," or "transition":
+Be strict here: we are looking for substantive mentions, not greenwashing measures.
+
+**A. Describing the State of Affairs**
+*   **Exclude** factual descriptions or statistics regarding poverty, gender gaps, or lack of resources (e.g., "Women earn 20% less than men," "Rural areas lack access to water").
+    *   *Reasoning:* Describing a problem is not the same as proposing a distributive justice solution.
+*   **Exclude** descriptions of vulnerability that do not mention a remedial action (e.g., "The elderly are most vulnerable to heatwaves").
+
+**B. Describing current or future impacts**
+*   **Exclude** predictions of economic decline, job losses, or "ghost towns" resulting from the transition *unless* the passage also discusses the measures to address them.
+    *   *Example:* "The coal industry will lose 10,000 jobs" -> **EXCLUDE**.
+    *   *Example:* "We are launching a fund to support the 10,000 workers losing jobs" -> **INCLUDE**.
+
+**C. Nominal Mentions & Titles**
+*   **Exclude** titles, headers, proper nouns, or names of committees/documents (e.g. "Just Transition Mechanism," "Section 7: Financing").
+*   **Exclude** citations or references where the term is just a label (e.g., "As discussed in the 2021 Just Transition Report...").
+*   **NOTE**: in some rare cases, these phrases can still be included, which is ONLY when it explicitly combines both a distributive element AND a justice element within the same snippet (e.g. "Just Energy Transition Investment Plan"
+
+**D. Procedural & Technical Details**
+*   **Exclude** purely administrative text, such as eligibility checklists, reporting deadlines, or definitions of terms (e.g., "Beneficiaries must show ID," "Polluter is defined as...").
+*   **Exclude** generic "capacity building" or "technical assistance" unless there is an explicit statement explaining how this redistributes power or resources to a marginalized group to correct an injustice.
+
+**E. General Social Welfare**
+*   **Exclude** standard social security or pension provisions. These can ONLY be included if they explicitly argue or show that they lead to a fairer distribution of benefits or harms; otherwise, assume that this is the normal functioning of the state and exclude.
+
+**F. Other/generic justice types
+*   **Exclude** passages that fit better under:
+        - Procedural Justice: {procedural.definition} (Focus on *how* decisions are made).
+        - Recognition Justice: {recognition.definition} (Focus on *identity/dignity*).
+*   **Exclude**: generic mentions of justice and justice policies where there is no explicit distributional element.
+   
+
+### 4. AMBIGUITY CHECK
+*   **If the text implies "fairness" but is vague:** Ask, "Does this text explain *who* gets *what* and *why*?" If it just says "we need a fair system" without detail, lean towards **EXCLUDE**.
+*   **If the text is a goal statement:** "Objective: Increase equitable participation for women." -> **INCLUDE** (This sets a distributive aim).
 """
 
     return criteria_q911
