@@ -5,7 +5,8 @@ from prefect.variables import Variable
 from pydantic import ValidationError
 
 from flows.config import Config
-from knowledge_graph.cloud import AwsEnv, Compute
+from flows.utils import Compute
+from knowledge_graph.cloud import AwsEnv
 
 
 def test_invalid_s3_prefix_without_trailing_slash():
