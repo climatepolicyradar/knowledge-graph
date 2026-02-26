@@ -10,8 +10,10 @@ import pytest
 from prefect.client.schemas.objects import FlowRun, State, StateType, TaskRun
 from prefect.context import FlowRunContext, TaskRunContext
 from prefect.flows import flow
+from prefect.variables import Variable
 
 from flows.utils import (
+    Compute,
     DocumentStem,
     Fault,
     ParameterisedFlow,
@@ -23,6 +25,8 @@ from flows.utils import (
     filter_non_english_language_file_stems,
     fn_is_async,
     gather_and_report,
+    get_prefect_job_variable,
+    get_prefect_job_variables,
     get_run_name,
     map_as_local,
     map_as_sub_flow,
@@ -336,8 +340,9 @@ async def test_gather_and_report_calls_progress_artifacts(mock_progress_artifact
         return_exceptions=False,
         key="test-progress-key",
         desc_create="Starting test tasks",
-        desc_update_fn=lambda tasks,
-        results: f"Completed {len(results)}/{len(tasks)} tasks",
+        desc_update_fn=lambda tasks, results: (
+            f"Completed {len(results)}/{len(tasks)} tasks"
+        ),
     )
 
     # Verify results (order may vary due to asyncio.as_completed)
@@ -737,3 +742,25 @@ def test_s3_uri_class() -> None:
 
     with pytest.raises((Exception), match="S3 Path does not represent an s3 path:"):
         S3Uri.from_s3_path("bucket/prefix/file.json")
+
+
+@pytest.mark.asyncio
+async def test_get_prefect_job_variables():
+    test_var_name = "ecs-default-job-variables-prefect-mvp-labs"
+    await Variable.set(
+        test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True
+    )
+
+    result = await get_prefect_job_variables(Compute.CPU, AwsEnv.labs)
+    assert result == {"KEY1": "value1", "KEY2": "value2"}
+
+
+@pytest.mark.asyncio
+async def test_get_prefect_job_variable():
+    test_var_name = "ecs-default-job-variables-prefect-mvp-labs"
+    await Variable.set(
+        test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True
+    )
+
+    result = await get_prefect_job_variable("KEY1", AwsEnv.labs, Compute.CPU)
+    assert result == "value1"

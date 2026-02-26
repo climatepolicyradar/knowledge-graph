@@ -12,7 +12,6 @@ import botocore
 import botocore.client
 import typer
 import yaml
-from prefect.variables import Variable
 from pydantic import BaseModel, Field
 
 from knowledge_graph.identifiers import WikibaseID
@@ -307,52 +306,3 @@ def write_spec_file(file_path: Path, data: list[ClassifierSpec]):
     serialised_data = list(map(lambda spec: str(spec), data))
     with open(file_path, "w") as file:
         yaml.dump(serialised_data, file, explicit_start=True)
-
-
-class Compute(Enum):
-    """Where the compute happens for a deployment."""
-
-    CPU = "ecs"
-    GPU = "coiled"
-
-    def __str__(self):
-        """Return a string friendly name."""
-        return self.value
-
-
-def generate_default_job_variables_name(
-    compute: Compute,
-    aws_env: AwsEnv,
-):
-    return f"{compute}-default-job-variables-prefect-mvp-{aws_env}"
-
-
-async def get_prefect_job_variables(
-    compute: Compute,
-    aws_env: AwsEnv,
-) -> dict[str, Any]:
-    """Get the default job variables from the Prefect."""
-    default_job_variables_name = generate_default_job_variables_name(compute, aws_env)
-    default_job_variables = await Variable.get(default_job_variables_name)  # pyright: ignore[reportGeneralTypeIssues]
-
-    if default_job_variables is None:
-        raise ValueError(
-            f"Variable '{default_job_variables_name}' not found in Prefect"
-        )
-    return default_job_variables  # pyright: ignore[reportReturnType]
-
-
-async def get_prefect_job_variable(
-    param_name: str,
-    aws_env: AwsEnv,
-    compute: Compute,
-) -> str:
-    """Get a single variable from the Prefect job variables."""
-    variables = await get_prefect_job_variables(compute, aws_env)
-    if param_name not in variables:
-        variable_name = generate_default_job_variables_name(compute, aws_env)
-        raise ValueError(
-            f"Parameter '{param_name}' not found in Prefect Variable '{variable_name}'. "
-            f"Available parameters: {list(variables.keys())}"
-        )
-    return variables[param_name]
