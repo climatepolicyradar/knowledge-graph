@@ -4,7 +4,6 @@ import botocore
 import pytest
 import yaml
 from moto import mock_aws
-from prefect.variables import Variable
 
 from knowledge_graph.cloud import (
     AwsEnv,
@@ -13,8 +12,6 @@ from knowledge_graph.cloud import (
     function_to_flow_name,
     generate_default_job_variables_name,
     generate_deployment_name,
-    get_prefect_job_variable,
-    get_prefect_job_variables,
     is_logged_in,
     parse_aws_env,
     parse_spec_file,
@@ -171,25 +168,3 @@ def test_compute_str():
 )
 def test_generate_default_job_variables_name(compute, aws_env, expected):
     assert generate_default_job_variables_name(compute, aws_env) == expected
-
-
-@pytest.mark.asyncio
-async def test_get_prefect_job_variables():
-    test_var_name = "ecs-default-job-variables-prefect-mvp-labs"
-    await Variable.set(
-        test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True
-    )
-
-    result = await get_prefect_job_variables(Compute.CPU, AwsEnv.labs)
-    assert result == {"KEY1": "value1", "KEY2": "value2"}
-
-
-@pytest.mark.asyncio
-async def test_get_prefect_job_variable():
-    test_var_name = "ecs-default-job-variables-prefect-mvp-labs"
-    await Variable.set(
-        test_var_name, {"KEY1": "value1", "KEY2": "value2"}, overwrite=True
-    )
-
-    result = await get_prefect_job_variable("KEY1", AwsEnv.labs, Compute.CPU)
-    assert result == "value1"
