@@ -34,15 +34,13 @@ from flows.sync_concepts import sync_concepts
 from flows.topic_pipeline import topic_pipeline
 from flows.train import train_on_gpu
 from flows.update_neo4j import update_concepts
-from flows.utils import JsonDict, get_logger
+from flows.utils import Compute, JsonDict, get_logger, get_prefect_job_variables
 from flows.vibe_check import vibe_check_inference
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import (
     PROJECT_NAME,
     AwsEnv,
-    Compute,
     generate_deployment_name,
-    get_prefect_job_variables,
 )
 
 MEGABYTES_PER_GIGABYTE = 1024
