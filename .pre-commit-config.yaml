@@ -6,12 +6,12 @@ repos:
       - id: detect-aws-credentials
         args: [--allow-missing-credentials]
   - repo: https://github.com/kynan/nbstripout
-    rev: 0.8.1
+    rev: 0.9.1
     hooks:
       - id: nbstripout
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.12.9
+    rev: v0.15.4
     hooks:
       - id: ruff-check
         types_or: [python, pyi, jupyter]
@@ -28,15 +28,15 @@ repos:
         types: [python]
   - repo: https://github.com/astral-sh/uv-pre-commit
     # uv version.
-    rev: 0.8.12
+    rev: 0.10.7
     hooks:
       - id: uv-lock
   - repo: https://github.com/boidolr/ast-grep-pre-commit
-    rev: 0.39.4
+    rev: 0.41.0
     hooks:
       - id: ast-grep
   - repo: https://github.com/crate-ci/typos
-    rev: v1.35.5
+    rev: v1
     hooks:
       - id: typos
         exclude: ^(tests/fixtures|tests/flows/fixtures|tests/local_vespa/test_documents|tests/__snapshots__|flows/classifier_specs/)
