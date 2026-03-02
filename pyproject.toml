@@ -128,6 +128,11 @@ asyncio_default_fixture_loop_scope = "function"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[dependency-groups]
+dev = [
+    "pytest-aioboto3>=0.6.0",
+]
+
 [tool.hatch.metadata]
 allow-direct-references = true
 

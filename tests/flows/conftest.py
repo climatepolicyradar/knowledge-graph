@@ -102,15 +102,17 @@ def mock_s3_client(mock_aws_creds) -> Generator:
 
 @pytest_asyncio.fixture
 async def mock_s3_async_client(
-    mock_aws_creds, moto_patch_session
+    mock_aws_creds,
+    # From pytest-aioboto3. Don't mix this and mock_aws() from moto3.
+    # Both will start a mock service, and you can't have both at once.
+    moto_patch_session,
 ) -> AsyncGenerator[S3Client, None]:
-    with mock_aws():
-        session = aioboto3.Session(region_name="eu-west-1")
-        config = BotoCoreConfig(
-            read_timeout=30, connect_timeout=10, retries={"max_attempts": 2}
-        )
-        async with session.client("s3", config=config) as client:
-            yield client
+    session = aioboto3.Session(region_name="eu-west-1")
+    config = BotoCoreConfig(
+        read_timeout=30, connect_timeout=10, retries={"max_attempts": 2}
+    )
+    async with session.client("s3", config=config) as client:
+        yield client
 
 
 @pytest.fixture(scope="function")
