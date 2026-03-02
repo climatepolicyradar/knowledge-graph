@@ -44,7 +44,7 @@ from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import wandb_model_artifact_filename
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import Identifier, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -75,9 +75,14 @@ def test_config():
 
 
 @pytest.fixture
-def test_wikibase_to_s3_config():
+def test_wikibase_to_s3_config(request):
     yield WikibaseToS3Config(
-        cdn_bucket_name="test_bucket",
+        # `nodeid` is a unique name for the run of the test,
+        # paramaterised or not, from pytest after it collects all
+        # tests.
+        #
+        # Get a bucket friendly name via an `Identifier`.
+        cdn_bucket_name=Identifier.generate(request.node.nodeid),
         aws_env=AwsEnv("sandbox"),
         wikibase_password=SecretStr("test_password"),
         wikibase_username="test_username",
