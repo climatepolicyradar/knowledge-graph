@@ -176,7 +176,6 @@ Here is the implementation of Classifier [training](https://github.com/climatepo
 
 We have several [static sites](./static_sites/) which can be generated from the outputs of the Knowledge Graph
 
-* [Vibe Checker](./static_sites/vibe_check/)
 * [labelling_librarian](./static_sites/labelling_librarian/)
 * [concept_librarian](./static_sites/concept_librarian/)
 
@@ -184,12 +183,11 @@ We have several [static sites](./static_sites/) which can be generated from the 
 
 ### Run a static site locally
 
-`just serve-static-site vibe_check`
+`just serve-static-site labelling_librarian`
 
 ### Generate a static site
 
-`just generate-static-site vibe_check`
-
+`just generate-static-site labelling_librarian`
 
 ## Concept Store
 
