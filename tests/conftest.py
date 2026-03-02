@@ -432,7 +432,8 @@ def MockedWikibaseSession(
     WikibaseSession._get_client = mocked_get_client
 
     try:
-        yield WikibaseSession
+        with patch.object(WikibaseSession, "REQUEST_DELAY_SECONDS", 0):
+            yield WikibaseSession
     except MockedWikibaseException:
         exc_info = traceback.format_exc()
         pytest.fail(f"Wikibase test failed because of an exception:\n {exc_info}")
