@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import socket
 import subprocess
 import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
@@ -26,6 +27,7 @@ from cpr_sdk.parser_models import (
 )
 from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
+from moto.server import ThreadedMotoServer
 from prefect import Flow, State
 from prefect.client.schemas import StateType
 from prefect.logging import disable_run_logger
@@ -55,6 +57,17 @@ def prefect_test_fixture():
     with prefect_test_harness(server_startup_timeout=120):
         with disable_run_logger():
             yield
+
+
+@pytest.fixture
+def moto_services():
+    with socket.socket() as s:
+        s.bind(("", 0))  # port 0 = OS assigns any available port
+        port = s.getsockname()[1]
+    server = ThreadedMotoServer(port=port, verbose=False)
+    server.start()
+    yield {"s3": f"http://localhost:{port}"}
+    server.stop()
 
 
 @pytest.fixture
