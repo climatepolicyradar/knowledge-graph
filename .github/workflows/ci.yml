@@ -77,11 +77,11 @@ jobs:
             tar -zxf - -C vespa-cli --strip-component=1
           echo "vespa-cli/bin" >> $GITHUB_PATH
 
-      - name: Setup local Vespa
-        run: just vespa_dev_setup
-
       - name: Run tests excl. Vespa
         run: just test-without-vespa -vv
+
+      - name: Setup local Vespa
+        run: just vespa_dev_setup
 
       - name: Run tests only Vespa
         run: just test-with-vespa -vv
