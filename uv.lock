@@ -2433,6 +2433,11 @@ transformers-gpu = [
     { name = "transformers", extra = ["torch"], marker = "extra == 'extra-15-knowledge-graph-transformers-gpu'" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "pytest-aioboto3" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "accelerate", marker = "extra == 'transformers'", specifier = ">=1.6.0" },
@@ -2508,6 +2513,9 @@ requires-dist = [
     { name = "wandb", specifier = ">=0.21.0" },
 ]
 provides-extras = ["transformers", "transformers-gpu", "coiled", "dev", "mcp"]
+
+[package.metadata.requires-dev]
+dev = [{ name = "pytest-aioboto3", specifier = ">=0.6.0" }]
 
 [[package]]
 name = "langdetect"
