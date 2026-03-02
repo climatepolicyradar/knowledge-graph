@@ -14,10 +14,11 @@ npm run dev
 
 The app will be available at `http://localhost:3000`.
 
-The app depends on being able to fetch data from an s3 bucket, hosted in the `labs` account and managed by the code in the [infra](../infra) directory. You'll need to authenticate with AWS to access the bucket.
+The app depends on being able to fetch data from an S3 bucket, hosted in the `labs` account and managed by the code in the [infra](../infra) directory. You'll need to authenticate with AWS and set the `BUCKET_NAME` environment variable:
 
 ```bash
 aws sso login --profile labs
+export BUCKET_NAME=$(cd ../infra && pulumi stack output bucket_name --stack labs)
 ```
 
 ## Deployment
@@ -47,7 +48,7 @@ aws logs tail /ecs/vibe-checker --follow --profile labs --region eu-west-1
 
 If the app is running happily, you should see logs like this:
 
-```
+```text
 2025-11-11T17:38:46.880000+00:00 ecs/vibe-checker/320c2c3e42174603b624e0a08fd5e11e > webapp@0.1.0 start
 2025-11-11T17:38:46.880000+00:00 ecs/vibe-checker/320c2c3e42174603b624e0a08fd5e11e > next start
 2025-11-11T17:38:48.677000+00:00 ecs/vibe-checker/320c2c3e42174603b624e0a08fd5e11e    ▲ Next.js 15.5.2
