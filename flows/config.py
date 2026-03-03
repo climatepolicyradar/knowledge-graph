@@ -23,6 +23,7 @@ WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
 WIKIBASE_URL_SSM_NAME = "/Wikibase/Cloud/URL"
 ARGILLA_URL_SSM_NAME = "/Argilla/APIURL"
 ARGILLA_API_KEY_SSM_NAME = "/Argilla/Owner/APIKey"
+WANDB_API_KEY_SSM_NAME = "WANDB_API_KEY"
 
 
 def validate_s3_prefix(value: str) -> str:
@@ -161,6 +162,14 @@ class Config(BaseModel):
                 # implicitly okay, and now it's explicit.
                 compute=Compute.CPU,
                 aws_env=config.aws_env,
+            )
+
+        if not config.wandb_api_key:
+            config.wandb_api_key = SecretStr(
+                get_aws_ssm_param(
+                    WANDB_API_KEY_SSM_NAME,
+                    aws_env=config.aws_env,
+                )
             )
 
         if not config.wikibase_password:
