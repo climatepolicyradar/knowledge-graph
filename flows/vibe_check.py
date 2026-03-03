@@ -434,7 +434,7 @@ async def process_single_concept(
 
 @flow(  # pyright: ignore[reportCallIssue, reportReturnType]
     timeout_seconds=None,
-    task_runner=ThreadPoolTaskRunner(max_workers=10),  # pyright: ignore[reportArgumentType]
+    task_runner=ThreadPoolTaskRunner(max_workers=3),  # pyright: ignore[reportArgumentType]
 )
 async def vibe_check_inference(
     wikibase_ids: Optional[list[str]] = None,
