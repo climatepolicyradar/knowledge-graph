@@ -40,9 +40,7 @@ async def _set_up_training_environment(
     ):
         raise ValueError("Missing values in config.")
 
-    wandb_api_key = SecretStr(
-        get_aws_ssm_param("WANDB_API_KEY", aws_env=config.aws_env)
-    )
+    wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY", aws_env=aws_env))
     wandb.login(key=wandb_api_key.get_secret_value())
 
     wikibase_config = WikibaseConfig(
