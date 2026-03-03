@@ -389,6 +389,12 @@ async def main() -> None:
     await create_deployment(
         flow=vibe_check_inference,  # pyright: ignore[reportArgumentType]
         description="Train classifiers and run vibe check inference for all concepts in vibe-checker/config.yml. Optionally provide a custom list of Wikibase IDs to process.",
+        flow_variables={
+            "cpu": MEGABYTES_PER_GIGABYTE * 4,
+            "memory": MEGABYTES_PER_GIGABYTE * 32,
+            "ephemeralStorage": {"sizeInGiB": 50},
+            "match_latest_revision_in_family": True,
+        },
         env_schedules={
             AwsEnv.labs: "0 8 * * MON-THU",  # Every working day at 8am
         },
