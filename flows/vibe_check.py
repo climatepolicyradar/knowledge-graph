@@ -279,56 +279,37 @@ async def process_single_concept(
         min_passages = 10_000
         max_passages = 100_000
 
-        # Create a copy of the dataset to avoid modifying the shared DataFrame
-        passages_with_similarity = passages_dataset.copy()
-        passages_with_similarity["similarity"] = similarities
+        # Sort indices by similarity descending without copying the full DataFrame
+        sorted_indices = np.argsort(similarities)[::-1]
+        sorted_similarities = similarities[sorted_indices]
 
-        # Sort by similarity (highest first)
-        passages_with_similarity = passages_with_similarity.sort_values(
-            "similarity", ascending=False
-        )
-
-        # Separate the passages which are above and below the threshold similarity to
-        # our concept embedding.
-        above_threshold = passages_with_similarity[
-            passages_with_similarity["similarity"] > similarity_threshold
-        ]
-        below_threshold = passages_with_similarity[
-            passages_with_similarity["similarity"] <= similarity_threshold
-        ]
+        above_count = int((sorted_similarities > similarity_threshold).sum())
+        below_count = len(sorted_similarities) - above_count
 
         logger.info(
-            f"Found {len(above_threshold)} passages above threshold {similarity_threshold}"
+            f"Found {above_count} passages above threshold {similarity_threshold}"
         )
-        logger.info(f"Found {len(below_threshold)} passages below threshold")
+        logger.info(f"Found {below_count} passages below threshold")
 
         # Selection strategy:
         # 1. If we have enough above threshold, take all of them, up to max_passages.
         # 2. If we don't have enough above threshold, take everything which is above
         #    the threshold, and then supplement the list with the passages which are
         #    closest to the threshold to reach min_passages.
-        if len(above_threshold) >= min_passages:
-            selected_passages = above_threshold
+        if above_count >= min_passages:
+            selected_indices = sorted_indices[: min(above_count, max_passages)]
         else:
-            # Sort below_threshold by distance from threshold (closest first)
-            below_threshold = (
-                below_threshold.assign(
-                    distance_from_threshold=abs(
-                        below_threshold["similarity"] - similarity_threshold
-                    )
-                )
-                .sort_values("distance_from_threshold")
-                .drop(columns=["distance_from_threshold"])
-            )
-            remaining_needed = min_passages - len(above_threshold)
-            selected_passages = pd.concat(
-                [above_threshold, below_threshold.head(remaining_needed)]
-            )
+            # sorted_indices[above_count:] are below-threshold, already ordered closest
+            # to threshold first (since sorted desc by similarity)
+            remaining_needed = min(min_passages - above_count, below_count)
+            selected_indices = sorted_indices[: above_count + remaining_needed]
+            selected_indices = selected_indices[:max_passages]
 
-        # Ensure we don't exceed max_passages in either scenario
-        selected_passages = selected_passages.head(max_passages)
-
-        # Reset index to get sequential integers
+        # Copy only the selected subset (up to max_passages rows, not the full dataset)
+        selected_passages = passages_dataset.iloc[selected_indices].copy()
+        selected_passages = selected_passages.assign(
+            similarity=similarities[selected_indices]
+        )
         selected_passages = selected_passages.reset_index(drop=True)
 
         logger.info(f"Selected {len(selected_passages)} passages")
