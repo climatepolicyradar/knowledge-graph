@@ -1541,9 +1541,6 @@ async def inference(
                 "failed_classifiers_count": len(failed_classifier_specs),
                 "successful_batches": len(all_raw_successes),
                 "failed_batches": len(all_raw_failures),
-                "successful_documents": f"{len(successful_document_stems)} / {len(requested_document_stems)}",
-                "failed_documents": f"{len(failed_document_stems)} / {len(requested_document_stems)}",
-                "skipped_documents": f"{sum(len(stems) for stems in skipped_by_cache.values())}",
             },
             data={
                 "successful_document_stems": successful_document_stems,
