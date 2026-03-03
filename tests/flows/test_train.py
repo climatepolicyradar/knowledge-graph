@@ -18,6 +18,9 @@ async def test_train_on_gpu(mock_s3_client, mock_wandb, test_config):
             "flows.train.run_training", return_value=AsyncMock()
         ) as mock_run_training,
         patch("boto3.session.Session", return_value=mock_session),
+        patch(
+            "flows.train.get_aws_ssm_param", return_value="mock-wandb-api-key"
+        ) as mock_get_aws_ssm_param,
     ):
         pass_through_kwargs = {
             "wikibase_id": WikibaseID("Q1"),
@@ -31,6 +34,9 @@ async def test_train_on_gpu(mock_s3_client, mock_wandb, test_config):
             config=test_config,
         )
 
+        mock_get_aws_ssm_param.assert_called_once_with(
+            "WANDB_API_KEY", aws_env=AwsEnv.labs
+        )
         mock_run_training.assert_called_once()
         got_kwargs = mock_run_training.call_args.kwargs
         for kwarg, value in pass_through_kwargs.items():
