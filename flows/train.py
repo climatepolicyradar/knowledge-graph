@@ -7,10 +7,11 @@ import boto3
 import wandb
 import yaml
 from prefect import flow
+from pydantic import SecretStr
 
 from flows.config import Config
 from flows.utils import get_logger
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.wikibase import WikibaseConfig
@@ -31,8 +32,7 @@ async def _set_up_training_environment(
         config = await Config.create()
 
     if (
-        not config.wandb_api_key
-        or not config.wikibase_username
+        not config.wikibase_username
         or not config.wikibase_password
         or not config.wikibase_url
         or not config.argilla_api_key
@@ -40,7 +40,10 @@ async def _set_up_training_environment(
     ):
         raise ValueError("Missing values in config.")
 
-    wandb.login(key=config.wandb_api_key.get_secret_value())
+    wandb_api_key = SecretStr(
+        get_aws_ssm_param("WANDB_API_KEY", aws_env=config.aws_env)
+    )
+    wandb.login(key=wandb_api_key.get_secret_value())
 
     wikibase_config = WikibaseConfig(
         username=config.wikibase_username,
