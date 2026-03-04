@@ -112,11 +112,8 @@ class BatchInferenceResult(BaseModel):
     classifier_spec: ClassifierSpec
     """The classifier specification used to process this batch of documents."""
 
-    @property
-    def failed(self) -> bool:
-        """Whether every runnable document in the batch failed."""
-        runnable = len(self.batch_document_stems) - len(self.noop_document_stems)
-        return runnable > 0 and len(self.successful_document_stems) == 0
+    failed: bool = False
+    """Whether every runnable document in the batch failed."""
 
 
 def did_inference_fail(
@@ -1079,6 +1076,7 @@ async def _inference_batch_of_documents(
         noop_document_stems=[n.document_stem for n in noops],
         failed_document_stems=[stem for stem, _ in all_failures],
         classifier_spec=classifier_spec,
+        failed=len(store_labels_successes) == 0 and len(batch) > len(noops),
     )
 
     if batch_inference_result.failed:
