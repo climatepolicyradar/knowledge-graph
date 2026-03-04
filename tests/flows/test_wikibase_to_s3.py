@@ -36,7 +36,7 @@ async def helper_upload_concept_to_s3(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xdist_group("s3-serial")
+@pytest.mark.no_xdist
 async def test_upload_to_s3(
     mock_s3_async_client,
     mock_async_cdn_bucket,
@@ -60,7 +60,7 @@ async def test_upload_to_s3(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xdist_group("s3-serial")
+@pytest.mark.no_xdist
 async def test_delete_from_s3(
     mock_s3_async_client,
     mock_async_cdn_bucket,
@@ -91,7 +91,7 @@ async def test_delete_from_s3(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xdist_group("s3-serial")
+@pytest.mark.no_xdist
 async def test_list_s3_concepts(
     mock_s3_async_client,
     mock_async_cdn_bucket,
@@ -114,7 +114,7 @@ async def test_list_s3_concepts(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xdist_group("s3-serial")
+@pytest.mark.no_xdist
 async def test_wikibase_to_s3__empty_cdn_bucket(
     MockedWikibaseSession,
     mock_async_cdn_bucket,
@@ -134,7 +134,7 @@ async def test_wikibase_to_s3__empty_cdn_bucket(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xdist_group("s3-serial")
+@pytest.mark.no_xdist
 async def test_wikibase_to_s3__repeat_runs(
     MockedWikibaseSession,
     mock_async_cdn_bucket,
@@ -155,7 +155,7 @@ async def test_wikibase_to_s3__repeat_runs(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xdist_group("s3-serial")
+@pytest.mark.no_xdist
 async def test_wikibase_to_s3__overwrite_concept(
     MockedWikibaseSession,
     mock_prefect_slack_webhook,
@@ -180,7 +180,7 @@ async def test_wikibase_to_s3__overwrite_concept(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xdist_group("s3-serial")
+@pytest.mark.no_xdist
 async def test_wikibase_to_s3__extra_concept_removed(
     MockedWikibaseSession,
     mock_async_cdn_bucket,
