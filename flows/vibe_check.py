@@ -261,7 +261,11 @@ async def process_single_concept(
     """
     s3_client = get_s3_client()
     try:
-        wikibase = WikibaseSession()
+        wikibase = WikibaseSession(
+            username=wikibase_config.username,
+            password=wikibase_config.password.get_secret_value(),
+            url=str(wikibase_config.url),
+        )
         concept = wikibase.get_concept(wikibase_id)
         logger.info(f"Loaded concept: {concept}")
 
