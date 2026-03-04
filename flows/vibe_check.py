@@ -246,7 +246,7 @@ async def process_single_concept(
     wikibase_id: WikibaseID,
     passages_dataset: pd.DataFrame,
     passages_embeddings: np.ndarray,
-    embedding_model: SentenceTransformer,
+    embedding_model_name: str,
     wikibase_config: WikibaseConfig,
     argilla_config: ArgillaConfig,
     s3_client: Any,
@@ -269,7 +269,10 @@ async def process_single_concept(
         concept = wikibase.get_concept(wikibase_id)
         logger.info(f"Loaded concept: {concept}")
 
-        concept_embedding = embedding_model.encode(concept.to_markdown())
+        embedding_model = SentenceTransformer(embedding_model_name)
+        concept_embedding = embedding_model.encode(
+            concept.to_markdown(), normalize_embeddings=True
+        )
 
         # Ensure embeddings and concept embedding have compatible dimensions
         if len(passages_embeddings) != len(passages_dataset):
@@ -484,10 +487,8 @@ async def vibe_check_inference(
     passages_embeddings_metadata = load_embeddings_metadata()
     logger.info("Loaded embeddings generation metadata")
 
-    logger.info("Loading embedding model...")
     embedding_model_name = passages_embeddings_metadata["embedding_model_name"]
-    embedding_model = SentenceTransformer(embedding_model_name)
-    logger.info(f"Loaded embedding model: {embedding_model_name}")
+    logger.info(f"Embedding model: {embedding_model_name}")
 
     # Submit a separate inference task for each of the concepts, and then wait for all
     logger.info(
@@ -499,7 +500,7 @@ async def vibe_check_inference(
             wikibase_id=wikibase_id,
             passages_dataset=passages_dataset,
             passages_embeddings=passages_embeddings,
-            embedding_model=embedding_model,
+            embedding_model_name=embedding_model_name,
             wikibase_config=wikibase_config,
             argilla_config=argilla_config,
             s3_client=s3_client,
