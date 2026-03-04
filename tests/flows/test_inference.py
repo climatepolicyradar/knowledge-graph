@@ -887,6 +887,7 @@ async def test_inference_batch_of_documents_cpu_with_failures(
             inference_batch_of_documents_cpu.flow_run_name = (
                 "test-inference-batch-of-documents-cpu-with-failures"
             )
+            inference_batch_of_documents_cpu.retry_delay_seconds = 0
             _ = await inference_batch_of_documents_cpu(
                 batch=batch,
                 config_json=config_json,
