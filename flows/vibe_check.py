@@ -30,6 +30,7 @@ import yaml
 from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 from prefect import flow, task
+from prefect.cache_policies import NO_CACHE
 from prefect.futures import wait
 from prefect.logging import get_logger
 from prefect.task_runners import ThreadPoolTaskRunner
@@ -240,7 +241,7 @@ def load_embeddings_metadata(
     return json.load(io.BytesIO(bytes_from_s3))
 
 
-@task(retries=2, retry_delay_seconds=10)
+@task(retries=2, retry_delay_seconds=10, cache_policy=NO_CACHE)
 async def process_single_concept(
     wikibase_id: WikibaseID,
     passages_dataset: pd.DataFrame,
@@ -433,7 +434,7 @@ async def process_single_concept(
 
 @flow(  # pyright: ignore[reportCallIssue, reportReturnType]
     timeout_seconds=None,
-    task_runner=ThreadPoolTaskRunner(max_workers=10),  # pyright: ignore[reportArgumentType]
+    task_runner=ThreadPoolTaskRunner(max_workers=3),  # pyright: ignore[reportArgumentType]
 )
 async def vibe_check_inference(
     wikibase_ids: Optional[list[str]] = None,
