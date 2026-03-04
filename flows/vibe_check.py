@@ -333,7 +333,10 @@ async def process_single_concept(
             argilla_config=argilla_config,
             s3_client=s3_client,
             force=False,  # Fetch if exists, train if missing
-            evaluate=True,  # Evaluate if we just trained a new model
+            # We don't need to run evaluation during the vibe checking stage. Doing so
+            # before the concept has a proper labelled dataset in argilla will also lead
+            # to the task crashing.
+            evaluate=False,
         )
         logger.info(f"Loaded/trained classifier: {classifier}")
 
