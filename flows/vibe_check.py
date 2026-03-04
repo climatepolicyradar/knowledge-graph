@@ -347,26 +347,19 @@ async def process_single_concept(
         # Run inference for the concept
         logger.info(f"Running inference for {classifier}")
 
-        # Collect all texts into a list for batch prediction
         assert isinstance(selected_passages, pd.DataFrame)
-        texts = [str(row["text_block.text"]) for _, row in selected_passages.iterrows()]
+        texts = selected_passages["text_block.text"].astype(str).tolist()
 
-        # Run predict in batches
         logger.info(f"Making predictions for {len(texts)} passages")
         predicted_spans_list = classifier.predict(texts, show_progress=True)
 
-        # Create labelled passages from batch results
-        labelled_passages: list[LabelledPassage] = []
-        for idx, (_, row) in enumerate(selected_passages.iterrows()):
-            text = texts[idx]
-            predicted_spans = predicted_spans_list[idx]
-            text_block_metadata = {str(k): str(v) for k, v in row.to_dict().items()}
-            labelled_passage = LabelledPassage(
-                text=text,
-                spans=predicted_spans,
-                metadata=text_block_metadata,
+        metadata_records = selected_passages.astype(str).to_dict(orient="records")
+        labelled_passages: list[LabelledPassage] = [
+            LabelledPassage(text=text, spans=predicted_spans, metadata=record)
+            for text, predicted_spans, record in zip(
+                texts, predicted_spans_list, metadata_records
             )
-            labelled_passages.append(labelled_passage)
+        ]
 
         logger.info(f"Generated {len(labelled_passages)} labelled passages")
 
