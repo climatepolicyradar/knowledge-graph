@@ -1185,6 +1185,7 @@ def test_batch_inference_result_failed_property():
         successful_document_stems=[],
         failed_document_stems=[doc1, doc2],
         classifier_spec=classifier_spec,
+        failed=True,
     )
     assert result_all_failed.failed is True
 
