@@ -417,7 +417,7 @@ async def process_single_concept(
         )
         return result
 
-    except (ValueError, RuntimeError, ConnectionError) as e:
+    except Exception as e:
         logger.error(f"Failed to process concept {wikibase_id}: {str(e)}")
         # Return failure result instead of raising exception
         # This prevents one concept failure from stopping others
@@ -510,9 +510,8 @@ async def vibe_check_inference(
         try:
             result = future.result()
             collected_results.append(result)
-        except (ValueError, RuntimeError) as e:
+        except Exception as e:
             logger.error(f"Unexpected error collecting result: {str(e)}")
-            # This shouldn't happen with our error handling in process_single_concept
             continue
 
     # Log summary results
