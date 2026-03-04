@@ -121,7 +121,7 @@ env = [
   "ARGILLA_API_KEY=argilla.apikey",
   "WANDB_API_KEY=test_wandb_api_key",
 ]
-markers = ["vespa", "transformers"]
+markers = ["vespa", "transformers", "no_xdist: tests that are flaky under pytest-xdist and must run without parallelism"]
 asyncio_default_fixture_loop_scope = "function"
 
 [build-system]
