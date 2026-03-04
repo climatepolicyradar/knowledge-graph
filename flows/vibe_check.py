@@ -259,7 +259,6 @@ async def process_single_concept(
     This task is designed to be isolated - if it fails, it won't affect the other
     concept processing tasks.
     """
-    s3_client = get_s3_client()
     try:
         wikibase = WikibaseSession(
             username=wikibase_config.username,
