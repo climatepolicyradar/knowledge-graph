@@ -259,17 +259,18 @@ async def process_single_concept(
     This task is designed to be isolated - if it fails, it won't affect the other
     concept processing tasks.
     """
-    s3_client = get_s3_client()
     try:
         wikibase = WikibaseSession(
             username=wikibase_config.username,
             password=wikibase_config.password.get_secret_value(),
             url=str(wikibase_config.url),
         )
-        concept = wikibase.get_concept(wikibase_id)
+        concept = await wikibase.get_concept_async(wikibase_id)
         logger.info(f"Loaded concept: {concept}")
 
-        concept_embedding = embedding_model.encode(concept.to_markdown())
+        concept_embedding = embedding_model.encode(
+            concept.to_markdown(), normalize_embeddings=True
+        )
 
         # Ensure embeddings and concept embedding have compatible dimensions
         if len(passages_embeddings) != len(passages_dataset):
@@ -332,7 +333,10 @@ async def process_single_concept(
             argilla_config=argilla_config,
             s3_client=s3_client,
             force=False,  # Fetch if exists, train if missing
-            evaluate=True,  # Evaluate if we just trained a new model
+            # We don't need to run evaluation during the vibe checking stage. Doing so
+            # before the concept has a proper labelled dataset in argilla will also lead
+            # to the task crashing.
+            evaluate=False,
         )
         logger.info(f"Loaded/trained classifier: {classifier}")
 
@@ -345,26 +349,19 @@ async def process_single_concept(
         # Run inference for the concept
         logger.info(f"Running inference for {classifier}")
 
-        # Collect all texts into a list for batch prediction
         assert isinstance(selected_passages, pd.DataFrame)
-        texts = [str(row["text_block.text"]) for _, row in selected_passages.iterrows()]
+        texts = selected_passages["text_block.text"].astype(str).tolist()
 
-        # Run predict in batches
         logger.info(f"Making predictions for {len(texts)} passages")
-        predicted_spans_list = classifier.predict(texts, show_progress=True)
+        predicted_spans_list = classifier.predict(texts, show_progress=False)
 
-        # Create labelled passages from batch results
-        labelled_passages: list[LabelledPassage] = []
-        for idx, (_, row) in enumerate(selected_passages.iterrows()):
-            text = texts[idx]
-            predicted_spans = predicted_spans_list[idx]
-            text_block_metadata = {str(k): str(v) for k, v in row.to_dict().items()}
-            labelled_passage = LabelledPassage(
-                text=text,
-                spans=predicted_spans,
-                metadata=text_block_metadata,
+        metadata_records = selected_passages.astype(str).to_dict(orient="records")
+        labelled_passages: list[LabelledPassage] = [
+            LabelledPassage(text=text, spans=predicted_spans, metadata=record)
+            for text, predicted_spans, record in zip(
+                texts, predicted_spans_list, metadata_records
             )
-            labelled_passages.append(labelled_passage)
+        ]
 
         logger.info(f"Generated {len(labelled_passages)} labelled passages")
 
@@ -422,7 +419,7 @@ async def process_single_concept(
         )
         return result
 
-    except (ValueError, RuntimeError, ConnectionError) as e:
+    except Exception as e:
         logger.error(f"Failed to process concept {wikibase_id}: {str(e)}")
         # Return failure result instead of raising exception
         # This prevents one concept failure from stopping others
@@ -484,8 +481,8 @@ async def vibe_check_inference(
     passages_embeddings_metadata = load_embeddings_metadata()
     logger.info("Loaded embeddings generation metadata")
 
-    logger.info("Loading embedding model...")
     embedding_model_name = passages_embeddings_metadata["embedding_model_name"]
+    logger.info(f"Loading embedding model: {embedding_model_name}")
     embedding_model = SentenceTransformer(embedding_model_name)
     logger.info(f"Loaded embedding model: {embedding_model_name}")
 
@@ -517,9 +514,8 @@ async def vibe_check_inference(
         try:
             result = future.result()
             collected_results.append(result)
-        except (ValueError, RuntimeError) as e:
+        except Exception as e:
             logger.error(f"Unexpected error collecting result: {str(e)}")
-            # This shouldn't happen with our error handling in process_single_concept
             continue
 
     # Log summary results
