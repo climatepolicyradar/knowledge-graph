@@ -350,7 +350,7 @@ async def process_single_concept(
         texts = selected_passages["text_block.text"].astype(str).tolist()
 
         logger.info(f"Making predictions for {len(texts)} passages")
-        predicted_spans_list = classifier.predict(texts, show_progress=True)
+        predicted_spans_list = classifier.predict(texts, show_progress=False)
 
         metadata_records = selected_passages.astype(str).to_dict(orient="records")
         labelled_passages: list[LabelledPassage] = [
