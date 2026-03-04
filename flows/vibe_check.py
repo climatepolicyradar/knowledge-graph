@@ -265,7 +265,7 @@ async def process_single_concept(
             password=wikibase_config.password.get_secret_value(),
             url=str(wikibase_config.url),
         )
-        concept = wikibase.get_concept(wikibase_id)
+        concept = await wikibase.get_concept_async(wikibase_id)
         logger.info(f"Loaded concept: {concept}")
 
         embedding_model = SentenceTransformer(embedding_model_name)
