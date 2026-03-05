@@ -97,6 +97,9 @@ async def test_run_training(
     mock_classifier.version = None
     # Set model_name to a non-OpenRouter model to avoid pricing lookups
     mock_classifier.model_name = "gpt-4"
+    mock_classifier.pipeline = Mock()
+    mock_classifier.model = Mock()
+    mock_classifier.model.config.to_dict.return_value = {"config_data": 768}
 
     mock_concept = Mock()
     mock_concept.id = "5d4xcy5g"
@@ -163,6 +166,7 @@ async def test_run_training(
             "classifier_name": mock_classifier.name,
             "concept_id": mock_classifier.concept.id,
             "concept_wikibase_revision": mock_classifier.concept.wikibase_revision,
+            "model_config": {"config_data": 768},
             **extra_metadata,
         }
 
@@ -181,6 +185,9 @@ def test_create_and_link_model_artifact():
     mock_run = Mock()
     mock_classifier = Mock()
     mock_classifier.name = "test_classifier"
+    mock_classifier.pipeline = Mock()
+    mock_classifier.model = Mock()
+    mock_classifier.model.config.to_dict.return_value = {"config_data": 768}
     mock_classifier.concept = Mock()
     mock_classifier.concept.id = "5d4xcy5g"
     mock_classifier.concept.wikibase_revision = 12300
@@ -214,6 +221,7 @@ def test_create_and_link_model_artifact():
                 "classifier_name": "test_classifier",
                 "concept_id": "5d4xcy5g",
                 "concept_wikibase_revision": 12300,
+                "model_config": {"config_data": 768},
             },
         )
 

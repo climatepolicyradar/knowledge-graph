@@ -243,6 +243,11 @@ def create_and_link_model_artifact(
         Console().log("Adding GPU requirement to metadata")
         compute_environment: ComputeEnvironment = {"gpu": True}
         metadata["compute_environment"] = compute_environment
+    if getattr(classifier, "pipeline", None):  # is a transformer model
+        if model := getattr(classifier, "model", None):
+            Console().log("Adding BERT model config to metadata")
+            metadata["model_config"] = model.config.to_dict()
+            # Note: some details are also viewable on the associated wandb run
 
     artifact = wandb.Artifact(
         name=classifier.id,
