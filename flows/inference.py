@@ -743,7 +743,12 @@ def _get_labelled_passage_from_prediction(
 
 
 def is_noop_document(document: BaseParserOutput) -> bool:
-    """Return a reason string if the document should be skipped, or None if it's valid."""
+    """
+    Determine whether a document can run through inference.
+
+    This is a check on the text to ensure it is valid. If text is not valid then
+    True will be returned to indicate that no operation should occur on the document.
+    """
     no_text_and_no_languages = (
         not document.languages
         and document.pdf_data is None
