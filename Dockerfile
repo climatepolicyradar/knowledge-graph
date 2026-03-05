@@ -1,5 +1,5 @@
 # Builder stage with full image, as we need compilation software
-FROM python:3.13-bookworm@sha256:aba8a0cd72f259c2737c8a47050652036c8bc8266a4f39291523a45cf8081960 AS builder
+FROM python:3.14-bookworm@sha256:6cc50e409fb008d64c8c119c33488cf0e2288fb657a9ceeae237d381f842713e AS builder
 COPY --from=ghcr.io/astral-sh/uv@sha256:f64ad69940b634e75d2e4d799eb5238066c5eeda49f76e782d4873c3d014ea33 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1
@@ -19,7 +19,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install -r pyproject.toml --extra transformers_gpu --extra coiled --link-mode=copy
 
 # Runtime stage with slim image
-FROM python:3.13-slim-bookworm@sha256:9b8102b7b3a61db24fe58f335b526173e5aeaaf7d13b2fbfb514e20f84f5e386
+FROM python:3.14-slim-bookworm@sha256:5404df00cf00e6e7273375f415651837b4d192ac6859c44d3b740888ac798c99
 
 WORKDIR /app
 
