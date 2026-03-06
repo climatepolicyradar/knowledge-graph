@@ -41,6 +41,7 @@ from flows.inference import (
     get_existing_inference_results,
     inference,
     inference_batch_of_documents_cpu,
+    is_noop_document,
     list_bucket_file_stems,
     load_classifier_from_model_registry,
     load_document,
@@ -351,6 +352,49 @@ async def test_load_classifier__existing_classifier(
     assert classifier.id == classifier_id
 
 
+_BASE_DOC_KWARGS = dict(
+    document_id="test",
+    document_metadata={},
+    document_name="test",
+    document_slug="test",
+    document_description="test",
+)
+_STUB_PDF_DATA = PDFData(page_metadata=[], md5sum="", text_blocks=[])
+
+
+@pytest.mark.parametrize(
+    "doc_overrides, expected_result",
+    [
+        pytest.param(
+            dict(
+                languages=["en"],
+                document_content_type="application/pdf",
+                pdf_data=_STUB_PDF_DATA,
+            ),
+            False,
+            id="english_pdf_valid",
+        ),
+        pytest.param(
+            dict(languages=[]),
+            True,
+            id="no_languages_no_data",
+        ),
+        pytest.param(
+            dict(
+                languages=["fr"],
+                document_content_type="application/pdf",
+                pdf_data=_STUB_PDF_DATA,
+            ),
+            True,
+            id="non_english",
+        ),
+    ],
+)
+def test_is_noop_document(doc_overrides: dict, expected_result: bool):
+    doc = BaseParserOutput(**(_BASE_DOC_KWARGS | doc_overrides))
+    assert expected_result == is_noop_document(doc)
+
+
 @pytest.mark.asyncio
 async def test_load_document(
     test_config, mock_async_bucket_documents, mock_s3_async_client
@@ -363,7 +407,7 @@ async def test_load_document(
         wandb_registry_version="v1",
     )
 
-    # Invalid doc
+    # Noop doc
     invalid_document_stem = Path(invalid_doc).stem
     invalid_document_result = SingleDocumentInferenceResult(
         document_stem=DocumentStem(invalid_document_stem),
@@ -371,13 +415,12 @@ async def test_load_document(
         labelled_passages=[],
         classifier_spec=classifier_spec,
     )
-
-    with pytest.raises(ValueError, match="non-English language"):
-        await load_document(
-            test_config,
-            document_result=invalid_document_result,
-            s3_client=mock_s3_async_client,
-        )
+    result = await load_document(
+        test_config,
+        document_result=invalid_document_result,
+        s3_client=mock_s3_async_client,
+    )
+    assert result.noop
 
     # Valid Doc
     valid_document_stem = Path(valid_doc).stem
@@ -1063,8 +1106,8 @@ async def test__inference_batch_of_documents(
     assert result.successful_document_stems == batch
     assert result.classifier_spec == classifier_spec
     assert result.failed is False, "All documents succeeded, so failed should be False"
-    assert result.failed_document_count == 0
-    assert result.all_document_count == 1
+    assert result.failed_document_stems == []
+    assert len(result.batch_document_stems) == 1
 
     # Verify W&B was initialized
     mock_wandb_init.assert_called_once_with(
@@ -1094,7 +1137,7 @@ async def test__inference_batch_of_documents(
         assert result_partial.batch_document_stems == batch
         assert len(result_partial.successful_document_stems) == 1
         assert result_partial.failed is False  # Not failed because some succeeded
-        assert result_partial.failed_document_count > 0
+        assert len(result_partial.failed_document_stems) > 0
     mock_get_aws_ssm_param.assert_called_once_with(
         "WANDB_API_KEY", aws_env=test_config.aws_env
     )
@@ -1131,6 +1174,7 @@ def test_batch_inference_result_failed_property():
     result_partial = BatchInferenceResult(
         batch_document_stems=[doc1, doc2],
         successful_document_stems=[doc1],
+        failed_document_stems=[doc2],
         classifier_spec=classifier_spec,
     )
     assert result_partial.failed is False
@@ -1139,13 +1183,24 @@ def test_batch_inference_result_failed_property():
     result_all_failed = BatchInferenceResult(
         batch_document_stems=[doc1, doc2],
         successful_document_stems=[],
+        failed_document_stems=[doc1, doc2],
         classifier_spec=classifier_spec,
+        failed=True,
     )
     assert result_all_failed.failed is True
 
+    # All noops - not failed
+    result_all_noops = BatchInferenceResult(
+        batch_document_stems=[doc1, doc2],
+        successful_document_stems=[],
+        noop_document_stems=[doc1, doc2],
+        classifier_spec=classifier_spec,
+    )
+    assert result_all_noops.failed is False
 
-def test_batch_inference_result_failed_document_stems():
-    """Test BatchInferenceResult.failed_document_stems property."""
+
+def test_batch_inference_result_fields():
+    """Test BatchInferenceResult stores all outcome fields correctly."""
     classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q788"),
         classifier_id="aaaa2222",
@@ -1156,43 +1211,17 @@ def test_batch_inference_result_failed_document_stems():
     doc2 = DocumentStem("TEST.doc.1.2")
     doc3 = DocumentStem("TEST.doc.1.3")
 
-    # All successful
-    result = BatchInferenceResult(
-        batch_document_stems=[doc1, doc2, doc3],
-        successful_document_stems=[doc1, doc2, doc3],
-        classifier_spec=classifier_spec,
-    )
-    assert result.failed_document_stems == []
-
-    # Some failed
     result = BatchInferenceResult(
         batch_document_stems=[doc1, doc2, doc3],
         successful_document_stems=[doc1],
+        noop_document_stems=[doc2],
+        failed_document_stems=[doc3],
         classifier_spec=classifier_spec,
     )
-    assert set(result.failed_document_stems) == {doc2, doc3}
-    assert result.failed_document_count == 2
-    assert not result.failed
-
-
-def test_batch_inference_result_all_document_count():
-    """Test BatchInferenceResult.all_document_count property."""
-    classifier_spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q788"),
-        classifier_id="aaaa2222",
-        wandb_registry_version="v7",
-    )
-
-    doc1 = DocumentStem("TEST.doc.1.1")
-    doc2 = DocumentStem("TEST.doc.1.2")
-
-    result = BatchInferenceResult(
-        batch_document_stems=[doc1, doc2],
-        successful_document_stems=[doc1],
-        classifier_spec=classifier_spec,
-    )
-    assert result.all_document_count == 2
-    assert len(result.successful_document_stems) == 1
+    assert result.successful_document_stems == [doc1]
+    assert result.noop_document_stems == [doc2]
+    assert result.failed_document_stems == [doc3]
+    assert len(result.batch_document_stems) == 3
     assert not result.failed
 
 
@@ -1834,50 +1863,61 @@ def test_gather_document_stems() -> None:
     ]
 
     # No results from any batches
-    successful_document_stems, failed_document_stems = gather_document_stems(
-        parameterised_batches=parameterised_batches,
-        requested_document_stems=set(requested_document_stems),
-        batch_inference_results=[],  # No results
+    successful_document_stems, failed_document_stems, noop_stems = (
+        gather_document_stems(
+            parameterised_batches=parameterised_batches,
+            requested_document_stems=set(requested_document_stems),
+            batch_inference_results=[],  # No results
+        )
     )
     assert successful_document_stems == set(), "No results should return an empty set"
     assert failed_document_stems == set(requested_document_stems)
+    assert noop_stems == set()
 
     # No documents successful for any batches
     all_failed_batch_1 = BatchInferenceResult(
         batch_document_stems=requested_document_stems,
-        successful_document_stems=[],  # No success
+        successful_document_stems=[],
+        failed_document_stems=requested_document_stems,
         classifier_spec=q100_classifier_spec,
     )
     all_failed_batch_2 = BatchInferenceResult(
         batch_document_stems=requested_document_stems,
-        successful_document_stems=[],  # No success
+        successful_document_stems=[],
+        failed_document_stems=requested_document_stems,
         classifier_spec=q101_classifier_spec,
     )
-    successful_document_stems, failed_document_stems = gather_document_stems(
-        parameterised_batches=parameterised_batches,
-        requested_document_stems=set(requested_document_stems),
-        batch_inference_results=[all_failed_batch_1, all_failed_batch_2],
+    successful_document_stems, failed_document_stems, noop_stems = (
+        gather_document_stems(
+            parameterised_batches=parameterised_batches,
+            requested_document_stems=set(requested_document_stems),
+            batch_inference_results=[all_failed_batch_1, all_failed_batch_2],
+        )
     )
     assert successful_document_stems == set(), (
         "All failures should return no successful documents"
     )
     assert len(failed_document_stems) == len(requested_document_stems)
+    assert noop_stems == set()
 
-    # Only some batch results
+    # Only some batch results — q100 has no result (crashed), q101 succeeded
     q101_batch_success = BatchInferenceResult(
         batch_document_stems=requested_document_stems,
         successful_document_stems=requested_document_stems,
         classifier_spec=q101_classifier_spec,
     )
-    successful_document_stems, failed_document_stems = gather_document_stems(
-        parameterised_batches=parameterised_batches,
-        requested_document_stems=set(requested_document_stems),
-        batch_inference_results=[q101_batch_success],  # No results for q100
+    successful_document_stems, failed_document_stems, noop_stems = (
+        gather_document_stems(
+            parameterised_batches=parameterised_batches,
+            requested_document_stems=set(requested_document_stems),
+            batch_inference_results=[q101_batch_success],  # No results for q100
+        )
     )
     assert successful_document_stems == set(), (
-        "Only documents that succeeded for all classifiers should be marked as successful"
+        "Missing batch results should count as failures"
     )
     assert len(failed_document_stems) == len(requested_document_stems)
+    assert noop_stems == set()
 
     # Not all documents successful for all batches
     q100_batch_success = BatchInferenceResult(
@@ -1887,18 +1927,22 @@ def test_gather_document_stems() -> None:
     )
     q101_batch_partial_success = BatchInferenceResult(
         batch_document_stems=requested_document_stems,
-        successful_document_stems=requested_document_stems[1:],  # Partial success
+        successful_document_stems=requested_document_stems[1:],
+        failed_document_stems=requested_document_stems[:1],
         classifier_spec=q101_classifier_spec,
     )
-    successful_document_stems, failed_document_stems = gather_document_stems(
-        parameterised_batches=parameterised_batches,
-        requested_document_stems=set(requested_document_stems),
-        batch_inference_results=[q100_batch_success, q101_batch_partial_success],
+    successful_document_stems, failed_document_stems, noop_stems = (
+        gather_document_stems(
+            parameterised_batches=parameterised_batches,
+            requested_document_stems=set(requested_document_stems),
+            batch_inference_results=[q100_batch_success, q101_batch_partial_success],
+        )
     )
     assert successful_document_stems == set(requested_document_stems[1:]), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
     assert failed_document_stems == set(requested_document_stems[:1])
+    assert noop_stems == set()
 
     # All documents successful for all batches
     q100_batch_success = BatchInferenceResult(
@@ -1906,15 +1950,46 @@ def test_gather_document_stems() -> None:
         successful_document_stems=requested_document_stems,
         classifier_spec=q100_classifier_spec,
     )
-    successful_document_stems, failed_document_stems = gather_document_stems(
-        parameterised_batches=parameterised_batches,
-        requested_document_stems=set(requested_document_stems),
-        batch_inference_results=[q100_batch_success, q101_batch_success],
+    successful_document_stems, failed_document_stems, noop_stems = (
+        gather_document_stems(
+            parameterised_batches=parameterised_batches,
+            requested_document_stems=set(requested_document_stems),
+            batch_inference_results=[q100_batch_success, q101_batch_success],
+        )
     )
     assert successful_document_stems == set(requested_document_stems), (
         "Only documents that succeeded for all classifiers should be marked as successful"
     )
     assert failed_document_stems == set()
+    assert noop_stems == set()
+
+    # Some documents are noops, rest succeed
+    noop_doc = requested_document_stems[0]
+    runnable_docs = requested_document_stems[1:]
+    q100_batch_with_noops = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=runnable_docs,
+        noop_document_stems=[noop_doc],
+        classifier_spec=q100_classifier_spec,
+    )
+    q101_batch_with_noops = BatchInferenceResult(
+        batch_document_stems=requested_document_stems,
+        successful_document_stems=runnable_docs,
+        noop_document_stems=[noop_doc],
+        classifier_spec=q101_classifier_spec,
+    )
+    successful_document_stems, failed_document_stems, noop_stems = (
+        gather_document_stems(
+            parameterised_batches=parameterised_batches,
+            requested_document_stems=set(requested_document_stems),
+            batch_inference_results=[q100_batch_with_noops, q101_batch_with_noops],
+        )
+    )
+    assert successful_document_stems == set(runnable_docs), (
+        "Noop documents should not appear in successful stems"
+    )
+    assert failed_document_stems == set()
+    assert noop_stems == {noop_doc}
 
 
 def test_process_single_document_inference():

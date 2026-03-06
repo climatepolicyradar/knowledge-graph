@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-from collections import defaultdict
 from collections.abc import Generator, Sequence
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -99,62 +98,43 @@ class BatchInferenceResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     batch_document_stems: list[DocumentStem]
-    """List of document stems that were included in this batch for processing.
-    
-    These represent all the documents that were assigned to this batch,
-    regardless of whether processing succeeded or failed.
-    """
+    """All document stems assigned to this batch, regardless of outcome."""
 
     successful_document_stems: list[DocumentStem]
-    """List of document stems that were processed successfully in this batch."""
+    """Document stems that were processed successfully."""
+
+    noop_document_stems: list[DocumentStem] = []
+    """Document stems that were skipped (e.g. non-English, no valid text)."""
+
+    failed_document_stems: list[DocumentStem] = []
+    """Document stems that failed during load, inference, or storage."""
 
     classifier_spec: ClassifierSpec
     """The classifier specification used to process this batch of documents."""
 
-    @property
-    def all_document_count(self) -> int:
-        """Count of all document stems"""
-        return len(self.batch_document_stems)
-
-    @property
-    def failed_document_count(self) -> int:
-        """Count of failed document stems"""
-        return len(self.failed_document_stems)
-
-    @property
-    def failed_document_stems(self) -> list[DocumentStem]:
-        """List of requested document stems that where not successful."""
-        return list(
-            set(self.batch_document_stems) - set(self.successful_document_stems)
-        )
-
-    @property
-    def failed(self) -> bool:
-        """Whether the batch failed, True if failed."""
-
-        documents_sent_for_inference: bool = len(self.batch_document_stems) > 0
-        no_successful_documents: bool = len(self.successful_document_stems) == 0
-
-        return documents_sent_for_inference and no_successful_documents
+    failed: bool = False
+    """Whether every runnable document in the batch failed."""
 
 
 def did_inference_fail(
     batch_inference_results: list[BatchInferenceResult],
     requested_document_stems: set[DocumentStem],
     successful_document_stems: set[DocumentStem],
+    noop_document_stems: set[DocumentStem] | None = None,
 ) -> bool:
     """
     Whether the Inference run failed.
 
     True equates to a failed run.
     """
+    accounted_for = len(successful_document_stems) + len(noop_document_stems or set())
 
     # Check if no batch results, but if all documents were
-    # skipped/cached, that's okay.
+    # skipped/cached/nooped, that's okay.
     if not batch_inference_results:
         return not (
             len(requested_document_stems) > 0
-            and len(requested_document_stems) == len(successful_document_stems)
+            and len(requested_document_stems) == accounted_for
         )
 
     # Check if any batch failed
@@ -162,7 +142,7 @@ def did_inference_fail(
         return True
 
     # Check if document counts don't match
-    if len(requested_document_stems) != len(successful_document_stems):
+    if len(requested_document_stems) != accounted_for:
         return True
 
     return False
@@ -172,52 +152,50 @@ def gather_document_stems(
     parameterised_batches: list[ParameterisedFlow],
     requested_document_stems: set[DocumentStem],
     batch_inference_results: list[BatchInferenceResult],
-) -> tuple[set[DocumentStem], set[DocumentStem]]:
+) -> tuple[set[DocumentStem], set[DocumentStem], set[DocumentStem]]:
     """
-    Looks across all batches to get successful & failed documents.
+    Looks across all batches to get successful, failed, and noop documents.
 
-    The parameterised batches contain the details of which documents were expected
-    to be processed by each classifier. We use this therefore to determine explicitly
-    whether we have a successful result or a failure from the BatchInferenceResults.
+    Reads outcomes directly from each BatchInferenceResult. Tracks results
+    per-classifier so that a stem succeeding for one classifier doesn't
+    mask a missing result for another. Also catches stems from batches
+    that crashed entirely and returned no result.
     """
-
-    # Collect the successful document stems for each classifier.
-    successes_by_classifier: dict[ClassifierSpec, set[DocumentStem]] = defaultdict(set)
-    for batch_inference_result in batch_inference_results:
-        successes_by_classifier[batch_inference_result.classifier_spec].update(
-            batch_inference_result.successful_document_stems
-        )
-
-    # Collect the unsuccessful document stems where an expected success for a classifier
-    #  was not found.
     failed_document_stems: set[DocumentStem] = set()
+    noop_document_stems: set[DocumentStem] = set()
+
+    # Index accounted-for stems per classifier from returned results.
+    accounted_by_classifier: dict[ClassifierSpec, set[DocumentStem]] = {}
+    for result in batch_inference_results:
+        accounted = accounted_by_classifier.setdefault(result.classifier_spec, set())
+        accounted.update(result.successful_document_stems)
+        accounted.update(result.noop_document_stems)
+        accounted.update(result.failed_document_stems)
+        failed_document_stems.update(result.failed_document_stems)
+        noop_document_stems.update(result.noop_document_stems)
+
+    # Any stem in a parameterised batch but not accounted for under that
+    # batch's classifier came from a batch that crashed without returning
+    # a BatchInferenceResult.
     for parameterised_batch in parameterised_batches:
         classifier_spec_json = parameterised_batch.params.get("classifier_spec_json")
         if classifier_spec_json is None:
             raise KeyError(
                 f"'classifier_spec_json' not found in parameterised batch: {parameterised_batch.params}"
             )
-
         batch_document_stems = parameterised_batch.params.get("batch")
         if batch_document_stems is None:
             raise KeyError(
                 f"'batch' not found in parameterised batch: {parameterised_batch.params}"
             )
-
         classifier_spec = ClassifierSpec(**classifier_spec_json)
-        classifier_successful_document_stems: set[DocumentStem] = (
-            successes_by_classifier[classifier_spec]
-        )
+        accounted = accounted_by_classifier.get(classifier_spec, set())
+        failed_document_stems.update(set(batch_document_stems) - accounted)
 
-        failed_document_stems.update(
-            set(batch_document_stems) - classifier_successful_document_stems
-        )
-
-    # Collect the successful document stems as the sum of the expected document stems
-    #   minus the unsuccessful document stems.
-    successful_documents = requested_document_stems - failed_document_stems
-
-    return successful_documents, failed_document_stems
+    successful_documents = (
+        requested_document_stems - failed_document_stems - noop_document_stems
+    )
+    return successful_documents, failed_document_stems, noop_document_stems
 
 
 async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client):
@@ -598,6 +576,7 @@ class SingleDocumentInferenceResult(BaseModel):
     labelled_passages: Sequence[LabelledPassage]
     document_stem: DocumentStem
     classifier_spec: ClassifierSpec
+    noop: bool = False  # Flag nothing was done / needs doing
 
 
 def generate_s3_uri_output(
@@ -763,6 +742,30 @@ def _get_labelled_passage_from_prediction(
     )
 
 
+def is_noop_document(document: BaseParserOutput) -> bool:
+    """
+    Determine whether a document can run through inference.
+
+    This is a check on the text to ensure it is valid. If text is not valid then
+    True will be returned to indicate that no operation should occur on the document.
+    """
+    no_text_and_no_languages = (
+        not document.languages
+        and document.pdf_data is None
+        and document.html_data is None
+    )
+    html_and_invalid_text = (
+        document.html_data is not None and not document.html_data.has_valid_text
+    )
+    if no_text_and_no_languages or html_and_invalid_text:  # No valid text
+        return True
+
+    if document.languages != ["en"]:  # Non valid language
+        return True
+
+    return False
+
+
 async def load_document(
     config: Config, document_result: SingleDocumentInferenceResult, s3_client: S3Client
 ) -> SingleDocumentInferenceResult:
@@ -774,28 +777,9 @@ async def load_document(
     content = await download_s3_file(config=config, key=file_key, s3_client=s3_client)
     document = BaseParserOutput.model_validate_json(content)
 
-    # Don't run inference on documents that have no text or languages as well as HTML
-    # documents with no valid text.
-    no_text_and_no_languages: bool = (
-        not document.languages
-        and document.pdf_data is None
-        and document.html_data is None
-    )
-    html_and_invalid_text: bool = (
-        document.html_data is not None and not document.html_data.has_valid_text
-    )
-    if no_text_and_no_languages or html_and_invalid_text:
-        raise ValueError(
-            f"Cannot run inference on {document_result.document_stem} as it has no valid text: "
-            f"{no_text_and_no_languages=}, {html_and_invalid_text=}"
-        )
+    if is_noop_document(document):
+        document_result.noop = True
 
-    # Raise on non-English documents
-    if document.languages != ["en"]:
-        raise ValueError(
-            f"Cannot run inference on {document_result.document_stem} as it has non-English language: "
-            f"{document.languages}"
-        )
     document_result.document = document
     return document_result
 
@@ -994,12 +978,21 @@ async def _inference_batch_of_documents(
         loads_unknown_failures,
     ) = process_single_document_inference(loads_results)
 
-    # Validate all documents are loaded or handled
+    # Validate all documents are loaded or handled, and separate noops
+    runnable: list[SingleDocumentInferenceResult] = []
+    noops: list[SingleDocumentInferenceResult] = []
     for load_result in loads_successes:
         if not load_result.document:
             raise ValueError(
                 f"Document load failed with an unhandled exception {load_result.document_stem}"
             )
+        if load_result.noop:
+            noops.append(load_result)
+        else:
+            runnable.append(load_result)
+
+    if noops:
+        logger.info(f"Skipping inference for {len(noops)} noop document(s)")
 
     # Run Inference
     tasks = [
@@ -1013,7 +1006,7 @@ async def _inference_batch_of_documents(
                 ),
             ),
         )
-        for load_result in loads_successes
+        for load_result in runnable
     ]
     inferences_results: list[
         tuple[DocumentStem, Exception | SingleDocumentInferenceResult] | BaseException
@@ -1085,7 +1078,10 @@ async def _inference_batch_of_documents(
     batch_inference_result = BatchInferenceResult(
         batch_document_stems=batch,
         successful_document_stems=[i.document_stem for i in store_labels_successes],
+        noop_document_stems=[n.document_stem for n in noops],
+        failed_document_stems=[stem for stem, _ in all_failures],
         classifier_spec=classifier_spec,
+        failed=len(store_labels_successes) == 0 and len(batch) > len(noops),
     )
 
     if batch_inference_result.failed:
@@ -1494,10 +1490,12 @@ async def inference(
         else:
             failed_classifier_specs.append(spec)
 
-    (successful_document_stems, failed_document_stems) = gather_document_stems(
-        parameterised_batches=parameterised_batches,
-        requested_document_stems=requested_document_stems,
-        batch_inference_results=all_successes,
+    (successful_document_stems, failed_document_stems, all_noop_documents) = (
+        gather_document_stems(
+            parameterised_batches=parameterised_batches,
+            requested_document_stems=requested_document_stems,
+            batch_inference_results=all_successes,
+        )
     )
 
     # Add skipped documents to successful stems, as they have
@@ -1509,6 +1507,7 @@ async def inference(
         batch_inference_results=all_successes,
         requested_document_stems=requested_document_stems,
         successful_document_stems=successful_document_stems,
+        noop_document_stems=all_noop_documents,
     )
 
     await create_inference_summary_artifact(
@@ -1516,6 +1515,7 @@ async def inference(
         requested_document_stems=list(requested_document_stems),
         successful_documents=successful_document_stems,
         failed_documents=failed_document_stems,
+        noop_documents=all_noop_documents,
         classifier_specs=list(classifier_specs),
         successful_classifier_specs=successful_classifier_specs,
         failed_classifier_specs=failed_classifier_specs,
@@ -1541,9 +1541,6 @@ async def inference(
                 "failed_classifiers_count": len(failed_classifier_specs),
                 "successful_batches": len(all_raw_successes),
                 "failed_batches": len(all_raw_failures),
-                "successful_documents": f"{len(successful_document_stems)} / {len(requested_document_stems)}",
-                "failed_documents": f"{len(failed_document_stems)} / {len(requested_document_stems)}",
-                "skipped_documents": f"{sum(len(stems) for stems in skipped_by_cache.values())}",
             },
             data={
                 "successful_document_stems": successful_document_stems,
@@ -1591,6 +1588,7 @@ async def create_inference_summary_artifact(
     requested_document_stems: list[DocumentStem],
     successful_documents: set[DocumentStem],
     failed_documents: set[DocumentStem],
+    noop_documents: set[DocumentStem],
     classifier_specs: list[ClassifierSpec],
     successful_classifier_specs: list[ClassifierSpec],
     failed_classifier_specs: list[ClassifierSpec],
@@ -1601,6 +1599,7 @@ async def create_inference_summary_artifact(
     """Create an artifact with a summary about the inference run."""
 
     total_skipped_by_cache = sum(len(stems) for stems in skipped_by_cache.values())
+    total_noop = len(noop_documents)
     total_documents_to_process = len(requested_document_stems)
 
     # Format the overview information as a string for the description
@@ -1610,6 +1609,7 @@ async def create_inference_summary_artifact(
 - **Environment**: {config.aws_env.value}
 - **Total documents to process**: {total_documents_to_process}
 - **Total documents skipped (cached)**: {total_skipped_by_cache}
+- **Total documents skipped (noop)**: {total_noop}
 - **Total successful documents**: {len(successful_documents)}
 - **Total failed documents**: {len(failed_documents)}
 - **Total classifiers**: {len(classifier_specs)}
