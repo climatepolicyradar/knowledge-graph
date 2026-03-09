@@ -1617,6 +1617,16 @@ async def sync_classifiers_profiles(
             auto_merge=automerge_classifier_specs_pr,
         )
 
+        logger.info("Syncing updated classifier specs to s3.")
+        s3_result = await export_classifier_specs_to_s3(
+            classifier_specs=updated_classifier_specs,
+            classifier_specs_archive_path=classifier_specs_archive_path,
+        )
+        if is_err(s3_result):
+            logger.error(f"failed to export to s3: {unwrap_err(s3_result)}")
+        else:
+            logger.info(f"exported classifier specs to {unwrap_ok(s3_result)}")
+
     vespa_results = []
 
     if is_err(cs_pr_results):
@@ -1636,16 +1646,6 @@ async def sync_classifiers_profiles(
             )
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
-
-    if not vespa_errors:
-        s3_result = await export_classifier_specs_to_s3(
-            classifier_specs=updated_classifier_specs,
-            classifier_specs_archive_path=classifier_specs_archive_path,
-        )
-        if is_err(s3_result):
-            logger.error(f"failed to export to s3: {unwrap_err(s3_result)}")
-        else:
-            logger.info(f"exported classifier specs to {unwrap_ok(s3_result)}")
 
     # The default, assuming there were no Vespa successes
     event: Result[Event | None, Error] = Ok(None)
