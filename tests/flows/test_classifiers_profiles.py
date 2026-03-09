@@ -1,3 +1,4 @@
+import json
 import re
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
@@ -18,6 +19,7 @@ from flows.classifiers_profiles import (
     create_vespa_profile_mappings,
     demote_classifier_profile,
     emit_finished,
+    export_classifier_specs_to_s3,
     format_error,
     get_classifiers_profiles,
     handle_classifier_profile_action,
@@ -32,6 +34,7 @@ from flows.classifiers_profiles import (
     wandb_validation,
 )
 from flows.compare_result_operation import Demote, Ignore, Promote, Update
+from flows.utils import S3Uri
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
@@ -1162,6 +1165,7 @@ async def test_send_classifiers_profile_slack_alert_success():
         {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
     ]
     pr_results: Result[int | None, Error] = Err(Error(msg="PR error", metadata={}))
+    s3_result: Result[str | None, Error] = Err(Error(msg="S3 error", metadata={}))
 
     with (
         patch(
@@ -1185,6 +1189,7 @@ async def test_send_classifiers_profile_slack_alert_success():
             upload_to_vespa=True,
             event=Mock(),
             cs_pr_results=pr_results,
+            s3_result=s3_result,
         )
 
         mock_slack_client.chat_postMessage.assert_any_call(
@@ -1217,8 +1222,14 @@ async def test_send_classifiers_profile_slack_alert_success():
             text="PR Errors: 1 issues found",
             blocks=ANY,
         )
+        mock_slack_client.chat_postMessage.assert_any_call(
+            channel="alerts-platform-production",
+            thread_ts="12345",
+            text="S3 sync Errors: 1 issues found",
+            blocks=ANY,
+        )
         assert spy_post_errors_main.call_count == 2
-        assert spy_post_errors_thread.call_count == 4
+        assert spy_post_errors_thread.call_count == 5
 
 
 @pytest.mark.asyncio
@@ -1253,6 +1264,7 @@ async def test_send_classifiers_profile_slack_alert__slack_failure():
             upload_to_vespa=True,
             event=Mock(),
             cs_pr_results=Mock(),
+            s3_result=Mock(),
         )
 
         mock_slack_client.chat_postMessage.assert_called_once_with(
@@ -1327,6 +1339,11 @@ async def test_sync_classifiers_profiles(
         ),
     ]
 
+    # mock S3 export
+    mock_export_to_s3 = AsyncMock(
+        return_value=Ok("s3://bucket/key/classifier_specs.json")
+    )
+
     with (
         patch(
             "flows.classifiers_profiles.WikibaseSession",
@@ -1358,6 +1375,10 @@ async def test_sync_classifiers_profiles(
             "flows.classifiers_profiles.update_vespa_with_classifiers_profiles",
             wraps=update_vespa_with_classifiers_profiles,
         ) as spy_update_vespa_with_classifiers_profiles,
+        patch(
+            "flows.classifiers_profiles.export_classifier_specs_to_s3",
+            mock_export_to_s3,
+        ) as mock_export_classifier_specs_to_s3,
     ):
         await sync_classifiers_profiles(
             wandb_api_key=mock_wandb_api_key,
@@ -1390,6 +1411,8 @@ async def test_sync_classifiers_profiles(
         mock_create_and_merge_pr.assert_called_once()
         # check vespa called
         spy_update_vespa_with_classifiers_profiles.assert_called_once()
+        # check S3 export called
+        mock_export_classifier_specs_to_s3.assert_called_once()
 
         # check slack messages sent, only validation errors so: 1 main, 1 thread
         assert mock_slack_client.chat_postMessage.call_count == 2
@@ -1408,6 +1431,10 @@ async def test_sync_classifiers_profiles(
         )  # number rows: 2 successes + 3 validation errors
         assert (
             f"**Classifiers Specs PR**: [#{pr_number}]"
+            in artifact_call_args["description"]
+        )
+        assert (
+            "**Classifiers Specs S3 sync**: Classifier specs synced to s3: s3://bucket/key/classifier_specs.json"
             in artifact_call_args["description"]
         )
 
@@ -1473,6 +1500,11 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
         ),
     ]
 
+    # mock S3 export
+    mock_export_to_s3 = AsyncMock(
+        return_value=Ok("s3://bucket/key/classifier_specs.json")
+    )
+
     with (
         patch(
             "flows.classifiers_profiles.WikibaseSession",
@@ -1500,6 +1532,10 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
             "flows.classifiers_profiles.update_vespa_with_classifiers_profiles",
             wraps=update_vespa_with_classifiers_profiles,
         ) as spy_update_vespa_with_classifiers_profiles,
+        patch(
+            "flows.classifiers_profiles.export_classifier_specs_to_s3",
+            mock_export_to_s3,
+        ) as mock_export_classifier_specs_to_s3,
     ):
         with pytest.raises(
             Exception, match="Errors occurred while creating classifiers specs PR"
@@ -1521,6 +1557,8 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
         spy_update_vespa_with_classifiers_profiles.assert_not_called()
         # check create and merge pr called once
         mock_create_and_merge_pr.assert_called_once()
+        # check s3 sync not called
+        mock_export_classifier_specs_to_s3.assert_not_called()
 
         # use artifact call args to check final results
         mock_acreate_table_artifact.assert_called_once()
@@ -1531,6 +1569,149 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
         )  # number rows: 2 successes + 3 validation errors
         assert (
             "**Classifiers Specs PR**: Error creating or merging PR"
+            in artifact_call_args["description"]
+        )
+        assert (
+            "**Classifiers Specs S3 sync**: No s3 sync"
+            in artifact_call_args["description"]
+        )
+
+
+@pytest.mark.asyncio
+async def test_sync_classifiers_profiles__failure_exporting_to_s3(
+    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
+):
+    """Test full sync_classifiers_profiles when s3 export fails"""
+
+    # mock wikibase session and return concepts and classifier ids from calls
+    mock_wikibase_session = AsyncMock()
+    mock_wikibase_session.get_concepts_async.return_value = mock_concepts
+    mock_wikibase_session.get_classifier_ids_async = AsyncMock(
+        side_effect=mock_classifier_ids
+    )
+
+    # mock wandb api key
+    mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
+    mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
+
+    # mock vespa search adaptor for calls to concept_present_in_vespa
+    mock_vespa_search_adapter = Mock(VespaSearchAdapter(instance_url="test-url"))
+    mock_vespa_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
+    mock_vespa_search_adapter.client.asyncio.return_value = AsyncMock()
+
+    # mock create_and_merge_pr results as async function
+    pr_number = 123
+    mock_pr_results = Ok(pr_number)
+    mock_create_and_merge_pr = AsyncMock(return_value=mock_pr_results)
+
+    # wandb validation mocks
+    mock_metadata = {"aws_env": "sandbox", "classifier_name": "ValidClassifier"}
+    mock_artifacts = [
+        Mock(version="v1", metadata=mock_metadata),
+        Mock(version="v2", metadata=mock_metadata),
+    ]
+    mock_api = Mock()
+    mock_api.return_value.artifacts.return_value = mock_artifacts
+
+    mock_artifact = Mock()
+    mock_artifact.metadata = mock_metadata
+    mock_artifact.logged_by.return_value.config = {}
+
+    mock_api.return_value.artifact.return_value = mock_artifact
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage.return_value = {"ok": True, "ts": "12345"}
+
+    mock_updated_specs = [
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v2",
+            concept_id="mmmm5566",
+        ),
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="abcd3456",
+            classifiers_profile="retired",
+            wandb_registry_version="v20",
+            concept_id="mmmm5555",
+        ),
+    ]
+
+    # mock S3 export
+    mock_export_to_s3 = AsyncMock(
+        return_value=Err(Error(msg="failed to export to s3", metadata={}))
+    )
+
+    with (
+        patch(
+            "flows.classifiers_profiles.WikibaseSession",
+            return_value=mock_wikibase_session,
+        ),
+        patch(
+            "flows.classifiers_profiles.load_classifier_specs",
+            side_effect=[[mock_specs], mock_updated_specs],
+        ),
+        patch("wandb.login"),
+        patch("wandb.Api", return_value=mock_api.return_value),
+        patch("flows.classifiers_profiles.refresh_all_available_classifiers"),
+        patch(
+            "flows.classifiers_profiles.create_classifiers_specs_pr.create_and_merge_pr",
+            mock_create_and_merge_pr,
+        ),
+        patch(
+            "flows.classifiers_profiles.get_slack_client",
+            return_value=mock_slack_client,
+        ),
+        patch(
+            "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
+        ) as mock_acreate_table_artifact,
+        patch(
+            "flows.classifiers_profiles.update_vespa_with_classifiers_profiles",
+            wraps=update_vespa_with_classifiers_profiles,
+        ) as spy_update_vespa_with_classifiers_profiles,
+        patch(
+            "flows.classifiers_profiles.export_classifier_specs_to_s3",
+            mock_export_to_s3,
+        ) as mock_export_classifier_specs_to_s3,
+    ):
+        with pytest.raises(
+            Exception, match="Errors occurred while syncing classifiers specs to s3"
+        ):
+            await sync_classifiers_profiles(
+                wandb_api_key=mock_wandb_api_key,
+                wikibase_auth=mock_wikibase_auth,
+                vespa_search_adapter=mock_vespa_search_adapter,
+                github_token=Mock(SecretStr("mock-github-token")),
+                upload_to_wandb=False,
+                upload_to_vespa=False,
+                automerge_classifier_specs_pr=False,
+                auto_train=False,
+                debug_wikibase_validation=False,
+                enable_slack_notifications=True,
+            )
+
+        # vespa should not be called when create PR fails
+        spy_update_vespa_with_classifiers_profiles.assert_not_called()
+        # check create and merge pr called once
+        mock_create_and_merge_pr.assert_called_once()
+        # check s3 sync called once
+        mock_export_classifier_specs_to_s3.assert_called_once()
+
+        # use artifact call args to check final results
+        mock_acreate_table_artifact.assert_called_once()
+        artifact_call_args = mock_acreate_table_artifact.call_args.kwargs
+        assert artifact_call_args["key"] == "classifiers-profiles-validation-sandbox"
+        assert (
+            len(artifact_call_args["table"]) == 2 + 3
+        )  # number rows: 2 successes + 3 validation errors
+        assert (
+            f"**Classifiers Specs PR**: [#{pr_number}]"
+            in artifact_call_args["description"]
+        )
+        assert (
+            "**Classifiers Specs S3 sync**: Error syncing classifier specs to s3"
             in artifact_call_args["description"]
         )
 
@@ -1585,6 +1766,11 @@ async def test_sync_classifiers_profiles__failure_updating_vespa(
     mock_vespa_results = [Err(Error(msg="Error creating Vespa Objects", metadata={}))]
     mock_update_vespa = AsyncMock(return_value=mock_vespa_results)
 
+    # mock S3 export
+    mock_export_to_s3 = AsyncMock(
+        return_value=Ok("s3://bucket/key/classifier_specs.json")
+    )
+
     with (
         patch(
             "flows.classifiers_profiles.WikibaseSession",
@@ -1612,6 +1798,10 @@ async def test_sync_classifiers_profiles__failure_updating_vespa(
         patch(
             "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
         ) as mock_acreate_table_artifact,
+        patch(
+            "flows.classifiers_profiles.export_classifier_specs_to_s3",
+            mock_export_to_s3,
+        ) as mock_export_classifier_specs_to_s3,
     ):
         with pytest.raises(
             Exception,
@@ -1634,6 +1824,8 @@ async def test_sync_classifiers_profiles__failure_updating_vespa(
         mock_update_vespa.assert_called_once()
         # check create and merge pr should not be called as no change to classifiers specs
         mock_create_and_merge_pr.assert_not_called()
+        # check sync to s3 is not called as no change to classifiers specs
+        mock_export_classifier_specs_to_s3.assert_not_called()
 
         # use artifact call args to check final results
         mock_acreate_table_artifact.assert_called_once()
@@ -1644,6 +1836,10 @@ async def test_sync_classifiers_profiles__failure_updating_vespa(
         )  # number rows: 2 successes + 3 validation errors + 1 vespa error
         assert (
             "**Classifiers Specs PR**: No PR created"
+            in artifact_call_args["description"]
+        )
+        assert (
+            "**Classifiers Specs S3 sync**: No s3 sync"
             in artifact_call_args["description"]
         )
 
@@ -1670,6 +1866,12 @@ async def test_create_classifiers_profiles_artifact():
             msg="Error in PR results", metadata={"exception": Exception("error in PR")}
         )
     )
+    s3_result = Err(
+        Error(
+            msg="Error in s3 result",
+            metadata={"exception": Exception("error in s3 sync")},
+        )
+    )
 
     with patch(
         "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
@@ -1681,6 +1883,7 @@ async def test_create_classifiers_profiles_artifact():
             successes=successes,
             aws_env=aws_env,
             cs_pr_results=cs_pr_results,
+            s3_result=s3_result,
         )
 
         mock_acreate_table_artifact.assert_called_once()
@@ -1705,6 +1908,12 @@ async def test_create_classifiers_profiles_artifact():
             in description
         )
 
+        s3_error = unwrap_err(s3_result)
+        assert (
+            f"**Classifiers Specs S3 sync**: Error syncing classifier specs to s3, msg: {s3_error.msg}, exception: {str((s3_error.metadata or {}).get('exception', ''))}"
+            in description
+        )
+
 
 @pytest.mark.asyncio
 async def test_create_classifiers_profiles_artifact__pr_error():
@@ -1717,6 +1926,7 @@ async def test_create_classifiers_profiles_artifact__pr_error():
     ]
     aws_env = AwsEnv.staging
     cs_pr_results = Err(Error(msg="Failed to create PR", metadata={}))
+    s3_result: Result[str | None, Error] = Ok(None)
 
     pr_errors = [unwrap_err(cs_pr_results)] if is_err(cs_pr_results) else []
     with patch(
@@ -1729,6 +1939,7 @@ async def test_create_classifiers_profiles_artifact__pr_error():
             successes=successes,
             aws_env=aws_env,
             cs_pr_results=cs_pr_results,
+            s3_result=s3_result,
         )
 
         mock_acreate_table_artifact.assert_called_once()
@@ -1744,10 +1955,124 @@ async def test_create_classifiers_profiles_artifact__pr_error():
         # Assert the table contains the correct number of rows
         assert len(table) == len(successes) + len(validation_errors) + len(
             wandb_errors
-        ) + len(vespa_errors)  # pr errors not added to table
+        ) + len(vespa_errors)  # pr and s3 errors not added to table
 
         # Assert the description contains the PR number
         assert (
             f"**Classifiers Specs PR**: Error creating or merging PR, msg: {pr_errors[0].msg}"
             in description
         )
+        assert "**Classifiers Specs S3 sync**: No s3 sync" in description
+
+
+@pytest.fixture
+def s3_archive_path() -> S3Uri:
+    """Create sample S3Uri for testing."""
+    return S3Uri(
+        bucket="cpr-sandbox-data-pipeline-cache",
+        key="classifier_specs",
+    )
+
+
+@pytest.mark.asyncio
+async def test_export_empty_list_returns_none(s3_archive_path: S3Uri):
+    """Test that exporting an empty list returns Ok(None)."""
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=[],
+        classifier_specs_archive_path=s3_archive_path,
+    )
+    assert is_ok(result)
+    assert unwrap_ok(result) is None
+
+
+@pytest.mark.asyncio
+async def test_export_missing_bucket_returns_error(
+    mock_specs_2profiles: list[ClassifierSpec],
+):
+    """Test that missing bucket returns an error."""
+    invalid_path = S3Uri(bucket="", key="classifier_specs")
+
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=mock_specs_2profiles,
+        classifier_specs_archive_path=invalid_path,
+    )
+
+    assert is_err(result)
+    assert "S3Uri must have both bucket and key" in unwrap_err(result).msg
+
+
+@pytest.mark.asyncio
+async def test_export_missing_key_returns_error(
+    mock_specs_2profiles: list[ClassifierSpec],
+):
+    """Test that missing key returns an error."""
+    invalid_path = S3Uri(bucket="my-bucket", key="")
+
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=mock_specs_2profiles,
+        classifier_specs_archive_path=invalid_path,
+    )
+
+    assert is_err(result)
+    assert "S3Uri must have both bucket and key" in unwrap_err(result).msg
+
+
+@pytest.mark.asyncio
+@patch("flows.classifiers_profiles.boto3")
+async def test_export_success(
+    mock_boto3: Mock,
+    mock_specs_2profiles: list[ClassifierSpec],
+    s3_archive_path: S3Uri,
+):
+    """Test successful export to S3."""
+    mock_s3_client = Mock()
+    mock_boto3.client.return_value = mock_s3_client
+
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=mock_specs_2profiles,
+        classifier_specs_archive_path=s3_archive_path,
+    )
+
+    assert is_ok(result)
+    export_path = unwrap_ok(result)
+    assert export_path is not None
+    assert export_path.startswith(
+        "s3://cpr-sandbox-data-pipeline-cache/classifier_specs/"
+    )
+    assert export_path.endswith(".json")
+
+    # Verify boto3 was called correctly
+    mock_boto3.client.assert_called_once_with("s3")
+    mock_s3_client.put_object.assert_called_once()
+
+    call_kwargs = mock_s3_client.put_object.call_args.kwargs
+    assert call_kwargs["Bucket"] == s3_archive_path.bucket
+    assert call_kwargs["Key"].startswith(s3_archive_path.key)
+    assert call_kwargs["ContentType"] == "application/json"
+
+    # Verify JSON body contains expected data
+    body = json.loads(call_kwargs["Body"])
+    assert len(body) == len(mock_specs_2profiles)
+    assert body[0]["wikibase_id"] == mock_specs_2profiles[0].wikibase_id
+    assert body[1]["wikibase_id"] == mock_specs_2profiles[1].wikibase_id
+
+
+@pytest.mark.asyncio
+@patch("flows.classifiers_profiles.boto3")
+async def test_export_s3_error_returns_error(
+    mock_boto3: Mock,
+    mock_specs_2profiles: list[ClassifierSpec],
+    s3_archive_path: S3Uri,
+):
+    """Test that S3 errors are handled and returned as Err."""
+    mock_s3_client = Mock()
+    mock_boto3.client.return_value = mock_s3_client
+    mock_s3_client.put_object.side_effect = Exception("S3 connection failed")
+
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=mock_specs_2profiles,
+        classifier_specs_archive_path=s3_archive_path,
+    )
+
+    assert is_err(result)
+    assert "Failed to export to S3" in unwrap_err(result).msg
