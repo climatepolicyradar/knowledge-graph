@@ -1427,6 +1427,7 @@ async def sync_classifiers_profiles(
     debug_wikibase_validation: bool = False,
     enable_slack_notifications: bool = True,
     classifier_specs_archive_path: S3Uri | None = None,
+    force_s3_sync: bool = False,
 ):
     """Update classifier profile for a given AWS environment."""
 
@@ -1623,7 +1624,6 @@ async def sync_classifiers_profiles(
 
     # set as default value to indicate no PR created
     cs_pr_results: Result[int | None, Error] = Ok(None)
-    s3_result: Result[str | None, Error] = Ok(None)
 
     if classifier_specs == updated_classifier_specs:
         logger.info("No changes to classifier specs")
@@ -1650,16 +1650,20 @@ async def sync_classifiers_profiles(
             auto_merge=automerge_classifier_specs_pr,
         )
 
-        if is_ok(cs_pr_results):
-            logger.info("Syncing updated classifier specs to s3.")
-            s3_result = await export_classifier_specs_to_s3(
-                classifier_specs=updated_classifier_specs,
-                classifier_specs_archive_path=classifier_specs_archive_path,
-            )
-            if is_err(s3_result):
-                logger.error(f"failed to export to s3: {unwrap_err(s3_result)}")
-            else:
-                logger.info(f"exported classifier specs to {unwrap_ok(s3_result)}")
+    # set default value to indicate when s3 sync not run
+    s3_result: Result[str | None, Error] = Ok(None)
+
+    # only run sync to s3 if PR is created successfully or force_s3_sync is set
+    if (is_ok(cs_pr_results) and unwrap_ok(cs_pr_results)) or force_s3_sync:
+        logger.info("Syncing classifier specs to s3.")
+        s3_result = await export_classifier_specs_to_s3(
+            classifier_specs=updated_classifier_specs,
+            classifier_specs_archive_path=classifier_specs_archive_path,
+        )
+        if is_err(s3_result):
+            logger.error(f"failed to export to s3: {unwrap_err(s3_result)}")
+        else:
+            logger.info(f"exported classifier specs to {unwrap_ok(s3_result)}")
 
     vespa_results = []
 
