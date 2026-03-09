@@ -103,7 +103,7 @@ class BatchInferenceResult(BaseModel):
     successful_document_stems: list[DocumentStem]
     """Document stems that were processed successfully."""
 
-    noop_document_stems: list[DocumentStem] = []
+    skipped_document_stems: list[DocumentStem] = []
     """Document stems that were skipped (e.g. non-English, no valid text)."""
 
     failed_document_stems: list[DocumentStem] = []
@@ -162,17 +162,17 @@ def gather_document_stems(
     that crashed entirely and returned no result.
     """
     failed_document_stems: set[DocumentStem] = set()
-    noop_document_stems: set[DocumentStem] = set()
+    skipped_document_stems: set[DocumentStem] = set()
 
     # Index accounted-for stems per classifier from returned results.
     accounted_by_classifier: dict[ClassifierSpec, set[DocumentStem]] = {}
     for result in batch_inference_results:
         accounted = accounted_by_classifier.setdefault(result.classifier_spec, set())
         accounted.update(result.successful_document_stems)
-        accounted.update(result.noop_document_stems)
+        accounted.update(result.skipped_document_stems)
         accounted.update(result.failed_document_stems)
         failed_document_stems.update(result.failed_document_stems)
-        noop_document_stems.update(result.noop_document_stems)
+        skipped_document_stems.update(result.skipped_document_stems)
 
     # Any stem in a parameterised batch but not accounted for under that
     # batch's classifier came from a batch that crashed without returning
@@ -193,9 +193,9 @@ def gather_document_stems(
         failed_document_stems.update(set(batch_document_stems) - accounted)
 
     successful_documents = (
-        requested_document_stems - failed_document_stems - noop_document_stems
+        requested_document_stems - failed_document_stems - skipped_document_stems
     )
-    return successful_documents, failed_document_stems, noop_document_stems
+    return successful_documents, failed_document_stems, skipped_document_stems
 
 
 async def get_bucket_paginator(config: Config, prefix: str, s3_client: S3Client):
@@ -1078,7 +1078,7 @@ async def _inference_batch_of_documents(
     batch_inference_result = BatchInferenceResult(
         batch_document_stems=batch,
         successful_document_stems=[i.document_stem for i in store_labels_successes],
-        noop_document_stems=[n.document_stem for n in noops],
+        skipped_document_stems=[n.document_stem for n in noops],
         failed_document_stems=[stem for stem, _ in all_failures],
         classifier_spec=classifier_spec,
         failed=len(store_labels_successes) == 0 and len(batch) > len(noops),
