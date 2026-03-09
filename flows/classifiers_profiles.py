@@ -1591,6 +1591,7 @@ async def sync_classifiers_profiles(
 
     # set as default value to indicate no PR created
     cs_pr_results: Result[int | None, Error] = Ok(None)
+    s3_result: Result[str | None, Error] = Ok(None)
 
     if classifier_specs == updated_classifier_specs:
         logger.info("No changes to classifier specs")
@@ -1617,20 +1618,23 @@ async def sync_classifiers_profiles(
             auto_merge=automerge_classifier_specs_pr,
         )
 
-        logger.info("Syncing updated classifier specs to s3.")
-        s3_result = await export_classifier_specs_to_s3(
-            classifier_specs=updated_classifier_specs,
-            classifier_specs_archive_path=classifier_specs_archive_path,
-        )
-        if is_err(s3_result):
-            logger.error(f"failed to export to s3: {unwrap_err(s3_result)}")
-        else:
-            logger.info(f"exported classifier specs to {unwrap_ok(s3_result)}")
+        if is_ok(cs_pr_results):
+            logger.info("Syncing updated classifier specs to s3.")
+            s3_result = await export_classifier_specs_to_s3(
+                classifier_specs=updated_classifier_specs,
+                classifier_specs_archive_path=classifier_specs_archive_path,
+            )
+            if is_err(s3_result):
+                logger.error(f"failed to export to s3: {unwrap_err(s3_result)}")
+            else:
+                logger.info(f"exported classifier specs to {unwrap_ok(s3_result)}")
 
     vespa_results = []
 
-    if is_err(cs_pr_results):
-        logger.warning("Error creating and merging PR, skipping vespa updates")
+    if is_err(cs_pr_results) or is_err(s3_result):
+        logger.warning(
+            "Error creating and merging PR or syncing to s3, skipping vespa updates"
+        )
     else:
         logger.info("Updating Vespa with classifiers profiles...")
         # vespa will update every pipeline run if no PR errors
@@ -1685,10 +1689,14 @@ async def sync_classifiers_profiles(
         cs_pr_results=cs_pr_results,
     )
 
-    # if classifiers specs PR errors, fail the flow
+    # if syncing errors, fail the flow
     if is_err(cs_pr_results):
         raise Exception(
             f"Errors occurred while creating classifiers specs PR: {unwrap_err(cs_pr_results)}"
+        )
+    if is_err(s3_result):
+        raise Exception(
+            f"Errors occurred while syncing classifiers specs to s3: {unwrap_err(s3_result)}"
         )
     if len(vespa_errors) > 0:
         raise Exception(
