@@ -42,6 +42,7 @@ from flows.inference import (
     inference,
     inference_batch_of_documents_cpu,
     is_noop_document,
+    is_total_batch_failure,
     list_bucket_file_stems,
     load_classifier_from_model_registry,
     load_document,
@@ -203,6 +204,7 @@ async def test_inference_with_document_ids_s3_path(
             batch_document_stems=batch_stems,
             successful_document_stems=batch_stems,
             classifier_spec=spec,
+            failed=False,
         ),
     )
     with mock_deployment(state) as mock_inference_run_deployment:
@@ -576,6 +578,7 @@ async def test_inference_with_dont_run_on_filter(
             batch_document_stems=[gef_doc_id],
             successful_document_stems=[gef_doc_id],
             classifier_spec=spec,
+            failed=False,
         ),
     )
     with mock_deployment(state) as mock_inference_run_deployment:
@@ -649,6 +652,7 @@ async def test_inference_with_gpu_enabled(
             batch_document_stems=output_doc_ids,
             successful_document_stems=output_doc_ids,
             classifier_spec=spec,
+            failed=False,
         ),
     )
     with mock_deployment(state) as mock_inference_run_deployment:
@@ -690,6 +694,7 @@ async def test_inference_flow_returns_successful_batch_inference_result_with_doc
             batch_document_stems=list(input_doc_ids),
             successful_document_stems=list(input_doc_ids),
             classifier_spec=expected_classifier_spec,
+            failed=False,
         )
     )
 
@@ -1159,6 +1164,7 @@ def test_batch_inference_result_failed_property():
         batch_document_stems=[],
         successful_document_stems=[],
         classifier_spec=classifier_spec,
+        failed=False,
     )
     assert result_empty.failed is False
 
@@ -1167,6 +1173,7 @@ def test_batch_inference_result_failed_property():
         batch_document_stems=[doc1, doc2],
         successful_document_stems=[doc1, doc2],
         classifier_spec=classifier_spec,
+        failed=False,
     )
     assert result_all_success.failed is False
 
@@ -1176,6 +1183,7 @@ def test_batch_inference_result_failed_property():
         successful_document_stems=[doc1],
         failed_document_stems=[doc2],
         classifier_spec=classifier_spec,
+        failed=False,
     )
     assert result_partial.failed is False
 
@@ -1193,10 +1201,31 @@ def test_batch_inference_result_failed_property():
     result_all_noops = BatchInferenceResult(
         batch_document_stems=[doc1, doc2],
         successful_document_stems=[],
-        noop_document_stems=[doc1, doc2],
+        skipped_document_stems=[doc1, doc2],
         classifier_spec=classifier_spec,
+        failed=False,
     )
     assert result_all_noops.failed is False
+
+
+@pytest.mark.parametrize(
+    "success_count, runnable_count, failures_count, expected",
+    [
+        (0, 0, 0, False),  # all noops / empty batch
+        (0, 3, 0, True),  # all runnable docs failed at inference/storage
+        (0, 0, 3, True),  # all docs failed to load
+        (0, 2, 1, True),  # mix of runnable and load failures, none succeeded
+        (1, 3, 0, False),  # partial success
+        (3, 3, 0, False),  # all succeeded
+    ],
+)
+def test_is_total_batch_failure(
+    success_count, runnable_count, failures_count, expected
+):
+    assert (
+        is_total_batch_failure(success_count, runnable_count, failures_count)
+        is expected
+    )
 
 
 def test_batch_inference_result_fields():
@@ -1214,12 +1243,13 @@ def test_batch_inference_result_fields():
     result = BatchInferenceResult(
         batch_document_stems=[doc1, doc2, doc3],
         successful_document_stems=[doc1],
-        noop_document_stems=[doc2],
+        skipped_document_stems=[doc2],
         failed_document_stems=[doc3],
         classifier_spec=classifier_spec,
+        failed=False,
     )
     assert result.successful_document_stems == [doc1]
-    assert result.noop_document_stems == [doc2]
+    assert result.skipped_document_stems == [doc2]
     assert result.failed_document_stems == [doc3]
     assert len(result.batch_document_stems) == 3
     assert not result.failed
@@ -1718,11 +1748,13 @@ def test_did_inference_fail() -> None:
             batch_document_stems=[DocumentStem("TEST.executive.1.1")],
             successful_document_stems=[],
             classifier_spec=q100_classifier_spec,
+            failed=True,
         ),
         BatchInferenceResult(
             batch_document_stems=[DocumentStem("TEST.executive.1.1")],
             successful_document_stems=[],
             classifier_spec=q101_classifier_spec,
+            failed=True,
         ),
     ]
     requested_document_stems = {DocumentStem("TEST.executive.1.1")}
@@ -1741,11 +1773,13 @@ def test_did_inference_fail() -> None:
             batch_document_stems=[DocumentStem("TEST.executive.1.1")],
             successful_document_stems=[DocumentStem("TEST.executive.1.1")],
             classifier_spec=q100_classifier_spec,
+            failed=False,
         ),
         BatchInferenceResult(
             batch_document_stems=[DocumentStem("TEST.executive.1.1")],
             successful_document_stems=[],  # No success
             classifier_spec=q100_classifier_spec,
+            failed=True,
         ),
     ]
     requested_document_stems = {DocumentStem("TEST.executive.1.1")}
@@ -1770,6 +1804,7 @@ def test_did_inference_fail() -> None:
                 DocumentStem("TEST.executive.1.2"),
             ],
             classifier_spec=q100_classifier_spec,
+            failed=False,
         ),
         BatchInferenceResult(
             batch_document_stems=[
@@ -1780,6 +1815,7 @@ def test_did_inference_fail() -> None:
                 DocumentStem("TEST.executive.1.1")
             ],  # No success for TEST.executive.1.2
             classifier_spec=q101_classifier_spec,
+            failed=False,
         ),
     ]
     requested_document_stems = {
@@ -1801,11 +1837,13 @@ def test_did_inference_fail() -> None:
             batch_document_stems=[DocumentStem("TEST.executive.1.1")],
             successful_document_stems=[DocumentStem("TEST.executive.1.1")],
             classifier_spec=q100_classifier_spec,
+            failed=False,
         ),
         BatchInferenceResult(
             batch_document_stems=[DocumentStem("TEST.executive.1.1")],
             successful_document_stems=[DocumentStem("TEST.executive.1.1")],
             classifier_spec=q100_classifier_spec,
+            failed=False,
         ),
     ]
     requested_document_stems = {DocumentStem("TEST.executive.1.1")}
@@ -1880,12 +1918,14 @@ def test_gather_document_stems() -> None:
         successful_document_stems=[],
         failed_document_stems=requested_document_stems,
         classifier_spec=q100_classifier_spec,
+        failed=True,
     )
     all_failed_batch_2 = BatchInferenceResult(
         batch_document_stems=requested_document_stems,
         successful_document_stems=[],
         failed_document_stems=requested_document_stems,
         classifier_spec=q101_classifier_spec,
+        failed=True,
     )
     successful_document_stems, failed_document_stems, noop_stems = (
         gather_document_stems(
@@ -1905,6 +1945,7 @@ def test_gather_document_stems() -> None:
         batch_document_stems=requested_document_stems,
         successful_document_stems=requested_document_stems,
         classifier_spec=q101_classifier_spec,
+        failed=False,
     )
     successful_document_stems, failed_document_stems, noop_stems = (
         gather_document_stems(
@@ -1924,12 +1965,14 @@ def test_gather_document_stems() -> None:
         batch_document_stems=requested_document_stems,
         successful_document_stems=requested_document_stems,
         classifier_spec=q100_classifier_spec,
+        failed=False,
     )
     q101_batch_partial_success = BatchInferenceResult(
         batch_document_stems=requested_document_stems,
         successful_document_stems=requested_document_stems[1:],
         failed_document_stems=requested_document_stems[:1],
         classifier_spec=q101_classifier_spec,
+        failed=False,
     )
     successful_document_stems, failed_document_stems, noop_stems = (
         gather_document_stems(
@@ -1949,6 +1992,7 @@ def test_gather_document_stems() -> None:
         batch_document_stems=requested_document_stems,
         successful_document_stems=requested_document_stems,
         classifier_spec=q100_classifier_spec,
+        failed=False,
     )
     successful_document_stems, failed_document_stems, noop_stems = (
         gather_document_stems(
@@ -1969,14 +2013,16 @@ def test_gather_document_stems() -> None:
     q100_batch_with_noops = BatchInferenceResult(
         batch_document_stems=requested_document_stems,
         successful_document_stems=runnable_docs,
-        noop_document_stems=[noop_doc],
+        skipped_document_stems=[noop_doc],
         classifier_spec=q100_classifier_spec,
+        failed=False,
     )
     q101_batch_with_noops = BatchInferenceResult(
         batch_document_stems=requested_document_stems,
         successful_document_stems=runnable_docs,
-        noop_document_stems=[noop_doc],
+        skipped_document_stems=[noop_doc],
         classifier_spec=q101_classifier_spec,
+        failed=False,
     )
     successful_document_stems, failed_document_stems, noop_stems = (
         gather_document_stems(
@@ -2298,6 +2344,7 @@ async def test_inference_with_caching_enabled(
             batch_document_stems=[doc_without_cache],
             successful_document_stems=[doc_without_cache],
             classifier_spec=classifier_spec,
+            failed=False,
         )
     )
 
@@ -2374,6 +2421,7 @@ async def test_inference_with_caching_disabled(
             batch_document_stems=list(input_doc_ids),
             successful_document_stems=list(input_doc_ids),
             classifier_spec=classifier_spec,
+            failed=False,
         )
     )
 

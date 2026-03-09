@@ -112,7 +112,7 @@ class BatchInferenceResult(BaseModel):
     classifier_spec: ClassifierSpec
     """The classifier specification used to process this batch of documents."""
 
-    failed: bool = False
+    failed: bool
     """Whether every runnable document in the batch failed."""
 
 
@@ -899,6 +899,15 @@ def process_single_document_inference(
     return successes, failures, unknown_failures
 
 
+def is_total_batch_failure(
+    success_count: int,
+    runnable_count: int,
+    failures_count: int,
+) -> bool:
+    """A check to see if no documents passed the batch."""
+    return success_count == 0 and (runnable_count > 0 or failures_count > 0)
+
+
 async def _inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: JsonDict,
@@ -1081,7 +1090,11 @@ async def _inference_batch_of_documents(
         skipped_document_stems=[n.document_stem for n in noops],
         failed_document_stems=[stem for stem, _ in all_failures],
         classifier_spec=classifier_spec,
-        failed=len(store_labels_successes) == 0 and len(batch) > len(noops),
+        failed=is_total_batch_failure(
+            success_count=len(store_labels_successes),
+            runnable_count=len(runnable),
+            failures_count=len(all_failures),
+        ),
     )
 
     if batch_inference_result.failed:
