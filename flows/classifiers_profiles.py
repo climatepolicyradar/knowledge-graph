@@ -4,6 +4,7 @@ Flow that updates classifiers profiles changes detected in wikibase
 Assumes that the classifier model has been trained in wandb
 """
 
+import json
 import os
 import tempfile
 import textwrap
@@ -12,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+import boto3
 import httpx
 import wandb
 from cpr_sdk.models.search import ClassifiersProfile as VespaClassifiersProfile
@@ -49,6 +51,7 @@ from flows.compare_result_operation import (
 )
 from flows.utils import (
     JsonDict,
+    S3Uri,
     SlackNotify,
     get_logger,
     get_run_name,
@@ -1322,6 +1325,61 @@ def concept_present_in_vespa(
         )
 
 
+async def export_classifier_specs_to_s3(
+    classifier_specs: list[ClassifierSpec],
+    classifier_specs_archive_path: S3Uri,
+) -> Result[str | None, Error]:
+    """
+    Export classifier specs to S3 as JSON.
+
+    Args:
+        classifier_specs: List of ClassifierSpec to export
+        classifier_specs_archive_path: S3 uri with target bucket and key
+
+    Returns:
+        Result with S3 path if successful, None if empty list, or Error
+    """
+    logger = get_logger()
+
+    if not classifier_specs:
+        logger.info("No classifier specs to export")
+        return Ok(None)
+
+    if (
+        not classifier_specs_archive_path.bucket
+        or not classifier_specs_archive_path.key
+    ):
+        return Err(
+            Error(
+                msg="S3Uri must have both bucket and key",
+                metadata={"path": str(classifier_specs_archive_path)},
+            )
+        )
+
+    try:
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        obj_name = f"classifier_specs_{timestamp}.json"
+        data = [spec.model_dump(mode="json") for spec in classifier_specs]
+
+        s3_key = f"{classifier_specs_archive_path.key}/{obj_name}"
+        boto3.client("s3").put_object(
+            Bucket=classifier_specs_archive_path.bucket,
+            Key=s3_key,
+            Body=json.dumps(data),
+            ContentType="application/json",
+        )
+
+        export_path = f"s3://{classifier_specs_archive_path.bucket}/{s3_key}"
+        logger.info(
+            f"Successfully exported {len(classifier_specs)} classifier specs to {export_path}"
+        )
+        return Ok(str(export_path))
+
+    except Exception as e:
+        logger.error(f"Failed to export to S3: {format_error(e)}")
+        return Err(Error(msg=f"Failed to export to S3: {e}", metadata={}))
+
+
 @flow(on_failure=[SlackNotify.message], on_crashed=[SlackNotify.message])
 async def sync_classifiers_profiles(
     wandb_api_key: SecretStr | None = None,
@@ -1336,6 +1394,7 @@ async def sync_classifiers_profiles(
     auto_train: bool = False,
     debug_wikibase_validation: bool = False,
     enable_slack_notifications: bool = True,
+    classifier_specs_archive_path: S3Uri | None = None,
 ):
     """Update classifier profile for a given AWS environment."""
 
@@ -1383,6 +1442,12 @@ async def sync_classifiers_profiles(
                 "/GitHub/Token",
                 aws_env=aws_env,
             )
+        )
+
+    if classifier_specs_archive_path is None:
+        classifier_specs_archive_path = S3Uri(
+            bucket=f"cpr-{aws_env.value}-data-pipeline-cache",
+            key="classifier_specs",
         )
 
     if not upload_to_wandb:
@@ -1571,6 +1636,16 @@ async def sync_classifiers_profiles(
             )
 
     vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
+
+    if not vespa_errors:
+        s3_result = await export_classifier_specs_to_s3(
+            classifier_specs=updated_classifier_specs,
+            classifier_specs_archive_path=classifier_specs_archive_path,
+        )
+        if is_err(s3_result):
+            logger.error(f"failed to export to s3: {unwrap_err(s3_result)}")
+        else:
+            logger.info(f"exported classifier specs to {unwrap_ok(s3_result)}")
 
     # The default, assuming there were no Vespa successes
     event: Result[Event | None, Error] = Ok(None)

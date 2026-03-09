@@ -1,3 +1,4 @@
+import json
 import re
 from unittest.mock import ANY, AsyncMock, Mock, patch
 
@@ -18,6 +19,7 @@ from flows.classifiers_profiles import (
     create_vespa_profile_mappings,
     demote_classifier_profile,
     emit_finished,
+    export_classifier_specs_to_s3,
     format_error,
     get_classifiers_profiles,
     handle_classifier_profile_action,
@@ -32,6 +34,7 @@ from flows.classifiers_profiles import (
     wandb_validation,
 )
 from flows.compare_result_operation import Demote, Ignore, Promote, Update
+from flows.utils import S3Uri
 from knowledge_graph.classifiers_profiles import (
     ClassifiersProfileMapping,
     Profile,
@@ -1751,3 +1754,116 @@ async def test_create_classifiers_profiles_artifact__pr_error():
             f"**Classifiers Specs PR**: Error creating or merging PR, msg: {pr_errors[0].msg}"
             in description
         )
+
+
+@pytest.fixture
+def s3_archive_path() -> S3Uri:
+    """Create sample S3Uri for testing."""
+    return S3Uri(
+        bucket="cpr-sandbox-data-pipeline-cache",
+        key="classifier_specs",
+    )
+
+
+@pytest.mark.asyncio
+async def test_export_empty_list_returns_none(s3_archive_path: S3Uri):
+    """Test that exporting an empty list returns Ok(None)."""
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=[],
+        classifier_specs_archive_path=s3_archive_path,
+    )
+    assert is_ok(result)
+    assert unwrap_ok(result) is None
+
+
+@pytest.mark.asyncio
+async def test_export_missing_bucket_returns_error(
+    mock_specs_2profiles: list[ClassifierSpec],
+):
+    """Test that missing bucket returns an error."""
+    invalid_path = S3Uri(bucket="", key="classifier_specs")
+
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=mock_specs_2profiles,
+        classifier_specs_archive_path=invalid_path,
+    )
+
+    assert is_err(result)
+    assert "S3Uri must have both bucket and key" in unwrap_err(result).msg
+
+
+@pytest.mark.asyncio
+async def test_export_missing_key_returns_error(
+    mock_specs_2profiles: list[ClassifierSpec],
+):
+    """Test that missing key returns an error."""
+    invalid_path = S3Uri(bucket="my-bucket", key="")
+
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=mock_specs_2profiles,
+        classifier_specs_archive_path=invalid_path,
+    )
+
+    assert is_err(result)
+    assert "S3Uri must have both bucket and key" in unwrap_err(result).msg
+
+
+@pytest.mark.asyncio
+@patch("flows.classifiers_profiles.boto3")
+async def test_export_success(
+    mock_boto3: Mock,
+    mock_specs_2profiles: list[ClassifierSpec],
+    s3_archive_path: S3Uri,
+):
+    """Test successful export to S3."""
+    mock_s3_client = Mock()
+    mock_boto3.client.return_value = mock_s3_client
+
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=mock_specs_2profiles,
+        classifier_specs_archive_path=s3_archive_path,
+    )
+
+    assert is_ok(result)
+    export_path = unwrap_ok(result)
+    assert export_path is not None
+    assert export_path.startswith(
+        "s3://cpr-sandbox-data-pipeline-cache/classifier_specs/"
+    )
+    assert export_path.endswith(".json")
+
+    # Verify boto3 was called correctly
+    mock_boto3.client.assert_called_once_with("s3")
+    mock_s3_client.put_object.assert_called_once()
+
+    call_kwargs = mock_s3_client.put_object.call_args.kwargs
+    assert call_kwargs["Bucket"] == s3_archive_path.bucket
+    assert call_kwargs["Key"].startswith(s3_archive_path.key)
+    assert call_kwargs["ContentType"] == "application/json"
+
+    # Verify JSON body contains expected data
+    body = json.loads(call_kwargs["Body"])
+    assert len(body) == len(mock_specs_2profiles)
+    assert body[0]["wikibase_id"] == mock_specs_2profiles[0].wikibase_id
+    assert body[1]["wikibase_id"] == mock_specs_2profiles[1].wikibase_id
+
+
+@pytest.mark.asyncio
+@patch("flows.classifiers_profiles.boto3")
+async def test_export_s3_error_returns_error(
+    mock_boto3: Mock,
+    mock_specs_2profiles: list[ClassifierSpec],
+    s3_archive_path: S3Uri,
+):
+    """Test that S3 errors are handled and returned as Err."""
+    mock_s3_client = Mock()
+    mock_boto3.client.return_value = mock_s3_client
+    mock_s3_client.put_object.side_effect = Exception("S3 connection failed")
+
+    result = await export_classifier_specs_to_s3(
+        classifier_specs=mock_specs_2profiles,
+        classifier_specs_archive_path=s3_archive_path,
+    )
+
+    assert is_err(result)
+    assert "Failed to export to S3" in unwrap_err(result).msg
