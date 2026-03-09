@@ -59,6 +59,29 @@ bucket_param = ssm.Parameter(
 # ECR repository for storing the webapp container image
 repository = ecr.Repository(app_name)
 
+ecr.LifecyclePolicy(
+    f"{app_name}-ecr-lifecycle-policy",
+    repository=repository.name,
+    policy=json.dumps(
+        {
+            "rules": [
+                {
+                    "rulePriority": 1,
+                    "description": "Keep last 50 images",
+                    "selection": {
+                        "tagStatus": "any",
+                        "countType": "imageCountMoreThan",
+                        # Keeping 50 images provides roughly 14 days of history based on our busiest
+                        # push frequencies (up to ~50 images pushed in a 14 day window).
+                        "countNumber": 50,
+                    },
+                    "action": {"type": "expire"},
+                }
+            ]
+        }
+    ),
+)
+
 cluster = ecs.Cluster(app_name)
 
 # VPC and subnets
