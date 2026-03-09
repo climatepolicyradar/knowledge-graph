@@ -498,6 +498,7 @@ async def create_classifiers_profiles_artifact(
     successes: list[Dict],
     aws_env: AwsEnv,
     cs_pr_results: Result[int | None, Error],
+    s3_result: Result[str | None, Error],
 ):
     """Create an artifact with a summary of the classifiers profiles validation checks"""
 
@@ -529,6 +530,26 @@ async def create_classifiers_profiles_artifact(
     else:
         pr_details = "No PR details"
 
+    s3_sync_details = ""
+    if s3_result and is_ok(s3_result):
+        s3_path = unwrap_ok(s3_result)
+        s3_sync_details = (
+            f"Classifier specs synced to s3: {s3_path}\n"
+            if s3_path
+            else "No s3 sync \n"
+        )
+    elif is_err(s3_result):
+        s3_error = unwrap_err(s3_result)
+        msg = textwrap.shorten(s3_error.msg, width=100, placeholder="...")
+        exception = textwrap.shorten(
+            str((s3_error.metadata or {}).get("exception", "")),
+            width=100,
+            placeholder="...",
+        )
+        s3_sync_details = f"Error syncing classifier specs to s3, msg: {msg}, exception: {exception}\n"
+    else:
+        s3_sync_details = "No sync details"
+
     overview_description = f"""# Classifiers Profiles Validation Summary
 ## Overview
 - **Total concepts found**: {total_concepts}
@@ -538,6 +559,7 @@ async def create_classifiers_profiles_artifact(
 - **Validation Errors**: {len(validation_errors)}
 - **Vespa Errors**: {len(vespa_errors)}
 - **Classifiers Specs PR**: {pr_details}
+- **Classifiers Specs S3 sync**: {s3_sync_details}
 """
 
     def format_cp_details(
@@ -636,6 +658,7 @@ async def send_classifiers_profile_slack_alert(
     upload_to_vespa: bool,
     event: Result[Event | None, Error],
     cs_pr_results: Result[int | None, Error],
+    s3_result: Result[str | None, Error],
 ):
     """
     Send slack alert with failures from the classifiers profiles lifecycle sync.
@@ -650,8 +673,9 @@ async def send_classifiers_profile_slack_alert(
 
     event_errors = [unwrap_err(event)] if is_err(event) else []
     pr_errors = [unwrap_err(cs_pr_results)] if is_err(cs_pr_results) else []
+    s3_errors = [unwrap_err(s3_result)] if is_err(s3_result) else []
 
-    other_errors = wandb_errors + vespa_errors + event_errors + pr_errors
+    other_errors = wandb_errors + vespa_errors + event_errors + pr_errors + s3_errors
     try:
         if len(validation_errors) > 0:
             # validation errors sent to policy team channel
@@ -751,6 +775,14 @@ async def send_classifiers_profile_slack_alert(
                         thread_ts=thread_ts,
                         errors=pr_errors,
                         error_type="PR Errors",
+                    )
+                if s3_errors:
+                    await _post_errors_thread(
+                        slack_client=slack_client,
+                        channel=channel,
+                        thread_ts=thread_ts,
+                        errors=s3_errors,
+                        error_type="S3 sync Errors",
                     )
             else:
                 raise ValueError(
@@ -1676,6 +1708,7 @@ async def sync_classifiers_profiles(
                 upload_to_vespa=upload_to_vespa,
                 event=event,
                 cs_pr_results=cs_pr_results,
+                s3_result=s3_result,
             )
         except Exception as e:
             logger.error(f"failed to send validation alert: {format_error(e)}")
@@ -1687,6 +1720,7 @@ async def sync_classifiers_profiles(
         successes=successes,
         aws_env=aws_env,
         cs_pr_results=cs_pr_results,
+        s3_result=s3_result,
     )
 
     # if syncing errors, fail the flow

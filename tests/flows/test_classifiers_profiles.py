@@ -1165,6 +1165,7 @@ async def test_send_classifiers_profile_slack_alert_success():
         {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
     ]
     pr_results: Result[int | None, Error] = Err(Error(msg="PR error", metadata={}))
+    s3_result: Result[str | None, Error] = Err(Error(msg="S3 error", metadata={}))
 
     with (
         patch(
@@ -1188,6 +1189,7 @@ async def test_send_classifiers_profile_slack_alert_success():
             upload_to_vespa=True,
             event=Mock(),
             cs_pr_results=pr_results,
+            s3_result=s3_result,
         )
 
         mock_slack_client.chat_postMessage.assert_any_call(
@@ -1220,8 +1222,14 @@ async def test_send_classifiers_profile_slack_alert_success():
             text="PR Errors: 1 issues found",
             blocks=ANY,
         )
+        mock_slack_client.chat_postMessage.assert_any_call(
+            channel="alerts-platform-production",
+            thread_ts="12345",
+            text="S3 sync Errors: 1 issues found",
+            blocks=ANY,
+        )
         assert spy_post_errors_main.call_count == 2
-        assert spy_post_errors_thread.call_count == 4
+        assert spy_post_errors_thread.call_count == 5
 
 
 @pytest.mark.asyncio
@@ -1256,6 +1264,7 @@ async def test_send_classifiers_profile_slack_alert__slack_failure():
             upload_to_vespa=True,
             event=Mock(),
             cs_pr_results=Mock(),
+            s3_result=Mock(),
         )
 
         mock_slack_client.chat_postMessage.assert_called_once_with(
@@ -1424,6 +1433,10 @@ async def test_sync_classifiers_profiles(
             f"**Classifiers Specs PR**: [#{pr_number}]"
             in artifact_call_args["description"]
         )
+        assert (
+            "**Classifiers Specs S3 sync**: Classifier specs synced to s3: s3://bucket/key/classifier_specs.json"
+            in artifact_call_args["description"]
+        )
 
 
 @pytest.mark.asyncio
@@ -1558,6 +1571,10 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
             "**Classifiers Specs PR**: Error creating or merging PR"
             in artifact_call_args["description"]
         )
+        assert (
+            "**Classifiers Specs S3 sync**: No s3 sync"
+            in artifact_call_args["description"]
+        )
 
 
 @pytest.mark.asyncio
@@ -1623,7 +1640,9 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
     ]
 
     # mock S3 export
-    mock_export_to_s3 = AsyncMock(return_value=Err("failed to export to s3"))
+    mock_export_to_s3 = AsyncMock(
+        return_value=Err(Error(msg="failed to export to s3", metadata={}))
+    )
 
     with (
         patch(
@@ -1689,6 +1708,10 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
         )  # number rows: 2 successes + 3 validation errors
         assert (
             f"**Classifiers Specs PR**: [#{pr_number}]"
+            in artifact_call_args["description"]
+        )
+        assert (
+            "**Classifiers Specs S3 sync**: Error syncing classifier specs to s3"
             in artifact_call_args["description"]
         )
 
@@ -1815,6 +1838,10 @@ async def test_sync_classifiers_profiles__failure_updating_vespa(
             "**Classifiers Specs PR**: No PR created"
             in artifact_call_args["description"]
         )
+        assert (
+            "**Classifiers Specs S3 sync**: No s3 sync"
+            in artifact_call_args["description"]
+        )
 
 
 @pytest.mark.asyncio
@@ -1839,6 +1866,12 @@ async def test_create_classifiers_profiles_artifact():
             msg="Error in PR results", metadata={"exception": Exception("error in PR")}
         )
     )
+    s3_result = Err(
+        Error(
+            msg="Error in s3 result",
+            metadata={"exception": Exception("error in s3 sync")},
+        )
+    )
 
     with patch(
         "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
@@ -1850,6 +1883,7 @@ async def test_create_classifiers_profiles_artifact():
             successes=successes,
             aws_env=aws_env,
             cs_pr_results=cs_pr_results,
+            s3_result=s3_result,
         )
 
         mock_acreate_table_artifact.assert_called_once()
@@ -1874,6 +1908,12 @@ async def test_create_classifiers_profiles_artifact():
             in description
         )
 
+        s3_error = unwrap_err(s3_result)
+        assert (
+            f"**Classifiers Specs S3 sync**: Error syncing classifier specs to s3, msg: {s3_error.msg}, exception: {str((s3_error.metadata or {}).get('exception', ''))}"
+            in description
+        )
+
 
 @pytest.mark.asyncio
 async def test_create_classifiers_profiles_artifact__pr_error():
@@ -1886,6 +1926,7 @@ async def test_create_classifiers_profiles_artifact__pr_error():
     ]
     aws_env = AwsEnv.staging
     cs_pr_results = Err(Error(msg="Failed to create PR", metadata={}))
+    s3_result: Result[str | None, Error] = Ok(None)
 
     pr_errors = [unwrap_err(cs_pr_results)] if is_err(cs_pr_results) else []
     with patch(
@@ -1898,6 +1939,7 @@ async def test_create_classifiers_profiles_artifact__pr_error():
             successes=successes,
             aws_env=aws_env,
             cs_pr_results=cs_pr_results,
+            s3_result=s3_result,
         )
 
         mock_acreate_table_artifact.assert_called_once()
@@ -1913,13 +1955,14 @@ async def test_create_classifiers_profiles_artifact__pr_error():
         # Assert the table contains the correct number of rows
         assert len(table) == len(successes) + len(validation_errors) + len(
             wandb_errors
-        ) + len(vespa_errors)  # pr errors not added to table
+        ) + len(vespa_errors)  # pr and s3 errors not added to table
 
         # Assert the description contains the PR number
         assert (
             f"**Classifiers Specs PR**: Error creating or merging PR, msg: {pr_errors[0].msg}"
             in description
         )
+        assert "**Classifiers Specs S3 sync**: No s3 sync" in description
 
 
 @pytest.fixture
