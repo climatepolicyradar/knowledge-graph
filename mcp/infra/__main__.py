@@ -32,6 +32,29 @@ ssm_url_arn = get_ssm_parameter_arn("/Wikibase/Cloud/URL")
 # Create a private ECR repository to store the Docker image
 repo = aws.ecr.Repository(f"{application_name}-repo")
 
+aws.ecr.LifecyclePolicy(
+    f"{application_name}-ecr-lifecycle-policy",
+    repository=repo.name,
+    policy=json.dumps(
+        {
+            "rules": [
+                {
+                    "rulePriority": 1,
+                    "description": "Keep last 50 images",
+                    "selection": {
+                        "tagStatus": "any",
+                        "countType": "imageCountMoreThan",
+                        # Keeping 50 images provides roughly 14 days of history based on our busiest
+                        # push frequencies (up to ~50 images pushed in a 14 day window).
+                        "countNumber": 50,
+                    },
+                    "action": {"type": "expire"},
+                }
+            ]
+        }
+    ),
+)
+
 # Get authorization token for ECR
 auth = aws.ecr.get_authorization_token()
 
