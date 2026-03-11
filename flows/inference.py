@@ -789,17 +789,18 @@ async def run_classifier_inference_on_document(
     classifier: Classifier,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
-    doc_labels: list[LabelledPassage] = []
     assert result.document  # For typing, we already check this properly earlier
-    for text, block_id in document_passages(result.document):
-        labelled_passages = text_block_inference(
+    passages = list(document_passages(result.document))
+    if passages:
+        all_text, all_block_ids = zip(*passages)
+        result.labelled_passages = batch_text_block_inference(
             classifier=classifier,
-            block_id=block_id,
-            text=text,
             classifier_spec=result.classifier_spec,
+            all_text=list(all_text),
+            all_block_ids=list(all_block_ids),
         )
-        doc_labels.append(labelled_passages)
-    result.labelled_passages = doc_labels
+    else:
+        result.labelled_passages = []
 
     # Unload the document now that we're done with it
     result.document = None
