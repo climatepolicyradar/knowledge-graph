@@ -103,7 +103,17 @@ class BertBasedClassifier(
         self,
         concept: Concept,
         model_name: str = "answerdotai/ModernBERT-base",
+        download_pretrained_model_on_init: bool = True,
     ):
+        """
+        Initialise a BERT classifier.
+
+        :param concept: _description_
+        :param model_name: model name from Huggingface, defaults to "answerdotai/ModernBERT-base"
+        :param download_pretrained_model_on_init: whether to download the pretrained model and tokenizer on init, defaults to True.
+            Disable this if planning to overwrite the model and tokenizer elsewhere.
+        """
+
         super().__init__(concept)
         self.model_name = model_name
 
@@ -123,11 +133,22 @@ class BertBasedClassifier(
         else:
             self.training_device = torch.device("cpu")
 
-        # Initialize model and tokenizer
+        if download_pretrained_model_on_init:
+            self.download_model_and_tokenizer()
+
+    def download_model_and_tokenizer(self) -> None:
+        """
+        Download the model and tokenizer from the Huggingface hub.
+
+        Uses the class's `model_name` property.
+        """
+
         self.model: PreTrainedModel = (
-            AutoModelForSequenceClassification.from_pretrained(model_name)
+            AutoModelForSequenceClassification.from_pretrained(self.model_name)
         )
-        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
+            self.model_name
+        )
 
         # Always use CPU for inference, to ensure consistency across different deployment
         # environments. Models may be developed on machines with GPU/MPS but need to run
