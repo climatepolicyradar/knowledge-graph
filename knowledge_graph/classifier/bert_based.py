@@ -22,7 +22,6 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizer,
 )
-from transformers.pipelines import pipeline
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
 from typing_extensions import Self
@@ -125,16 +124,39 @@ class BertBasedClassifier(
         # Random component for nondeterministic ID, generated once when classifier is fitted
         self._random_id_component: str = ""
 
-        # For training, we can use GPU/MPS if available
-        if torch.backends.mps.is_available():
-            self.training_device = torch.device("mps")
-        elif torch.cuda.is_available():
-            self.training_device = torch.device("cuda")
-        else:
-            self.training_device = torch.device("cpu")
+        # For training and inference, we use GPU/MPS if available
+        self.training_device = self._resolve_device()
+        self.inference_device = self.training_device
 
         if download_pretrained_model_on_init:
             self.download_model_and_tokenizer()
+
+    def _resolve_device(self) -> torch.device:
+        """
+        Resolve the best available device for this machine.
+
+        :returns: The best available torch device (MPS, CUDA, or CPU).
+        """
+        if torch.backends.mps.is_available():
+            return torch.device("mps")
+        elif torch.cuda.is_available():
+            return torch.device("cuda")
+        return torch.device("cpu")
+
+    def move_model_to_device(self, device: torch.device | None = None) -> None:
+        """
+        Move the model to the given device and update device references.
+
+        If no device is provided, the best available device is resolved
+        automatically.  This is useful after deserialisation because pickle
+        does not preserve MPS/CUDA tensor placement.
+
+        :param device: Target device. Resolved automatically when ``None``.
+        """
+        device = device or self._resolve_device()
+        self.model.to(device)  # type: ignore[attr-defined]
+        self.training_device = device
+        self.inference_device = device
 
     def download_model_and_tokenizer(self) -> None:
         """
@@ -148,16 +170,6 @@ class BertBasedClassifier(
         )
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
             self.model_name
-        )
-
-        # Always use CPU for inference, to ensure consistency across different deployment
-        # environments. Models may be developed on machines with GPU/MPS but need to run
-        # reliably on CPU in production pipelines.
-        self.pipeline = pipeline(
-            "text-classification",
-            model=self.model,
-            tokenizer=self.tokenizer,
-            device=self.training_device,
         )
 
         # Move model to training device (only used during training)
@@ -257,43 +269,62 @@ class BertBasedClassifier(
         self, texts: Sequence[str], threshold: float | None = None
     ) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
-
         if self._use_dropout_during_inference:
             with self._dropout_enabled():
-                predictions = self.pipeline(list(texts), padding=True, truncation=True)
+                with torch.no_grad():
+                    scores, predicted_classes = self._forward(texts)
         else:
             self.model.eval()  # type: ignore[attr-defined]
-            predictions = self.pipeline(list(texts), padding=True, truncation=True)
+            with torch.no_grad():
+                scores, predicted_classes = self._forward(texts)
 
-        # Use the provided threshold, or fall back to the classifier's default threshold
         effective_threshold = (
             threshold if threshold is not None else self.prediction_threshold
         )
 
+        now = datetime.now()
+        labeller = str(self)
         results = []
-        for text, prediction in zip(texts, predictions):
+        for text, score, cls in zip(texts, scores, predicted_classes):
             text_results = []
-            # By default, the huggingface text classification pipeline returns LABEL_0
-            # for negative predictions and LABEL_1 for positive predictions. We check
-            # for LABEL_1 to determine if the text contains an instance of the concept.
-            if prediction["label"] == "LABEL_1":
-                if (
-                    effective_threshold is None
-                    or prediction["score"] >= effective_threshold
-                ):
+            # LABEL_1 (class index 1) is the positive prediction.
+            if cls == 1:
+                if effective_threshold is None or score >= effective_threshold:
                     span = Span(
                         text=text,
                         concept_id=self.concept.wikibase_id,
-                        prediction_probability=prediction["score"],
+                        prediction_probability=score,
                         start_index=0,
                         end_index=len(text),
-                        labellers=[str(self)],
-                        timestamps=[datetime.now()],
+                        labellers=[labeller],
+                        timestamps=[now],
                     )
                     text_results.append(span)
             results.append(text_results)
 
         return results
+
+    def _forward(self, texts: Sequence[str]) -> tuple[list[float], list[int]]:
+        """
+        Run a batched forward pass and return per-text scores and predicted classes.
+
+        :param texts: Texts to classify.
+        :returns: Tuple of `(scores, predicted_classes)` where `scores[i]` is the
+            probability of the predicted class for text `i`
+        """
+        device = self.inference_device
+        inputs = self.tokenizer(
+            list(texts),
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt",
+        ).to(device)
+        logits = self.model(**inputs).logits
+        probs = torch.softmax(logits, dim=-1)
+        predicted_classes = torch.argmax(probs, dim=-1)
+        scores = probs[torch.arange(len(probs)), predicted_classes]
+        return scores.tolist(), predicted_classes.tolist()
 
     def get_variant(
         self, random_seed: int | None = None, dropout_rate: float = 0.1
@@ -317,12 +348,7 @@ class BertBasedClassifier(
         """
         variant = self.__class__(concept=self.concept, model_name=self.model_name)
         variant.model.load_state_dict(self.model.state_dict())
-        variant.pipeline = pipeline(
-            "text-classification",
-            model=variant.model,
-            tokenizer=variant.tokenizer,
-            device=variant.training_device,
-        )
+        variant.inference_device = self.inference_device
 
         variant._variant_seed = random_seed
         variant._variant_dropout_rate = dropout_rate

@@ -25,6 +25,7 @@ from knowledge_graph.classifier import (
     ModelPath,
     get_local_classifier_path,
 )
+from knowledge_graph.classifier.bert_based import BertBasedClassifier
 from knowledge_graph.cloud import (
     AwsEnv,
     Namespace,
@@ -168,16 +169,16 @@ def move_model_to_cpu(classifier: Classifier) -> None:
     """
     Move a model which uses torch to CPU.
 
-    No-op if the classifier's model is already on CPU, or the classifier doesn't have
-    a 'pipeline' attribute. This needs to be done before the model is saved, otherwise
-    an MPS device will not be able to load a classifier stored on CUDA and vice-versa.
+    No-op if the classifier is not a `BertBasedClassifier`, or the model is not on CPU.
+    This needs to be done before the model is saved, otherwise an MPS device will not be
+    able to load a classifier stored on CUDA and vice-versa.
     """
 
     console = Console()
 
-    if hasattr(classifier, "pipeline"):
-        classifier.pipeline.model.to("cpu")  # type: ignore
-        classifier.pipeline.device = torch.device("cpu")  # type: ignore
+    if isinstance(classifier, BertBasedClassifier):
+        classifier.model.to("cpu")  # type: ignore
+        classifier.inference_device = torch.device("cpu")  # type: ignore
         console.log("Moved model to CPU")
 
 
