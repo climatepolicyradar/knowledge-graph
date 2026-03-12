@@ -268,11 +268,26 @@ class Classifier(ABC):
         Load a classifier from a file.
 
         :param Union[str, Path] path: The path to load the classifier from
+        :param bool model_to_cuda: Whether to move the model to CUDA if available
         :return Classifier: The loaded classifier
         """
         with open(path, "rb") as f:
             classifier = pickle.load(f)
         assert isinstance(classifier, Classifier)
+
+        # Avoids circular import
+        from knowledge_graph.classifier.bert_based import BertBasedClassifier  # noqa: I001
+
+        if isinstance(classifier, BertBasedClassifier):
+            new_classifier = BertBasedClassifier(
+                concept=classifier.concept,
+                model_name=classifier.model_name,
+                download_pretrained_model_on_init=False,
+            )
+
+            vars(new_classifier).update(vars(classifier))
+            classifier = new_classifier
+
         if model_to_cuda and hasattr(classifier, "pipeline"):
             classifier.pipeline.model.to("cuda:0")  # type: ignore
             import torch  # type: ignore[import-untyped]

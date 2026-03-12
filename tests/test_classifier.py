@@ -1,3 +1,4 @@
+import pickle
 import re
 from typing import Type
 
@@ -5,6 +6,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+from knowledge_graph.classifier.bert_based import BertBasedClassifier
 from knowledge_graph.classifier.classifier import Classifier
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.concept import Concept
@@ -648,3 +650,33 @@ def test_whether_classifier_handles_non_ascii_labels_across_separators(
     classifier = KeywordClassifier(concept)
     spans = classifier.predict(variant_text)
     assert spans
+
+
+def test_classifier_load_reinitializes_bert_based_classifier(tmp_path):
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
+
+    original = BertBasedClassifier(
+        concept=concept,
+        model_name="test-model",
+        download_pretrained_model_on_init=False,
+    )
+    original.model = "fake_trained_model"
+    original.tokenizer = "fake_trained_tokenizer"
+    original.pipeline = "fake_trained_pipeline"
+    original.model_name = "test-model"
+    original.is_fitted = True
+    original.prediction_threshold = 0.7
+
+    path = tmp_path / "bert_classifier.pkl"
+    with open(path, "wb") as f:
+        pickle.dump(original, f)
+
+    loaded = Classifier.load(path)
+
+    assert isinstance(loaded, BertBasedClassifier)
+    assert loaded is not original, "Should be a fresh instance, not the pickled object"
+    assert loaded.model == "fake_trained_model"
+    assert loaded.tokenizer == "fake_trained_tokenizer"
+    assert loaded.pipeline == "fake_trained_pipeline"
+    assert loaded.is_fitted is True
+    assert loaded.prediction_threshold == 0.7
