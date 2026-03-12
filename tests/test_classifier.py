@@ -1,6 +1,7 @@
 import pickle
 import re
 from typing import Type
+from unittest.mock import patch
 
 import pytest
 from hypothesis import given, settings
@@ -671,7 +672,13 @@ def test_classifier_load_reinitializes_bert_based_classifier(tmp_path):
     with open(path, "wb") as f:
         pickle.dump(original, f)
 
-    loaded = Classifier.load(path)
+    # Patch _predict_batch on the class *after* pickling so the pickle contains the
+    # old method reference. The loaded instance should use the current (patched) class
+    # method, proving it was reconstructed from the current class definition.
+    sentinel = object()
+    with patch.object(BertBasedClassifier, "_predict_batch", return_value=sentinel):
+        loaded = Classifier.load(path)
+        assert loaded._predict_batch(["text"]) is sentinel
 
     assert isinstance(loaded, BertBasedClassifier)
     assert loaded is not original, "Should be a fresh instance, not the pickled object"
