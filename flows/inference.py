@@ -623,50 +623,6 @@ async def labels_to_s3(
         )
 
 
-def batch_text_block_inference(
-    classifier: Classifier,
-    classifier_spec: ClassifierSpec,
-    all_text: list[str],
-    all_block_ids: list[str],
-    batch_size: int = 10,
-) -> list[LabelledPassage]:
-    """Runs inference and batches the text blocks"""
-
-    outputs = []
-    for batch_idx in range(0, len(all_text), batch_size):
-        text_batch = all_text[batch_idx : batch_idx + batch_size]
-        block_ids = all_block_ids[batch_idx : batch_idx + batch_size]
-
-        outputs.extend(
-            _text_block_inference_for_single_batch(
-                classifier=classifier,
-                classifier_spec=classifier_spec,
-                text_batch=text_batch,
-                block_ids=block_ids,
-            )
-        )
-    return outputs
-
-
-def _text_block_inference_for_single_batch(
-    classifier: Classifier,
-    classifier_spec: ClassifierSpec,
-    text_batch: list[str],
-    block_ids: list[str],
-) -> list[LabelledPassage]:
-    """Runs predict on a batch of blocks."""
-    spans: list[list[Span]] = classifier.predict(text_batch)
-
-    labelled_passages = [
-        _get_labelled_passage_from_prediction(
-            classifier, spans, block_id, text, classifier_spec
-        )
-        for spans, block_id, text in zip(spans, block_ids, text_batch)
-    ]
-
-    return labelled_passages
-
-
 def text_block_inference(
     classifier: Classifier,
     classifier_spec: ClassifierSpec,
@@ -789,17 +745,19 @@ async def run_classifier_inference_on_document(
     classifier: Classifier,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
-    doc_labels: list[LabelledPassage] = []
     assert result.document  # For typing, we already check this properly earlier
-    for text, block_id in document_passages(result.document):
-        labelled_passages = text_block_inference(
-            classifier=classifier,
-            block_id=block_id,
-            text=text,
-            classifier_spec=result.classifier_spec,
-        )
-        doc_labels.append(labelled_passages)
-    result.labelled_passages = doc_labels
+
+    if passages := list(document_passages(result.document)):
+        all_text, all_block_ids = zip(*passages)
+        all_spans: list[list[Span]] = classifier.predict(list(all_text), batch_size=10)
+        result.labelled_passages = [
+            _get_labelled_passage_from_prediction(
+                classifier, spans, block_id, text, result.classifier_spec
+            )
+            for spans, block_id, text in zip(all_spans, all_block_ids, all_text)
+        ]
+    else:
+        result.labelled_passages = []
 
     # Unload the document now that we're done with it
     result.document = None
