@@ -124,9 +124,7 @@ class BertBasedClassifier(
         # Random component for nondeterministic ID, generated once when classifier is fitted
         self._random_id_component: str = ""
 
-        # For training and inference, we use GPU/MPS if available
-        self.training_device = self._resolve_device()
-        self.inference_device = self.training_device
+        self.device = self._resolve_device()
 
         if download_pretrained_model_on_init:
             self.download_model_and_tokenizer()
@@ -154,9 +152,9 @@ class BertBasedClassifier(
         :param device: Target device. Resolved automatically when ``None``.
         """
         device = device or self._resolve_device()
-        self.model.to(device)  # type: ignore[attr-defined]
-        self.training_device = device
-        self.inference_device = device
+        if hasattr(self.model, "to"):
+            self.model.to(device)  # type: ignore[attr-defined]
+        self.device = device
 
     def download_model_and_tokenizer(self) -> None:
         """
@@ -172,8 +170,7 @@ class BertBasedClassifier(
             self.model_name
         )
 
-        # Move model to training device (only used during training)
-        self.model.to(self.training_device)  # type: ignore
+        self.model.to(self.device)  # type: ignore
 
     @property
     def id(self) -> ClassifierID:
@@ -312,7 +309,7 @@ class BertBasedClassifier(
         :returns: Tuple of `(scores, predicted_classes)` where `scores[i]` is the
             probability of the predicted class for text `i`
         """
-        device = self.inference_device
+        device = self.device
         inputs = self.tokenizer(
             list(texts),
             padding=True,
@@ -348,7 +345,7 @@ class BertBasedClassifier(
         """
         variant = self.__class__(concept=self.concept, model_name=self.model_name)
         variant.model.load_state_dict(self.model.state_dict())
-        variant.inference_device = self.inference_device
+        variant.device = self.device
 
         variant._variant_seed = random_seed
         variant._variant_dropout_rate = dropout_rate
@@ -524,7 +521,7 @@ class BertBasedClassifier(
             class_weight="balanced", classes=np.unique(train_labels), y=train_labels
         )
         class_weights_tensor = torch.tensor(class_weights, dtype=torch.float32).to(
-            self.training_device
+            self.device
         )
         logger.info("Class weights: %s", class_weights_tensor.cpu().numpy())
 

@@ -177,8 +177,7 @@ def move_model_to_cpu(classifier: Classifier) -> None:
     console = Console()
 
     if isinstance(classifier, BertBasedClassifier):
-        classifier.model.to("cpu")  # type: ignore
-        classifier.inference_device = torch.device("cpu")  # type: ignore
+        classifier.move_model_to_device(torch.device("cpu"))
         console.log("Moved model to CPU")
 
 
