@@ -285,6 +285,14 @@ class Classifier(ABC):
                 download_pretrained_model_on_init=False,
             )
 
+            # The BertBasedClassifier stores its Huggingface model, tokenizer and
+            # pipeline as attributes. So, we can load these in from the old classifier
+            # into the new classifier, whilst using any updates to the code from the
+            # new classifier.
+            # This is vulnerable to changes in the code that break compatibility with
+            # the HF model, tokenizer and pipeline. This should be unlikely as the
+            # methods which use these underlying objects contain nothing specific to our
+            # domain, so are assumed to not have regular updates.
             vars(new_classifier).update(vars(classifier))
             classifier = new_classifier
 
