@@ -648,34 +648,14 @@ def batch_text_block_inference(
     return outputs
 
 
-def _text_block_inference_for_single_batch(
-    classifier: Classifier,
-    classifier_spec: ClassifierSpec,
-    text_batch: list[str],
-    block_ids: list[str],
-) -> list[LabelledPassage]:
-    """Runs predict on a batch of blocks."""
-    spans: list[list[Span]] = classifier.predict(text_batch)
+def _validate_spans(spans: list[Span]) -> None:
+    """
+    Validate that spans have required timestamps and labellers.
 
-    labelled_passages = [
-        _get_labelled_passage_from_prediction(
-            classifier, spans, block_id, text, classifier_spec
-        )
-        for spans, block_id, text in zip(spans, block_ids, text_batch)
-    ]
-
-    return labelled_passages
-
-
-def text_block_inference(
-    classifier: Classifier,
-    classifier_spec: ClassifierSpec,
-    block_id: str,
-    text: str,
-) -> LabelledPassage:
-    """Run predict on a single text block."""
-    spans: list[Span] = classifier.predict(text)
-
+    :param list[Span] spans: The spans to validate.
+    :raises ValueError: If any span has missing timestamps, missing labellers,
+        or mismatched timestamp/labeller lengths.
+    """
     if spans_missing_timestamps := [span for span in spans if not span.timestamps]:
         span_ids = ",".join(str(span.id) for span in spans_missing_timestamps)
         raise ValueError(
@@ -701,6 +681,39 @@ def text_block_inference(
             f"Found {len(spans_mismatched_lengths)} span(s) with mismatched timestamp/labeller lengths. "
             f"Details: {mismatched_info}"
         )
+
+
+def _text_block_inference_for_single_batch(
+    classifier: Classifier,
+    classifier_spec: ClassifierSpec,
+    text_batch: list[str],
+    block_ids: list[str],
+) -> list[LabelledPassage]:
+    """Runs predict on a batch of blocks."""
+    all_spans: list[list[Span]] = classifier.predict(text_batch)
+
+    for spans in all_spans:
+        _validate_spans(spans)
+
+    labelled_passages = [
+        _get_labelled_passage_from_prediction(
+            classifier, spans, block_id, text, classifier_spec
+        )
+        for spans, block_id, text in zip(all_spans, block_ids, text_batch)
+    ]
+
+    return labelled_passages
+
+
+def text_block_inference(
+    classifier: Classifier,
+    classifier_spec: ClassifierSpec,
+    block_id: str,
+    text: str,
+) -> LabelledPassage:
+    """Run predict on a single text block."""
+    spans: list[Span] = classifier.predict(text)
+    _validate_spans(spans)
 
     labelled_passage = _get_labelled_passage_from_prediction(
         classifier, spans, block_id, text, classifier_spec
