@@ -658,23 +658,6 @@ def _validate_spans(spans: list[Span]) -> None:
         )
 
 
-def text_block_inference(
-    classifier: Classifier,
-    classifier_spec: ClassifierSpec,
-    block_id: str,
-    text: str,
-) -> LabelledPassage:
-    """Run predict on a single text block."""
-    spans: list[Span] = classifier.predict(text)
-    _validate_spans(spans)
-
-    labelled_passage = _get_labelled_passage_from_prediction(
-        classifier, spans, block_id, text, classifier_spec
-    )
-
-    return labelled_passage
-
-
 def _get_labelled_passage_from_prediction(
     classifier: Classifier,
     spans: list[Span],
