@@ -108,7 +108,7 @@ class BertBasedClassifier(
         """
         Initialise a BERT classifier.
 
-        :param concept: _description_
+        :param concept: concept the classifier is trained to detect mentions of in text
         :param model_name: model name from Huggingface, defaults to "answerdotai/ModernBERT-base"
         :param download_pretrained_model_on_init: whether to download the pretrained model and tokenizer on init, defaults to True.
             Disable this if planning to overwrite the model and tokenizer elsewhere.
