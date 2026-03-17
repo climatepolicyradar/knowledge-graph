@@ -107,7 +107,7 @@ class BertBasedClassifier(
         """
         Initialise a BERT classifier.
 
-        :param concept: _description_
+        :param concept: concept the classifier is trained to detect mentions of in text
         :param model_name: model name from Huggingface, defaults to "answerdotai/ModernBERT-base"
         :param download_pretrained_model_on_init: whether to download the pretrained model and tokenizer on init, defaults to True.
             Disable this if planning to overwrite the model and tokenizer elsewhere.
@@ -156,6 +156,9 @@ class BertBasedClassifier(
             self.model.to(device)  # type: ignore[attr-defined]
         self.device = device
 
+        if download_pretrained_model_on_init:
+            self.download_model_and_tokenizer()
+
     def download_model_and_tokenizer(self) -> None:
         """
         Download the model and tokenizer from the Huggingface hub.
@@ -168,6 +171,16 @@ class BertBasedClassifier(
         )
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
             self.model_name
+        )
+
+        # Always use CPU for inference, to ensure consistency across different deployment
+        # environments. Models may be developed on machines with GPU/MPS but need to run
+        # reliably on CPU in production pipelines.
+        self.pipeline = pipeline(
+            "text-classification",
+            model=self.model,
+            tokenizer=self.tokenizer,
+            device=self.training_device,
         )
 
         self.model.to(self.device)  # type: ignore

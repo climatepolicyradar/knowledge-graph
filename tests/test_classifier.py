@@ -666,6 +666,7 @@ def test_classifier_load_reinitializes_bert_based_classifier(tmp_path):
     original.model = "fake_trained_model"
     original.tokenizer = "fake_trained_tokenizer"
     original.device = torch.device("cpu")
+    original.pipeline = "fake_trained_pipeline"
     original.model_name = "test-model"
     original.is_fitted = True
     original.prediction_threshold = 0.7
@@ -688,5 +689,6 @@ def test_classifier_load_reinitializes_bert_based_classifier(tmp_path):
     assert loaded.tokenizer == "fake_trained_tokenizer"
     # Device should be re-resolved to the best available, not preserved from pickle
     assert loaded.device == loaded._resolve_device()
+    assert loaded.pipeline == "fake_trained_pipeline"
     assert loaded.is_fitted is True
     assert loaded.prediction_threshold == 0.7
