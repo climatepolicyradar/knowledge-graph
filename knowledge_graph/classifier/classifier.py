@@ -284,7 +284,7 @@ class Classifier(ABC):
                 model_name=classifier.model_name,
                 download_pretrained_model_on_init=False,
             )
-            
+
             # The BertBasedClassifier stores its Huggingface model, tokenizer and
             # pipeline as attributes. So, we can load these in from the old classifier
             # into the new classifier, whilst using any updates to the code from the

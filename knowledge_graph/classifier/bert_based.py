@@ -21,6 +21,7 @@ from transformers import (
     EvalPrediction,
     PreTrainedModel,
     PreTrainedTokenizer,
+    pipeline,
 )
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
@@ -156,9 +157,6 @@ class BertBasedClassifier(
             self.model.to(device)  # type: ignore[attr-defined]
         self.device = device
 
-        if download_pretrained_model_on_init:
-            self.download_model_and_tokenizer()
-
     def download_model_and_tokenizer(self) -> None:
         """
         Download the model and tokenizer from the Huggingface hub.
@@ -173,14 +171,11 @@ class BertBasedClassifier(
             self.model_name
         )
 
-        # Always use CPU for inference, to ensure consistency across different deployment
-        # environments. Models may be developed on machines with GPU/MPS but need to run
-        # reliably on CPU in production pipelines.
         self.pipeline = pipeline(
             "text-classification",
             model=self.model,
             tokenizer=self.tokenizer,
-            device=self.training_device,
+            device=self.device,
         )
 
         self.model.to(self.device)  # type: ignore
