@@ -628,7 +628,7 @@ def batch_text_block_inference(
     classifier_spec: ClassifierSpec,
     all_text: list[str],
     all_block_ids: list[str],
-    batch_size: int = 10,
+    batch_size: int = 32,
 ) -> list[LabelledPassage]:
     """Runs inference and batches the text blocks"""
 

@@ -294,13 +294,15 @@ class Classifier(ABC):
             # methods which use these underlying objects contain nothing specific to our
             # domain, so are assumed to not have regular updates.
             vars(new_classifier).update(vars(classifier))
+
+            if model_to_cuda:
+                import torch  # type: ignore[import-untyped]
+
+                new_classifier.move_model_to_device(torch.device("cuda:0"))
+            else:
+                new_classifier.move_model_to_device()
+
             classifier = new_classifier
-
-        if model_to_cuda and hasattr(classifier, "pipeline"):
-            classifier.pipeline.model.to("cuda:0")  # type: ignore
-            import torch  # type: ignore[import-untyped]
-
-            classifier.pipeline.device = torch.device("cuda:0")  # type: ignore
         return classifier
 
 

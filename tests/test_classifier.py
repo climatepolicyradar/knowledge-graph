@@ -654,6 +654,8 @@ def test_whether_classifier_handles_non_ascii_labels_across_separators(
 
 
 def test_classifier_load_reinitializes_bert_based_classifier(tmp_path):
+    import torch
+
     concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
 
     original = BertBasedClassifier(
@@ -663,6 +665,7 @@ def test_classifier_load_reinitializes_bert_based_classifier(tmp_path):
     )
     original.model = "fake_trained_model"
     original.tokenizer = "fake_trained_tokenizer"
+    original.device = torch.device("cpu")
     original.pipeline = "fake_trained_pipeline"
     original.model_name = "test-model"
     original.is_fitted = True
@@ -684,6 +687,8 @@ def test_classifier_load_reinitializes_bert_based_classifier(tmp_path):
     assert loaded is not original, "Should be a fresh instance, not the pickled object"
     assert loaded.model == "fake_trained_model"
     assert loaded.tokenizer == "fake_trained_tokenizer"
+    # Device should be re-resolved to the best available, not preserved from pickle
+    assert loaded.device == loaded._resolve_device()
     assert loaded.pipeline == "fake_trained_pipeline"
     assert loaded.is_fitted is True
     assert loaded.prediction_threshold == 0.7
