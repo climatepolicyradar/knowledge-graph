@@ -268,11 +268,34 @@ class Classifier(ABC):
         Load a classifier from a file.
 
         :param Union[str, Path] path: The path to load the classifier from
+        :param bool model_to_cuda: Whether to move the model to CUDA if available
         :return Classifier: The loaded classifier
         """
         with open(path, "rb") as f:
             classifier = pickle.load(f)
         assert isinstance(classifier, Classifier)
+
+        # Avoids circular import
+        from knowledge_graph.classifier.bert_based import BertBasedClassifier  # noqa: I001
+
+        if isinstance(classifier, BertBasedClassifier):
+            new_classifier = BertBasedClassifier(
+                concept=classifier.concept,
+                model_name=classifier.model_name,
+                download_pretrained_model_on_init=False,
+            )
+
+            # The BertBasedClassifier stores its Huggingface model, tokenizer and
+            # pipeline as attributes. So, we can load these in from the old classifier
+            # into the new classifier, whilst using any updates to the code from the
+            # new classifier.
+            # This is vulnerable to changes in the code that break compatibility with
+            # the HF model, tokenizer and pipeline. This should be unlikely as the
+            # methods which use these underlying objects contain nothing specific to our
+            # domain, so are assumed to not have regular updates.
+            vars(new_classifier).update(vars(classifier))
+            classifier = new_classifier
+
         if model_to_cuda and hasattr(classifier, "pipeline"):
             classifier.pipeline.model.to("cuda:0")  # type: ignore
             import torch  # type: ignore[import-untyped]
