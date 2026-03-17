@@ -21,6 +21,12 @@ schema document_passage {
 
         field text_block_id type string {
             indexing: attribute | summary
+            # Don't tokenise this, so we can match on UUIDs[1]. In
+            # general too, we're only matching on exact IDs, and not
+            # tokens of an ID.
+            #
+            # [1]: https://docs.vespa.ai/en/performance/feature-tuning.html#indexing-uuids
+            match: word
         }
 
         field text_block_coords type array<array<float>> {
