@@ -30,6 +30,7 @@ from flows.inference import (
     Metadata,
     ParameterisedFlow,
     SingleDocumentInferenceResult,
+    _get_labelled_passage_from_prediction,
     _inference_batch_of_documents,
     _stringify,
     _validate_spans,
@@ -2327,3 +2328,79 @@ async def test_inference_with_caching_disabled(
         assert artifact_data[0]["Skipped"] == 0
         assert artifact_data[0]["Existing Results"] == 0
         assert artifact_data[0]["Accepted"] == 2
+
+
+def test_get_labelled_passage_from_prediction_with_spans():
+    """Test _get_labelled_passage_from_prediction returns correct metadata when spans exist."""
+    from knowledge_graph.concept import Concept
+
+    concept = Concept(
+        preferred_label="Fishing",
+        wikibase_id=WikibaseID("Q9081"),
+        labelled_passages=[
+            LabelledPassage(id="lp1", text="example", spans=[], metadata={})
+        ],
+    )
+    classifier = MagicMock()
+    classifier.concept = concept
+
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q9081"),
+        classifier_id=ClassifierID.generate("Q9081", "v3"),
+        wandb_registry_version="v3",
+    )
+
+    spans = [
+        Span(
+            text="I love fishing.",
+            start_index=0,
+            end_index=14,
+            labellers=["test_labeller"],
+            timestamps=[datetime.now(tz=timezone.utc)],
+        )
+    ]
+
+    result = _get_labelled_passage_from_prediction(
+        classifier=classifier,
+        spans=spans,
+        block_id="fish_block",
+        text="I love fishing. Aquaculture is the best.",
+        classifier_spec=spec,
+    )
+
+    assert len(result.spans) > 0
+    assert result.id == "fish_block"
+    assert result.metadata != {}
+    assert "classifier_spec" in result.metadata
+    assert result.metadata["classifier_spec"] == spec.model_dump()
+    # Labelled passages should be emptied in metadata
+    expected_concept_metadata = concept.model_dump()
+    expected_concept_metadata["labelled_passages"] = []
+    assert result.metadata["concept"] == expected_concept_metadata
+    # Check timestamps are valid
+    for span in result.spans:
+        assert isinstance(span.timestamps[0], datetime)
+
+
+def test_get_labelled_passage_from_prediction_without_spans():
+    """Test _get_labelled_passage_from_prediction returns empty metadata when no spans."""
+    classifier = MagicMock()
+
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q9081"),
+        classifier_id=ClassifierID.generate("Q9081", "v3"),
+        wandb_registry_version="v3",
+    )
+
+    result = _get_labelled_passage_from_prediction(
+        classifier=classifier,
+        spans=[],
+        block_id="fish_block",
+        text="Rockets are cool. We should build more rockets.",
+        classifier_spec=spec,
+    )
+
+    assert len(result.spans) == 0
+    assert result.id == "fish_block"
+    # When there are no spans, metadata should be empty
+    assert result.metadata == {}
