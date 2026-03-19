@@ -80,6 +80,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
+CLASSIFIER_PREDICT_BATCH_SIZE: Final[PositiveInt] = 32
 AWS_ENV: str = os.environ["AWS_ENV"]
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
@@ -743,7 +744,9 @@ async def run_classifier_inference_on_document(
     all_text = [text for text, _ in passages]
     all_block_ids = [block_id for _, block_id in passages]
 
-    all_spans: list[list[Span]] = classifier.predict(all_text, batch_size=32)
+    all_spans: list[list[Span]] = classifier.predict(
+        all_text, batch_size=CLASSIFIER_PREDICT_BATCH_SIZE
+    )
     for spans in all_spans:
         _validate_spans(spans)
 
