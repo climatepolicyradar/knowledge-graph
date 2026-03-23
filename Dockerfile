@@ -53,7 +53,7 @@ COPY static_sites ./static_sites/
 COPY vibe-checker ./vibe-checker/
 
 # Install the project
-RUN uv pip install --system -e .
+RUN uv pip install --system --no-deps -e .
 
 # Set PYTHONPATH to ensure modules can be found for distributed tasks
 # This is a workaround for when running on coiled when functions are serialised 
