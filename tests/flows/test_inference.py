@@ -30,8 +30,10 @@ from flows.inference import (
     Metadata,
     ParameterisedFlow,
     SingleDocumentInferenceResult,
+    _get_labelled_passage_from_prediction,
     _inference_batch_of_documents,
     _stringify,
+    _validate_spans,
     determine_file_stems,
     did_inference_fail,
     document_passages,
@@ -51,7 +53,6 @@ from flows.inference import (
     run_classifier_inference_on_document,
     store_inference_result,
     store_metadata,
-    text_block_inference,
 )
 from flows.utils import (
     DocumentImportId,
@@ -484,72 +485,6 @@ def test_document_passages__html(parser_output_html):
 def test_document_passages__pdf(parser_output_pdf):
     pdf_result = document_passages(parser_output_pdf).__next__()
     assert pdf_result == ("test pdf text", "2")
-
-
-@pytest.mark.asyncio
-async def test_text_block_inference_with_results(
-    mock_wandb, test_config, mock_classifiers_dir
-):
-    _, mock_run, _ = mock_wandb
-    test_config.local_classifier_dir = mock_classifiers_dir
-    spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q9081"),
-        classifier_id=ClassifierID.generate("Q9081", "v3"),
-        wandb_registry_version="v3",
-    )
-    classifier = await load_classifier_from_model_registry(
-        mock_run,
-        test_config,
-        spec,
-    )
-
-    text = "I love fishing. Aquaculture is the best."
-    block_id = "fish_block"
-    labels = text_block_inference(
-        classifier=classifier, classifier_spec=spec, block_id=block_id, text=text
-    )
-
-    assert len(labels.spans) > 0
-    assert labels.id == block_id
-    assert labels.metadata != {}
-    assert "classifier_spec" in labels.metadata
-    assert labels.metadata["classifier_spec"] == spec.model_dump()
-    # Set the labelled passages as empty as we are removing them.
-    expected_concept_metadata = classifier.concept.model_dump()
-    expected_concept_metadata["labelled_passages"] = []
-    assert labels.metadata["concept"] == expected_concept_metadata
-    # check whether the timestamps are valid
-    for span in labels.spans:
-        assert isinstance(span.timestamps[0], datetime)
-
-
-@pytest.mark.asyncio
-async def test_text_block_inference_without_results(
-    mock_wandb, test_config, mock_classifiers_dir
-):
-    _, mock_run, _ = mock_wandb
-    test_config.local_classifier_dir = mock_classifiers_dir
-    spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q9081"),
-        classifier_id=ClassifierID.generate("Q9081", "v3"),
-        wandb_registry_version="v3",
-    )
-    classifier = await load_classifier_from_model_registry(
-        mock_run,
-        test_config,
-        spec,
-    )
-
-    text = "Rockets are cool. We should build more rockets."
-    block_id = "fish_block"
-    labels = text_block_inference(
-        classifier=classifier, classifier_spec=spec, block_id=block_id, text=text
-    )
-
-    assert len(labels.spans) == 0
-    assert labels.id == block_id
-    # When there are no spans, metadata should be empty
-    assert labels.metadata == {}
 
 
 @pytest.mark.asyncio
@@ -1462,91 +1397,41 @@ def test_log_client_error():
     assert "skew.seconds=1201" in extra_context
 
 
-def test_text_block_inference_span_validation_missing_timestamps():
-    mock_classifier = MagicMock()
-
-    spans_missing_timestamps = [
+def test_validate_spans_missing_timestamps():
+    spans = [
         Span(
             text="test text",
             start_index=0,
             end_index=4,
             labellers=["test_labeller"],
-            timestamps=[],  # Missing timestamps
+            timestamps=[],
         )
     ]
-    mock_classifier.predict.return_value = spans_missing_timestamps
-
-    classifier_spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q123"),
-        classifier_id=ClassifierID("testabcd"),
-        wandb_registry_version="v1",
-    )
-
     with pytest.raises(ValueError, match="Found 1 span\\(s\\) with missing timestamps"):
-        text_block_inference(
-            classifier=mock_classifier,
-            classifier_spec=classifier_spec,
-            block_id="test_block",
-            text="test text",
-        )
+        _validate_spans(spans)
 
 
-def test_text_block_inference_span_validation_missing_labellers():
-    mock_classifier = MagicMock()
-
-    # Create a mock span to bypass Pydantic validation during construction
-    mock_span_missing_labellers = MagicMock(spec=Span)
-    mock_span_missing_labellers.timestamps = [datetime.now()]
-    mock_span_missing_labellers.labellers = []  # Missing labellers
-    spans_missing_labellers = [mock_span_missing_labellers]
-    mock_classifier.predict.return_value = spans_missing_labellers
-
-    classifier_spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q123"),
-        classifier_id=ClassifierID("testabcd"),
-        wandb_registry_version="v1",
-    )
-
+def test_validate_spans_missing_labellers():
+    mock_span = MagicMock(spec=Span)
+    mock_span.timestamps = [datetime.now()]
+    mock_span.labellers = []
     with pytest.raises(ValueError, match="Found 1 span\\(s\\) with missing labellers"):
-        text_block_inference(
-            classifier=mock_classifier,
-            classifier_spec=classifier_spec,
-            block_id="test_block",
-            text="test text",
-        )
+        _validate_spans([mock_span])
 
 
-def test_text_block_inference_span_validation_mismatched_lengths():
-    mock_classifier = MagicMock()
-
-    mock_span_mismatched = MagicMock(spec=Span)
-    mock_span_mismatched.timestamps = [datetime.now()]  # 1 timestamp
-    mock_span_mismatched.labellers = ["labeller1", "labeller2"]  # 2 labellers
-    spans_mismatched_lengths = [mock_span_mismatched]
-    mock_classifier.predict.return_value = spans_mismatched_lengths
-
-    classifier_spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q123"),
-        classifier_id=ClassifierID("testabcd"),
-        wandb_registry_version="v1",
-    )
-
+def test_validate_spans_mismatched_lengths():
+    mock_span = MagicMock(spec=Span)
+    mock_span.timestamps = [datetime.now()]
+    mock_span.labellers = ["labeller1", "labeller2"]
     with pytest.raises(
         ValueError,
         match="Found 1 span\\(s\\) with mismatched timestamp/labeller lengths",
     ):
-        text_block_inference(
-            classifier=mock_classifier,
-            classifier_spec=classifier_spec,
-            block_id="test_block",
-            text="test text",
-        )
+        _validate_spans([mock_span])
 
 
-def test_text_block_inference_span_validation_valid_spans():
-    mock_classifier = MagicMock()
-
-    valid_spans = [
+def test_validate_spans_valid():
+    spans = [
         Span(
             text="test text",
             start_index=0,
@@ -1555,25 +1440,7 @@ def test_text_block_inference_span_validation_valid_spans():
             timestamps=[datetime.now()],
         )
     ]
-    mock_classifier.predict.return_value = valid_spans
-
-    classifier_spec = ClassifierSpec(
-        wikibase_id=WikibaseID("Q123"),
-        classifier_id=ClassifierID("testabcd"),
-        wandb_registry_version="v1",
-    )
-
-    # This should not raise any exceptions
-    result = text_block_inference(
-        classifier=mock_classifier,
-        classifier_spec=classifier_spec,
-        block_id="test_block",
-        text="test text",
-    )
-
-    assert result.id == "test_block"
-    assert result.text == "test text"
-    assert len(result.spans) == 1
+    _validate_spans(spans)  # Should not raise
 
 
 @pytest.mark.asyncio
@@ -2461,3 +2328,79 @@ async def test_inference_with_caching_disabled(
         assert artifact_data[0]["Skipped"] == 0
         assert artifact_data[0]["Existing Results"] == 0
         assert artifact_data[0]["Accepted"] == 2
+
+
+def test_get_labelled_passage_from_prediction_with_spans():
+    """Test _get_labelled_passage_from_prediction returns correct metadata when spans exist."""
+    from knowledge_graph.concept import Concept
+
+    concept = Concept(
+        preferred_label="Fishing",
+        wikibase_id=WikibaseID("Q9081"),
+        labelled_passages=[
+            LabelledPassage(id="lp1", text="example", spans=[], metadata={})
+        ],
+    )
+    classifier = MagicMock()
+    classifier.concept = concept
+
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q9081"),
+        classifier_id=ClassifierID.generate("Q9081", "v3"),
+        wandb_registry_version="v3",
+    )
+
+    spans = [
+        Span(
+            text="I love fishing.",
+            start_index=0,
+            end_index=14,
+            labellers=["test_labeller"],
+            timestamps=[datetime.now(tz=timezone.utc)],
+        )
+    ]
+
+    result = _get_labelled_passage_from_prediction(
+        classifier=classifier,
+        spans=spans,
+        block_id="fish_block",
+        text="I love fishing. Aquaculture is the best.",
+        classifier_spec=spec,
+    )
+
+    assert len(result.spans) > 0
+    assert result.id == "fish_block"
+    assert result.metadata != {}
+    assert "classifier_spec" in result.metadata
+    assert result.metadata["classifier_spec"] == spec.model_dump()
+    # Labelled passages should be emptied in metadata
+    expected_concept_metadata = concept.model_dump()
+    expected_concept_metadata["labelled_passages"] = []
+    assert result.metadata["concept"] == expected_concept_metadata
+    # Check timestamps are valid
+    for span in result.spans:
+        assert isinstance(span.timestamps[0], datetime)
+
+
+def test_get_labelled_passage_from_prediction_without_spans():
+    """Test _get_labelled_passage_from_prediction returns empty metadata when no spans."""
+    classifier = MagicMock()
+
+    spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q9081"),
+        classifier_id=ClassifierID.generate("Q9081", "v3"),
+        wandb_registry_version="v3",
+    )
+
+    result = _get_labelled_passage_from_prediction(
+        classifier=classifier,
+        spans=[],
+        block_id="fish_block",
+        text="Rockets are cool. We should build more rockets.",
+        classifier_spec=spec,
+    )
+
+    assert len(result.spans) == 0
+    assert result.id == "fish_block"
+    # When there are no spans, metadata should be empty
+    assert result.metadata == {}

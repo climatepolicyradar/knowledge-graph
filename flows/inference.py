@@ -80,6 +80,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 
 CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
+CLASSIFIER_PREDICT_BATCH_SIZE: Final[PositiveInt] = 32
 AWS_ENV: str = os.environ["AWS_ENV"]
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
 
@@ -623,59 +624,14 @@ async def labels_to_s3(
         )
 
 
-def batch_text_block_inference(
-    classifier: Classifier,
-    classifier_spec: ClassifierSpec,
-    all_text: list[str],
-    all_block_ids: list[str],
-    batch_size: int = 32,
-) -> list[LabelledPassage]:
-    """Runs inference and batches the text blocks"""
+def _validate_spans(spans: list[Span]) -> None:
+    """
+    Validate that spans have required timestamps and labellers.
 
-    outputs = []
-    for batch_idx in range(0, len(all_text), batch_size):
-        text_batch = all_text[batch_idx : batch_idx + batch_size]
-        block_ids = all_block_ids[batch_idx : batch_idx + batch_size]
-
-        outputs.extend(
-            _text_block_inference_for_single_batch(
-                classifier=classifier,
-                classifier_spec=classifier_spec,
-                text_batch=text_batch,
-                block_ids=block_ids,
-            )
-        )
-    return outputs
-
-
-def _text_block_inference_for_single_batch(
-    classifier: Classifier,
-    classifier_spec: ClassifierSpec,
-    text_batch: list[str],
-    block_ids: list[str],
-) -> list[LabelledPassage]:
-    """Runs predict on a batch of blocks."""
-    spans: list[list[Span]] = classifier.predict(text_batch)
-
-    labelled_passages = [
-        _get_labelled_passage_from_prediction(
-            classifier, spans, block_id, text, classifier_spec
-        )
-        for spans, block_id, text in zip(spans, block_ids, text_batch)
-    ]
-
-    return labelled_passages
-
-
-def text_block_inference(
-    classifier: Classifier,
-    classifier_spec: ClassifierSpec,
-    block_id: str,
-    text: str,
-) -> LabelledPassage:
-    """Run predict on a single text block."""
-    spans: list[Span] = classifier.predict(text)
-
+    :param list[Span] spans: The spans to validate.
+    :raises ValueError: If any span has missing timestamps, missing labellers,
+        or mismatched timestamp/labeller lengths.
+    """
     if spans_missing_timestamps := [span for span in spans if not span.timestamps]:
         span_ids = ",".join(str(span.id) for span in spans_missing_timestamps)
         raise ValueError(
@@ -701,12 +657,6 @@ def text_block_inference(
             f"Found {len(spans_mismatched_lengths)} span(s) with mismatched timestamp/labeller lengths. "
             f"Details: {mismatched_info}"
         )
-
-    labelled_passage = _get_labelled_passage_from_prediction(
-        classifier, spans, block_id, text, classifier_spec
-    )
-
-    return labelled_passage
 
 
 def _get_labelled_passage_from_prediction(
@@ -789,17 +739,23 @@ async def run_classifier_inference_on_document(
     classifier: Classifier,
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
-    doc_labels: list[LabelledPassage] = []
     assert result.document  # For typing, we already check this properly earlier
-    for text, block_id in document_passages(result.document):
-        labelled_passages = text_block_inference(
-            classifier=classifier,
-            block_id=block_id,
-            text=text,
-            classifier_spec=result.classifier_spec,
+    passages = list(document_passages(result.document))
+    all_text = [text for text, _ in passages]
+    all_block_ids = [block_id for _, block_id in passages]
+
+    all_spans: list[list[Span]] = classifier.predict(
+        all_text, batch_size=CLASSIFIER_PREDICT_BATCH_SIZE
+    )
+    for spans in all_spans:
+        _validate_spans(spans)
+
+    result.labelled_passages = [
+        _get_labelled_passage_from_prediction(
+            classifier, spans, block_id, text, result.classifier_spec
         )
-        doc_labels.append(labelled_passages)
-    result.labelled_passages = doc_labels
+        for spans, block_id, text in zip(all_spans, all_block_ids, all_text)
+    ]
 
     # Unload the document now that we're done with it
     result.document = None
