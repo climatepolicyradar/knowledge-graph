@@ -359,7 +359,7 @@ async def wait_for_pr_merge(
 
             if elapsed > timeout.total_seconds():
                 logger.error(
-                    f"PR #{pr_number} did not merge within {timeout_minutes} minutes. Check: https://github.com/{repo}/pull/{pr_number}."
+                    f"PR #{pr_number} did not merge within {timeout_minutes} minutes. Check: https://github.com/{repo}/pull/{pr_number}"
                 )
                 return Err(
                     Error(
