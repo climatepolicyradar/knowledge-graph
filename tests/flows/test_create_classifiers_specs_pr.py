@@ -509,23 +509,25 @@ async def test_create_and_merge_pr():
         patch(
             "flows.create_classifiers_specs_pr.enable_auto_merge"
         ) as mock_enable_merge,
+        patch(
+            "flows.create_classifiers_specs_pr.get_slack_client"
+        ) as mock_get_slack_client,
         patch("flows.create_classifiers_specs_pr.wait_for_pr_merge") as mock_wait_merge,
     ):
-        # Mock commit_and_create_pr
         mock_commit.return_value = 123
-
-        # Mock enable_auto_merge
         mock_enable_merge.return_value = Ok(None)
-
-        # Mock wait_for_pr_merge
+        mock_slack = Mock()
+        mock_slack.chat_postMessage = Mock(return_value=Mock())
+        mock_get_slack_client.return_value = mock_slack
         mock_wait_merge.return_value = Ok(None)
-        # Call the main function
+
         results = await create_and_merge_pr(
             spec_file="testfile",
             aws_env=AwsEnv.staging,
             flow_run_name="Test Run",
             flow_run_url="http://example.com",
             github_token=SecretStr("mock-token"),
+            spec_changes_summary="+3 added · 2 updated",
             auto_merge=True,
         )
 
@@ -535,10 +537,11 @@ async def test_create_and_merge_pr():
             repo="climatepolicyradar/knowledge-graph",
             merge_method="REBASE",
         )
+        mock_slack.chat_postMessage.assert_called_once()
         mock_wait_merge.assert_called_once_with(
             pr_number=123,
             repo="climatepolicyradar/knowledge-graph",
-            timeout=timedelta(minutes=30),
+            timeout=timedelta(minutes=60),
             poll_interval=timedelta(seconds=30),
         )
         assert is_ok(results)
@@ -564,6 +567,7 @@ async def test_create_and_merge_pr__no_automerge():
             flow_run_name="Test Run",
             flow_run_url="http://example.com",
             github_token=SecretStr("mock-token"),
+            spec_changes_summary="+3 added",
             auto_merge=False,
         )
 
@@ -597,6 +601,7 @@ async def test_create_and_merge_pr__automerge_failure():
             flow_run_name="Test Run",
             flow_run_url="http://example.com",
             github_token=SecretStr("mock-token"),
+            spec_changes_summary="+3 added · 2 updated",
             auto_merge=True,
         )
 

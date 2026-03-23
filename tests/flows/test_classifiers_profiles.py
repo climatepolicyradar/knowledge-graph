@@ -27,6 +27,7 @@ from flows.classifiers_profiles import (
     promote_classifier_profile,
     read_concepts,
     send_classifiers_profile_slack_alert,
+    summarise_spec_changes,
     sync_classifiers_profiles,
     update_classifier_profile,
     update_vespa_with_classifiers_profiles,
@@ -805,7 +806,9 @@ def test_emit_finished__success():
         mock_event = Mock()
         mock_emit_event.return_value = mock_event
 
-        result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
+        result = emit_finished(
+            promotions=promotions, updates=[], demotions=[], aws_env=AwsEnv.staging
+        )
 
         mock_emit_event.assert_called_once()
         call_args = mock_emit_event.call_args
@@ -820,9 +823,11 @@ def test_emit_finished__success():
         assert result == Ok(mock_event)
 
 
-def test_emit_finished__no_promotions():
-    """Test emit_finished with no promotions returns."""
-    result = emit_finished(promotions=[], aws_env=AwsEnv.staging)
+def test_emit_finished__no_operations():
+    """Test emit_finished with no successful operations returns early."""
+    result = emit_finished(
+        promotions=[], updates=[], demotions=[], aws_env=AwsEnv.staging
+    )
 
     assert result == Ok(None)
 
@@ -842,7 +847,9 @@ def test_emit_finished__emit_event_returns_none():
     with patch("flows.classifiers_profiles.emit_event") as mock_emit_event:
         mock_emit_event.return_value = None
 
-        result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
+        result = emit_finished(
+            promotions=promotions, updates=[], demotions=[], aws_env=AwsEnv.staging
+        )
 
         assert result == Err(
             Error(
@@ -862,7 +869,9 @@ def test_emit_finished__emit_event_returns_none():
                                     "classifiers_profile": "primary",
                                 }
                             }
-                        ]
+                        ],
+                        "updates": [],
+                        "demotions": [],
                     },
                 },
             )
@@ -884,7 +893,9 @@ def test_emit_finished__emit_event_raises_exception():
     with patch("flows.classifiers_profiles.emit_event") as mock_emit_event:
         mock_emit_event.side_effect = Exception("Failed to emit event")
 
-        result = emit_finished(promotions=promotions, aws_env=AwsEnv.staging)
+        result = emit_finished(
+            promotions=promotions, updates=[], demotions=[], aws_env=AwsEnv.staging
+        )
 
         assert isinstance(result, Err) and result._error.msg == "failed to emit event"
         metadata = result._error.metadata
@@ -2076,3 +2087,57 @@ async def test_export_s3_error_returns_error(
 
     assert is_err(result)
     assert "Failed to export to S3" in unwrap_err(result).msg
+
+
+# Some quick factory functions
+
+
+def _promote() -> Promote:
+    return Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id="Q1",
+            classifier_id="abcd3456",
+            classifiers_profile="retired",
+        )
+    )
+
+
+def _update() -> Update:
+    return Update(
+        classifier_spec=ClassifierSpec(
+            wikibase_id="Q1",
+            classifier_id="abcd3456",
+            wandb_registry_version="v1",
+        ),
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id="Q1",
+            classifier_id="abcd3456",
+            classifiers_profile="retired",
+        ),
+    )
+
+
+def _demote() -> Demote:
+    return Demote(
+        classifier_spec=ClassifierSpec(
+            wikibase_id="Q1",
+            classifier_id="abcd3456",
+            wandb_registry_version="v1",
+        )
+    )
+
+
+def test_summarise_spec_changes():
+    assert (
+        summarise_spec_changes(
+            promotions=[_promote()], updates=[_update()], demotions=[_demote()]
+        )
+        == "1 promotions · 1 updates · 1 demotions"
+    )
+
+
+def test_summarise_spec_changes__no_changes():
+    assert (
+        summarise_spec_changes(promotions=[], updates=[], demotions=[])
+        == "0 promotions · 0 updates · 0 demotions"
+    )

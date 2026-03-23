@@ -11,7 +11,7 @@ from typing import Protocol
 from prefect import task
 from pydantic import SecretStr
 
-from flows.utils import get_logger, total_minutes
+from flows.utils import get_logger, get_slack_client, total_minutes
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.result import Err, Error, Ok, Result, is_err
 
@@ -436,6 +436,59 @@ async def wait_for_pr_merge(
         )
 
 
+async def notify_pr_awaiting_approval(
+    pr_number: int,
+    pr_url: str,
+    flow_run_url: str,
+    spec_changes_summary: str,
+    aws_env: AwsEnv,
+) -> None:
+    """Send a Slack notification that a classifier specs PR is open and awaiting approval."""
+    logger = get_logger()
+    channel_env = "production" if aws_env.value == "prod" else aws_env.value
+    channel = f"alerts-platform-{channel_env}"
+    slack_client = await get_slack_client()
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"Classifier specs PR *<{pr_url}|#{pr_number}>* is open and awaiting approval to merge.",
+            },
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "Review PR", "emoji": True},
+                "value": "review_pr",
+                "url": pr_url,
+                "action_id": "button-action",
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": " · ".join(
+                        filter(
+                            None,
+                            [
+                                f"<{flow_run_url}|Prefect flow run \u2197\ufe0e>",
+                                spec_changes_summary,
+                            ],
+                        )
+                    ),
+                }
+            ],
+        },
+    ]
+    await slack_client.chat_postMessage(
+        channel=channel,
+        text=f"Classifier specs PR #{pr_number} is open and awaiting approval to merge.",
+        blocks=blocks,
+    )
+    logger.info(f"Sent Slack notification for PR #{pr_number} to #{channel}")
+
+
 @task
 async def create_and_merge_pr(
     spec_file: str,
@@ -443,6 +496,7 @@ async def create_and_merge_pr(
     flow_run_name: str,
     flow_run_url: str,
     github_token: SecretStr,
+    spec_changes_summary: str,
     auto_merge: bool = False,
 ) -> Result[None | int, Error]:
     """
@@ -454,6 +508,7 @@ async def create_and_merge_pr(
         Err on failures.
     """
     logger = get_logger()
+    repo = "climatepolicyradar/knowledge-graph"
 
     try:
         repo_path = Path("./")
@@ -466,7 +521,7 @@ async def create_and_merge_pr(
             pr_body=f"Sync to Classifier Profiles updates to classifier specs YAML files. During Flow Run {flow_run_name}, see {flow_run_url}",
             git=git_ops,
             github_token=github_token,
-            repo="climatepolicyradar/knowledge-graph",
+            repo=repo,
             base_branch="main",
             repo_path=repo_path,
         )
@@ -493,22 +548,34 @@ async def create_and_merge_pr(
         logger.info("Auto-merge not enabled as per configuration.")
         return Ok(pr_no)
     else:
-        logger.info("Auto-approving and merging PR...")
+        logger.info("Enabling auto-merge on PR...")
         auto_merge_results = await enable_auto_merge(
             pr_number=pr_no,
             merge_method="REBASE",
-            repo="climatepolicyradar/knowledge-graph",
+            repo=repo,
         )
 
         # if error in results return early
         if is_err(auto_merge_results):
             return auto_merge_results
 
+        pr_url = f"https://github.com/{repo}/pull/{pr_no}"
+        try:
+            await notify_pr_awaiting_approval(
+                pr_number=pr_no,
+                pr_url=pr_url,
+                flow_run_url=flow_run_url,
+                spec_changes_summary=spec_changes_summary,
+                aws_env=aws_env,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send Slack notification for PR #{pr_no}: {e}")
+
         pr_merge_results = await wait_for_pr_merge(
             pr_number=pr_no,
-            timeout=timedelta(minutes=30),
+            timeout=timedelta(minutes=60),
             poll_interval=timedelta(seconds=30),
-            repo="climatepolicyradar/knowledge-graph",
+            repo=repo,
         )
 
         return pr_merge_results

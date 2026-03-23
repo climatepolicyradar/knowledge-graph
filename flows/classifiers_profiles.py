@@ -648,6 +648,15 @@ def compare_classifiers_profiles(
     return results
 
 
+def summarise_spec_changes(
+    promotions: list[Promote],
+    updates: list[Update],
+    demotions: list[Demote],
+) -> str:
+    """Build a human-readable summary of changes."""
+    return f"{len(promotions)} promotions · {len(updates)} updates · {len(demotions)} demotions"
+
+
 async def send_classifiers_profile_slack_alert(
     validation_errors: list[Error],
     wandb_errors: list[Error],
@@ -1207,14 +1216,16 @@ async def update_vespa_with_classifiers_profiles(
 
 def emit_finished(
     promotions: list[Promote],
+    updates: list[Update],
+    demotions: list[Demote],
     aws_env: AwsEnv,
 ) -> Result[Event | None, Error]:
     """Emit an event indicating the pipeline finished."""
 
     logger = get_logger()
 
-    if not promotions:
-        logger.info("no promotions, skipping emitting finished event")
+    if not promotions and not updates and not demotions:
+        logger.info("no successful operations, skipping emitting finished event")
         return Ok(None)
 
     event = SYNC_FINISHED_EVENT_NAME
@@ -1225,12 +1236,9 @@ def emit_finished(
     payload = {
         # Not currently used by the trigger, but including just in
         # case it'll be helpful.
-        "promotions": list(
-            map(
-                lambda p: p.model_dump(mode="json"),
-                promotions,
-            )
-        )
+        "promotions": [p.model_dump(mode="json") for p in promotions],
+        "updates": [u.model_dump(mode="json") for u in updates],
+        "demotions": [d.model_dump(mode="json") for d in demotions],
     }
 
     try:
@@ -1535,7 +1543,10 @@ async def sync_classifiers_profiles(
 
     wandb_results: list[Result[Dict, Error]] = []
 
+    # Successful operations
     promotions: list[Promote] = []
+    updates: list[Update] = []
+    demotions: list[Demote] = []
 
     for classifiers in classifiers_to_update:
         match classifiers:
@@ -1574,18 +1585,19 @@ async def sync_classifiers_profiles(
                 current_spec = u.classifier_spec
                 new_spec = u.classifiers_profile_mapping
 
-                wandb_results.append(
-                    handle_classifier_profile_action(
-                        action="updating",
-                        wikibase_id=current_spec.wikibase_id,
-                        aws_env=aws_env,
-                        action_function=update_classifier_profile,
-                        upload_to_wandb=upload_to_wandb,
-                        classifier_id=current_spec.classifier_id,
-                        remove_classifiers_profiles=[current_spec.classifiers_profile],
-                        add_classifiers_profiles=[new_spec.classifiers_profile],
-                    )
+                wandb_result = handle_classifier_profile_action(
+                    action="updating",
+                    wikibase_id=current_spec.wikibase_id,
+                    aws_env=aws_env,
+                    action_function=update_classifier_profile,
+                    upload_to_wandb=upload_to_wandb,
+                    classifier_id=current_spec.classifier_id,
+                    remove_classifiers_profiles=[current_spec.classifiers_profile],
+                    add_classifiers_profiles=[new_spec.classifiers_profile],
                 )
+                wandb_results.append(wandb_result)
+                if is_ok(wandb_result):
+                    updates.append(u)
 
             case Demote() as r:
                 logger.info(
@@ -1594,18 +1606,19 @@ async def sync_classifiers_profiles(
 
                 current_spec = r.classifier_spec
 
-                wandb_results.append(
-                    handle_classifier_profile_action(
-                        action="demoting",
-                        wikibase_id=current_spec.wikibase_id,
-                        aws_env=aws_env,
-                        action_function=demote_classifier_profile,
-                        upload_to_wandb=upload_to_wandb,
-                        wandb_registry_version=current_spec.wandb_registry_version,
-                        classifier_id=current_spec.classifier_id,
-                        classifiers_profile=current_spec.classifiers_profile,
-                    )
+                wandb_result = handle_classifier_profile_action(
+                    action="demoting",
+                    wikibase_id=current_spec.wikibase_id,
+                    aws_env=aws_env,
+                    action_function=demote_classifier_profile,
+                    upload_to_wandb=upload_to_wandb,
+                    wandb_registry_version=current_spec.wandb_registry_version,
+                    classifier_id=current_spec.classifier_id,
+                    classifiers_profile=current_spec.classifiers_profile,
                 )
+                wandb_results.append(wandb_result)
+                if is_ok(wandb_result):
+                    demotions.append(r)
 
     successes = [unwrap_ok(r) for r in wandb_results if isinstance(r, Ok)]
     wandb_errors = [unwrap_err(r) for r in wandb_results if isinstance(r, Err)]
@@ -1641,12 +1654,19 @@ async def sync_classifiers_profiles(
             flow_run_url = (
                 f"{PREFECT_UI_URL.value()}/flow-runs/flow-run/{run_context.flow_run.id}"
             )
+        spec_changes_summary = summarise_spec_changes(
+            promotions=promotions,
+            updates=updates,
+            demotions=demotions,
+        )
+
         cs_pr_results = await create_classifiers_specs_pr.create_and_merge_pr(
             spec_file=spec_file,
             aws_env=aws_env,
             flow_run_name=flow_run_name,
             flow_run_url=flow_run_url,
             github_token=github_token,
+            spec_changes_summary=spec_changes_summary,
             auto_merge=automerge_classifier_specs_pr,
         )
 
@@ -1694,8 +1714,10 @@ async def sync_classifiers_profiles(
         event = emit_finished(
             # This is a vague check, since all of the promotions may
             # have failed in updating Vespa to reflect them.
-            promotions,
-            aws_env,
+            promotions=promotions,
+            updates=updates,
+            demotions=demotions,
+            aws_env=aws_env,
         )
 
     if not enable_slack_notifications:
