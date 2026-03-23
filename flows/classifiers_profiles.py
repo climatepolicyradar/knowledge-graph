@@ -284,7 +284,7 @@ def promote_classifier_profile(
     )
 
     if not upload_to_wandb:
-        logger.info("Dry run, not uploading to wandb.")
+        logger.info("Dry run, not uploading to W&B.")
     else:
         scripts.promote.main(
             wikibase_id=wikibase_id,
@@ -315,7 +315,7 @@ def demote_classifier_profile(
         f"Demoting {wikibase_id}, {aws_env}, {classifier_id}, {wandb_registry_version}, {classifiers_profile}"
     )
     if not upload_to_wandb:
-        logger.info("Dry run, not uploading to wandb.")
+        logger.info("Dry run, not uploading to W&B.")
     else:
         scripts.demote.main(
             wikibase_id=wikibase_id,
@@ -345,7 +345,7 @@ def update_classifier_profile(
     )
 
     if not upload_to_wandb:
-        logger.info("Dry run, not uploading to wandb.")
+        logger.info("Dry run, not uploading to W&B.")
     else:
         scripts.classifier_metadata.update(
             wikibase_id=wikibase_id,
@@ -555,7 +555,7 @@ async def create_classifiers_profiles_artifact(
 - **Total concepts found**: {total_concepts}
 - **Successful Wikibase IDs**: {successful_concepts}
 - **Failed Wikibase IDs**: {failed_concepts}
-- **WandB Errors**: {len(wandb_errors)}
+- **W&B Errors**: {len(wandb_errors)}
 - **Validation Errors**: {len(validation_errors)}
 - **Vespa Errors**: {len(vespa_errors)}
 - **Classifiers Specs PR**: {pr_details}
@@ -750,7 +750,7 @@ async def send_classifiers_profile_slack_alert(
                         channel=channel,
                         thread_ts=thread_ts,
                         errors=wandb_errors,
-                        error_type="WandB Errors",
+                        error_type="W&B Errors",
                     )
                 if vespa_errors:
                     await _post_errors_thread(
@@ -839,13 +839,13 @@ async def _post_errors_main(
 
     header = "Classifiers Profile Sync Summary:"
     if upload_to_wandb:
-        header += " uploading to wandb"
+        header += " uploading to W&B"
     else:
-        header += " (dry run, not uploading to wandb)"
+        header += " (dry run, not uploading to W&B)"
     if upload_to_vespa:
-        header += " uploading to vespa"
+        header += " uploading to Vespa"
     else:
-        header += " (dry run, not uploading to vespa)"
+        header += " (dry run, not uploading to Vespa)"
 
     return await slack_client.chat_postMessage(
         channel=channel,
@@ -1485,17 +1485,17 @@ async def sync_classifiers_profiles(
 
     if not upload_to_wandb:
         logger.warning(
-            f"upload_to_wandb is set to {upload_to_wandb}. Using dry run mode for wandb."
+            f"`upload_to_wandb` is set to {upload_to_wandb}. Using dry run mode for W&B."
         )
 
     if not upload_to_vespa:
         logger.warning(
-            f"upload_to_vespa is set to {upload_to_vespa}. Using dry run mode for vespa."
+            f"`upload_to_vespa` is set to {upload_to_vespa}. Using dry run mode for Vespa."
         )
 
     if not automerge_classifier_specs_pr:
         logger.warning(
-            f"automerge_classifier_specs_pr is set to {automerge_classifier_specs_pr}. Classifier specs PRs will not be auto-merged."
+            f"`automerge_classifier_specs_pr` is set to {automerge_classifier_specs_pr}. Classifier specs PRs will not be auto-merged."
         )
 
     classifier_specs = load_classifier_specs(aws_env)
@@ -1521,9 +1521,9 @@ async def sync_classifiers_profiles(
     ]
 
     logger.info(
-        f"Valid concepts retrieved from wikibase: {len(classifiers_profiles_mappings)}"
+        f"Valid concepts retrieved from Wikibase: {len(classifiers_profiles_mappings)}"
     )
-    logger.info(f"Validation errors from wikibase: {len(validation_errors)}")
+    logger.info(f"Validation errors from Wikibase: {len(validation_errors)}")
 
     # compare current specs to valid classifiers profiles from wikibase to identify changes
     classifiers_to_update = compare_classifiers_profiles(
@@ -1613,10 +1613,10 @@ async def sync_classifiers_profiles(
         f"Total concepts processed: {len(wandb_results) + len(validation_errors)}"
     )
     logger.info(
-        f"Successful updates: {len(successes)}, Validation errors: {len(validation_errors)}, Wandb errors: {len(wandb_errors)}"
+        f"Successful updates: {len(successes)}, Validation errors: {len(validation_errors)}, W&B errors: {len(wandb_errors)}"
     )
 
-    # update classifiers specs yaml file
+    # update classifiers specs YAML file
     refresh_all_available_classifiers([aws_env])
 
     # reload classifier specs to confirm updates
@@ -1650,10 +1650,10 @@ async def sync_classifiers_profiles(
             auto_merge=automerge_classifier_specs_pr,
         )
 
-    # set default value to indicate when s3 sync not run
+    # set default value to indicate when S3 sync not run
     s3_result: Result[str | None, Error] = Ok(None)
 
-    # only run sync to s3 if PR is created successfully or force_s3_sync is set
+    # only run sync to S3 if PR is created successfully or `force_s3_sync` is set
     if (is_ok(cs_pr_results) and unwrap_ok(cs_pr_results)) or force_s3_sync:
         logger.info("Syncing classifier specs to s3.")
         s3_result = await export_classifier_specs_to_s3(
@@ -1669,7 +1669,7 @@ async def sync_classifiers_profiles(
 
     if is_err(cs_pr_results) or is_err(s3_result):
         logger.warning(
-            "Error creating and merging PR or syncing to s3, skipping vespa updates"
+            "Error creating and merging PR or syncing to s3, skipping Vespa updates"
         )
     else:
         logger.info("Updating Vespa with classifiers profiles...")
@@ -1734,7 +1734,7 @@ async def sync_classifiers_profiles(
         )
     if is_err(s3_result):
         raise Exception(
-            f"Errors occurred while syncing classifiers specs to s3: {unwrap_err(s3_result)}"
+            f"Errors occurred while syncing classifiers specs to S3: {unwrap_err(s3_result)}"
         )
     if len(vespa_errors) > 0:
         raise Exception(
