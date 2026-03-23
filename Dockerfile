@@ -45,7 +45,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /bin/uv /bin/uvx /bin/
 
 # Copy the project into the image
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 COPY knowledge_graph ./knowledge_graph/
 COPY flows ./flows/
 COPY scripts ./scripts/
