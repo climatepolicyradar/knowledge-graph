@@ -88,7 +88,7 @@ class ClassifierSpec(BaseModel):
 
     def __str__(self) -> SpecStr:
         """Return a string representation of the classifier spec."""
-        return f"{self.wikibase_id}:{self.classifier_id}"
+        return f"{self.wikibase_id}:{self.classifier_id}:{self.wandb_registry_version}"
 
 
 def determine_spec_file_path(aws_env: AwsEnv) -> Path:

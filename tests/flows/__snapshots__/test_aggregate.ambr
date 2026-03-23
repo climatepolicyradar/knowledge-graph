@@ -1,7 +1,7 @@
 # serializer version: 1
 # name: test_process_single_document__value_error
   list([
-    AggregationFailure('CCLW.executive.10061.4515 | exception: The number of passages diverge when appending Q767:mgwutbqx: len(labelled_passages)=2 != len(concepts_for_vespa)=27 | context: '),
+    AggregationFailure('CCLW.executive.10061.4515 | exception: The number of passages diverge when appending Q767:mgwutbqx:v3: len(labelled_passages)=2 != len(concepts_for_vespa)=27 | context: '),
   ])
 # ---
 # name: test_store_metadata
