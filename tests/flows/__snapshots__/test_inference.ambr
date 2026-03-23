@@ -7,7 +7,7 @@
       
       ## Overview
       - **Flow Run**: test-inference-batch-of-documents-cpu
-      - **Classifier**: Q788:6vxrmcuf
+      - **Classifier**: Q788:6vxrmcuf:v7
       - **Total documents processed**: 1
       - **Successful documents**: 1
       - **Failed documents**: 0
@@ -24,7 +24,7 @@
       
       ## Overview
       - **Flow Run**: test-inference-batch-of-documents-cpu-empty-batch
-      - **Classifier**: Q788:aaaa2222
+      - **Classifier**: Q788:aaaa2222:v12
       - **Total documents processed**: 0
       - **Successful documents**: 0
       - **Failed documents**: 0
@@ -41,7 +41,7 @@
       
       ## Overview
       - **Flow Run**: test-inference-batch-of-documents-cpu-with-failures
-      - **Classifier**: Q788:aaaa2222
+      - **Classifier**: Q788:aaaa2222:v8
       - **Total documents processed**: 2
       - **Successful documents**: 0
       - **Failed documents**: 2
