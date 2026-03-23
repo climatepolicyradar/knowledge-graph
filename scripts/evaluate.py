@@ -518,6 +518,9 @@ def create_wandb_model_evaluation_charts(
     The first two are only plotted if predictions have probabilities
     """
 
+    if not predictions and not ground_truth:
+        return
+
     ground_truth_labels = [1 if lp.spans else 0 for lp in ground_truth]
     binary_predictions = [1 if lp.spans else 0 for lp in predictions]
 
