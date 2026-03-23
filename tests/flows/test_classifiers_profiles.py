@@ -1194,7 +1194,7 @@ async def test_send_classifiers_profile_slack_alert_success():
 
         mock_slack_client.chat_postMessage.assert_any_call(
             channel="alerts-platform-production",
-            text="Classifiers Profile Sync Summary: uploading to wandb uploading to vespa",
+            text="Classifiers Profile Sync Summary: uploading to W&B uploading to Vespa",
             attachments=ANY,  # ignore content of attachments
         )
 
@@ -1207,7 +1207,7 @@ async def test_send_classifiers_profile_slack_alert_success():
         mock_slack_client.chat_postMessage.assert_any_call(
             channel="alerts-platform-production",
             thread_ts="12345",
-            text=f"WandB Errors: {len(wandb_errors)} issues found",
+            text=f"W&B Errors: {len(wandb_errors)} issues found",
             blocks=ANY,
         )
         mock_slack_client.chat_postMessage.assert_any_call(
@@ -1269,7 +1269,7 @@ async def test_send_classifiers_profile_slack_alert__slack_failure():
 
         mock_slack_client.chat_postMessage.assert_called_once_with(
             channel="alerts-concept-store",
-            text="Classifiers Profile Sync Summary: uploading to wandb uploading to vespa",
+            text="Classifiers Profile Sync Summary: uploading to W&B uploading to Vespa",
             attachments=ANY,
         )
 
@@ -1418,7 +1418,7 @@ async def test_sync_classifiers_profiles(
         assert mock_slack_client.chat_postMessage.call_count == 2
         mock_slack_client.chat_postMessage.assert_any_call(
             channel="alerts-concept-store",  # validation errors only
-            text="Classifiers Profile Sync Summary: (dry run, not uploading to wandb) (dry run, not uploading to vespa)",
+            text="Classifiers Profile Sync Summary: (dry run, not uploading to W&B) (dry run, not uploading to Vespa)",
             attachments=ANY,
         )
 
@@ -1677,7 +1677,7 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
         ) as mock_export_classifier_specs_to_s3,
     ):
         with pytest.raises(
-            Exception, match="Errors occurred while syncing classifiers specs to s3"
+            Exception, match="Errors occurred while syncing classifiers specs to S3"
         ):
             await sync_classifiers_profiles(
                 wandb_api_key=mock_wandb_api_key,
