@@ -78,7 +78,8 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
     BlockType.FIGURE,
 }
 
-CLASSIFIER_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
+CLASSIFIER_CPU_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
+CLASSIFIER_GPU_CONCURRENCY_LIMIT: Final[PositiveInt] = 10
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
 CLASSIFIER_PREDICT_BATCH_SIZE: Final[PositiveInt] = 32
 AWS_ENV: str = os.environ["AWS_ENV"]
@@ -1267,7 +1268,8 @@ async def inference(
     document_ids_s3_path: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
-    classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
+    classifier_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
+    classifier_gpu_concurrency_limit: PositiveInt = CLASSIFIER_GPU_CONCURRENCY_LIMIT,
     return_pointer: Literal[False] = False,
 ) -> set[DocumentStem] | Fault: ...
 
@@ -1279,7 +1281,8 @@ async def inference(
     document_ids_s3_path: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
-    classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
+    classifier_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
+    classifier_gpu_concurrency_limit: PositiveInt = CLASSIFIER_GPU_CONCURRENCY_LIMIT,
     return_pointer: Literal[True] = ...,
 ) -> RunOutputIdentifier | Fault: ...
 
@@ -1294,7 +1297,8 @@ async def inference(
     document_ids_s3_path: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
-    classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
+    classifier_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
+    classifier_gpu_concurrency_limit: PositiveInt = CLASSIFIER_GPU_CONCURRENCY_LIMIT,
     return_pointer: bool = False,
 ) -> set[DocumentStem] | RunOutputIdentifier | Fault:
     """
@@ -1374,7 +1378,8 @@ async def inference(
 
     # Prepare document batches based on classifier specs
     requested_document_stems: set[DocumentStem] = set()
-    parameterised_batches: Sequence[ParameterisedFlow] = []
+    cpu_batches: list[ParameterisedFlow] = []
+    gpu_batches: list[ParameterisedFlow] = []
     removal_details: dict[ClassifierSpec, int] = {}
     skipped_by_cache: dict[ClassifierSpec, set[DocumentStem]] = {}
     existing_results_count: dict[ClassifierSpec, int] = {}
@@ -1413,11 +1418,17 @@ async def inference(
                 classifier_spec.compute_environment
                 and classifier_spec.compute_environment.gpu
             ):
-                fn = inference_batch_of_documents_gpu
+                gpu_batches.append(
+                    ParameterisedFlow(
+                        fn=inference_batch_of_documents_gpu, params=params
+                    )
+                )
             else:
-                fn = inference_batch_of_documents_cpu
-
-            parameterised_batches.append(ParameterisedFlow(fn=fn, params=params))
+                cpu_batches.append(
+                    ParameterisedFlow(
+                        fn=inference_batch_of_documents_cpu, params=params
+                    )
+                )
 
     await create_dont_run_on_docs_summary_artifact(
         config=config,
@@ -1427,6 +1438,8 @@ async def inference(
         accepted_documents_count=accepted_documents_count,
     )
 
+    parameterised_batches = [*cpu_batches, *gpu_batches]
+
     all_raw_successes: list[BatchInferenceResult] = []
     all_raw_failures: list[BaseException | FlowRun] = []
 
@@ -1434,15 +1447,30 @@ async def inference(
         printer=print,
         name="running classifier inference with map_as_sub_flow",
     ):
-        raw_successes, raw_failures = await map_as_sub_flow(
-            aws_env=config.aws_env,
-            counter=classifier_concurrency_limit,
-            parameterised_batches=parameterised_batches,
-            unwrap_result=True,
-        )
+        coros = []
+        if cpu_batches:
+            coros.append(
+                map_as_sub_flow(
+                    aws_env=config.aws_env,
+                    counter=classifier_cpu_concurrency_limit,
+                    parameterised_batches=cpu_batches,
+                    unwrap_result=True,
+                )
+            )
+        if gpu_batches:
+            coros.append(
+                map_as_sub_flow(
+                    aws_env=config.aws_env,
+                    counter=classifier_gpu_concurrency_limit,
+                    parameterised_batches=gpu_batches,
+                    unwrap_result=True,
+                )
+            )
 
-        all_raw_successes.extend(raw_successes)
-        all_raw_failures.extend(raw_failures)
+        results = await asyncio.gather(*coros)
+        for raw_successes, raw_failures in results:
+            all_raw_successes.extend(raw_successes)
+            all_raw_failures.extend(raw_failures)
 
     # The type of response when running as a sub deployment is:
     #   <class 'inference.BatchInferenceResult'>

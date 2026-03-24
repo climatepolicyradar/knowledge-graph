@@ -206,7 +206,8 @@ async def test_topic_pipeline_with_full_config(
                 DocumentImportId("test.doc.2"),
             ],
             inference_batch_size=500,
-            inference_classifier_concurrency_limit=5,
+            inference_cpu_concurrency_limit=5,
+            inference_gpu_concurrency_limit=5,
             aggregation_n_documents_in_batch=50,
             aggregation_n_batches=3,
             indexing_batch_size=200,
@@ -227,7 +228,8 @@ async def test_topic_pipeline_with_full_config(
         )
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
-        assert call_args.kwargs["classifier_concurrency_limit"] == 5
+        assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
+        assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
@@ -322,7 +324,8 @@ async def test_topic_pipeline_with_inference_failure(
                 classifier_specs=[classifier_spec],
                 document_ids=document_ids,
                 inference_batch_size=500,
-                inference_classifier_concurrency_limit=5,
+                inference_cpu_concurrency_limit=5,
+                inference_gpu_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
                 aggregation_n_batches=3,
                 indexing_batch_size=200,
@@ -343,7 +346,8 @@ async def test_topic_pipeline_with_inference_failure(
         )
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
-        assert call_args.kwargs["classifier_concurrency_limit"] == 5
+        assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
+        assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
@@ -379,7 +383,8 @@ async def test_topic_pipeline_with_inference_failure(
                 classifier_specs=[classifier_spec],
                 document_ids=document_ids,
                 inference_batch_size=500,
-                inference_classifier_concurrency_limit=5,
+                inference_cpu_concurrency_limit=5,
+                inference_gpu_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
                 aggregation_n_batches=3,
                 indexing_batch_size=200,
@@ -466,7 +471,8 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
                     DocumentImportId("test.doc.2"),
                 ],
                 inference_batch_size=500,
-                inference_classifier_concurrency_limit=5,
+                inference_cpu_concurrency_limit=5,
+                inference_gpu_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
                 aggregation_n_batches=3,
                 indexing_batch_size=200,
@@ -487,7 +493,8 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
         )
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
-        assert call_args.kwargs["classifier_concurrency_limit"] == 5
+        assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
+        assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
         mock_aggregate.assert_called_once()
         call_args = mock_aggregate.call_args
@@ -610,7 +617,8 @@ async def test_topic_pipeline_with_document_ids_s3_path(
             classifier_specs=[classifier_spec],
             document_ids_s3_path=s3_path,
             inference_batch_size=500,
-            inference_classifier_concurrency_limit=5,
+            inference_cpu_concurrency_limit=5,
+            inference_gpu_concurrency_limit=5,
             aggregation_n_documents_in_batch=50,
             aggregation_n_batches=3,
             indexing_batch_size=200,
@@ -626,7 +634,8 @@ async def test_topic_pipeline_with_document_ids_s3_path(
         assert call_args.kwargs["document_ids_s3_path"] == s3_path
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["batch_size"] == 500
-        assert call_args.kwargs["classifier_concurrency_limit"] == 5
+        assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
+        assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
         mock_aggregate.assert_called_once()
         mock_indexing.assert_called_once()
