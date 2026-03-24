@@ -82,10 +82,16 @@ def mock_deployment():
             self._mock_patch = None
 
         async def mock_awaitable(self, *args, **kwargs):
-            """Generate FlowRun with next state from the iterator"""
+            """
+            Generate FlowRun with next state from the iterator.
+
+            If self.state is callable it is invoked with the same args/kwargs
+            so callers can return different states per call.
+            """
             flow_id = uuid.uuid4()
             flow_name = f"{self.name}-{str(flow_id)[:8]}"
-            return FlowRun(flow_id=flow_id, name=flow_name, state=self.state)
+            state = self.state(*args, **kwargs) if callable(self.state) else self.state
+            return FlowRun(flow_id=flow_id, name=flow_name, state=state)
 
         def __enter__(self):
             self._mock_patch = patch("flows.utils.run_deployment")
@@ -2404,3 +2410,71 @@ def test_get_labelled_passage_from_prediction_without_spans():
     assert result.id == "fish_block"
     # When there are no spans, metadata should be empty
     assert result.metadata == {}
+
+
+@pytest.mark.asyncio
+async def test_inference_with_mixed_cpu_and_gpu_specs(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_async_bucket_documents,
+    mock_deployment,
+):
+    """Inference for both CPU and GPU are called & results combined."""
+
+    cpu_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id=ClassifierID("cpucpu22"),
+        wandb_registry_version="v13",
+    )
+    gpu_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q789"),
+        classifier_id=ClassifierID("gpugpu22"),
+        wandb_registry_version="v1",
+        compute_environment=ClassifierSpec.ComputeEnvironment(gpu=True),
+    )
+
+    input_doc_ids = [
+        DocumentImportId(Path(doc_file).stem)
+        for doc_file in mock_async_bucket_documents
+    ]
+    doc_stems = [DocumentStem(d) for d in input_doc_ids]
+    results_by_spec = {
+        str(cpu_spec): BatchInferenceResult(
+            batch_document_stems=doc_stems,
+            successful_document_stems=doc_stems,
+            classifier_spec=cpu_spec,
+            failed=False,
+        ),
+        str(gpu_spec): BatchInferenceResult(
+            batch_document_stems=doc_stems,
+            successful_document_stems=doc_stems,
+            classifier_spec=gpu_spec,
+            failed=False,
+        ),
+    }
+
+    def state_for_call(*args, **kwargs):
+        spec_json = kwargs["parameters"]["classifier_spec_json"]
+        spec = ClassifierSpec.model_validate(spec_json)
+        return Completed(data=results_by_spec[str(spec)])
+
+    with mock_deployment(state_for_call) as mock_rd:
+        inference_result = await inference(
+            classifier_specs=[cpu_spec, gpu_spec],
+            document_ids=input_doc_ids,
+            config=test_config,
+        )
+
+    assert mock_rd.call_count == 2
+    called_names = {call.kwargs["name"] for call in mock_rd.call_args_list}
+    assert (
+        "inference-batch-of-documents-cpu/kg-inference-batch-of-documents-cpu-sandbox"
+        in called_names
+    )
+    assert (
+        "inference-batch-of-documents-gpu/kg-inference-batch-of-documents-gpu-sandbox"
+        in called_names
+    )
+
+    assert inference_result == set(input_doc_ids)

@@ -25,7 +25,8 @@ from flows.index import (
     index,
 )
 from flows.inference import (
-    CLASSIFIER_CONCURRENCY_LIMIT,
+    CLASSIFIER_CPU_CONCURRENCY_LIMIT,
+    CLASSIFIER_GPU_CONCURRENCY_LIMIT,
     INFERENCE_BATCH_SIZE_DEFAULT,
     inference,
 )
@@ -71,7 +72,8 @@ async def topic_pipeline(
     document_ids: Sequence[DocumentImportId] | None = None,
     document_ids_s3_path: str | None = None,
     inference_batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
-    inference_classifier_concurrency_limit: PositiveInt = CLASSIFIER_CONCURRENCY_LIMIT,
+    inference_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
+    inference_gpu_concurrency_limit: PositiveInt = CLASSIFIER_GPU_CONCURRENCY_LIMIT,
     config: Config | None = None,
     aggregation_n_documents_in_batch: PositiveInt = AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
     aggregation_n_batches: PositiveInt = 5,
@@ -95,7 +97,8 @@ async def topic_pipeline(
         document_ids_s3_path: An S3 path string (e.g., "s3://bucket/key") that contains document ids to process.
         config: Configuration for the inference, aggregation and index flows. If None, creates default.
         inference_batch_size: Number of documents to process in each batch.
-        inference_classifier_concurrency_limit: Maximum concurrent classifiers.
+        inference_cpu_concurrency_limit: Maximum concurrent CPU classifier batches.
+        inference_gpu_concurrency_limit: Maximum concurrent GPU classifier batches.
         aggregation_n_documents_in_batch: Number of documents per aggregation batch.
         aggregation_n_batches: Number of aggregation batches to run.
         indexing_batch_size: Number of documents to index in each batch.
@@ -125,7 +128,8 @@ async def topic_pipeline(
         document_ids_s3_path=document_ids_s3_path,
         config=config,
         batch_size=inference_batch_size,
-        classifier_concurrency_limit=inference_classifier_concurrency_limit,
+        classifier_cpu_concurrency_limit=inference_cpu_concurrency_limit,
+        classifier_gpu_concurrency_limit=inference_gpu_concurrency_limit,
         return_pointer=True,
         return_state=True,
     )
