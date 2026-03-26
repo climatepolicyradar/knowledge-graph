@@ -54,6 +54,11 @@
   classifier_id: argh45s5
   classifiers_profile: primary
   wandb_registry_version: v27
+- wikibase_id: Q385
+  concept_id: chj57n99
+  classifier_id: 4mcdpeaw
+  classifiers_profile: primary
+  wandb_registry_version: v0
 - wikibase_id: Q404
   concept_id: ybg68eaw
   classifier_id: fd5t9bhw
