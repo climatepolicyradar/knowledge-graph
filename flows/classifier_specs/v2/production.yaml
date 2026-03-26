@@ -294,6 +294,11 @@
   classifier_id: 2nwj5fwh
   classifiers_profile: primary
   wandb_registry_version: v25
+- wikibase_id: Q979
+  concept_id: e2cbzw2u
+  classifier_id: fnkarth4
+  classifiers_profile: primary
+  wandb_registry_version: v0
 - wikibase_id: Q983
   concept_id: yfycqcfb
   classifier_id: dsxc3m8e
@@ -512,5 +517,10 @@
 - wikibase_id: Q2008
   concept_id: 9765nh64
   classifier_id: 2zkkg734
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q2029
+  concept_id: q2htxc45
+  classifier_id: ghax83yn
   classifiers_profile: primary
   wandb_registry_version: v0
