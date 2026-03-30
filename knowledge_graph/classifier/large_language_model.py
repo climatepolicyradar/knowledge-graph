@@ -267,7 +267,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                     marked_up_text=response.output,
                     reasoning=None,
                 )
-        except UnexpectedModelBehavior as e:
+        except (UnexpectedModelBehavior, ValidationError) as e:
             logger.warning(
                 f"LLM failed to produce valid response after retries: {e}. "
                 f"Text (truncated): {text[:100]}..."
@@ -336,7 +336,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         for text, response in zip(texts, responses):
             # Handle exceptions that occurred during async execution
             if isinstance(response, Exception):
-                if isinstance(response, UnexpectedModelBehavior):
+                if isinstance(response, (UnexpectedModelBehavior, ValidationError)):
                     logger.warning(
                         f"LLM failed to produce valid response after retries: {response}. "
                         f"Text (truncated): {text[:100]}..."
