@@ -225,9 +225,11 @@ def group_passages_by_equity_strata(
     if missing_equity_strata := [
         name for name, values in equity_strata_values.items() if values == {None}
     ]:
-        raise ValueError(
-            f"Equity columns provided to evaluate don't have values in the human labelled passages: {missing_equity_strata}."
+        print(
+            f"WARNING: Equity columns provided to evaluate don't have values in the human labelled passages: {missing_equity_strata}."
         )
+
+        return groups
 
     # group the passages according to their values
     for equity_stratum, values in equity_strata_values.items():
