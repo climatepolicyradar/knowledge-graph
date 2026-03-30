@@ -28,7 +28,7 @@ app = typer.Typer()
 console = Console()
 
 WIKIBASE_ID = WikibaseID("Q32")
-MODEL_NAME = "openrouter:google/gemini-3-pro-preview"
+MODEL_NAME = "openrouter:google/gemini-3.1-pro-preview"
 
 CONCEPT_DEFINITION = "Justice is the ethical and political framework that addresses fairness, including issues of responsibility, rights, and structural inequity."
 
