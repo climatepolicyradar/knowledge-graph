@@ -137,8 +137,10 @@ def test_log_metrics(metrics_df: pd.DataFrame):
         assert any(["performance" in log_call[0][0] for log_call in log_calls])
 
 
-def test_group_passages_by_equity_strata_raises_when_equity_column_missing_from_metadata():
-    """Test that ValueError is raised when equity strata columns have no values in passages."""
+def test_group_passages_by_equity_strata_logs_warning_when_equity_column_missing_from_metadata(
+    caplog,
+):
+    """Test that a warning is logged and only the 'all' group is returned when equity strata columns have no values."""
     human_passages = [
         LabelledPassage(text="passage 1", spans=[], metadata={"other_field": "value1"}),
         LabelledPassage(text="passage 2", spans=[], metadata={"other_field": "value2"}),
@@ -148,14 +150,16 @@ def test_group_passages_by_equity_strata_raises_when_equity_column_missing_from_
         LabelledPassage(text="passage 2", spans=[], metadata={"other_field": "value2"}),
     ]
 
-    with pytest.raises(ValueError) as exc_info:
-        group_passages_by_equity_strata(
+    with caplog.at_level("WARNING", logger="scripts.evaluate"):
+        result = group_passages_by_equity_strata(
             human_labelled_passages=human_passages,
             model_labelled_passages=model_passages,
             equity_strata=["missing_column"],
         )
 
-    assert "missing_column" in str(exc_info.value)
+    assert "missing_column" in caplog.text
+    assert len(result) == 1
+    assert result[0][0] == "all"
 
 
 def test_calculate_std_by_equity_strata(metrics_df: pd.DataFrame):

@@ -28,7 +28,7 @@ app = typer.Typer()
 console = Console()
 
 WIKIBASE_ID = WikibaseID("Q911")
-MODEL_NAME = "openrouter:google/gemini-3-pro-preview"
+MODEL_NAME = "openrouter:google/gemini-3.1-pro-preview"
 
 CONCEPT_DEFINITION = """Distributive justice is the fair allocation of the benefits, burdens, and risks, focusing on those most responsible and those most vulnerable. It includes ethical and political arguments, as well as concrete actions."""
 

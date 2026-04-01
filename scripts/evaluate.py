@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from collections import defaultdict
 from datetime import datetime
@@ -36,6 +37,7 @@ from knowledge_graph.wandb_helpers import load_classifier_from_wandb
 from scripts.get_concept import get_concept_async
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 def load_concept(wikibase_id: WikibaseID) -> Concept:
@@ -225,9 +227,12 @@ def group_passages_by_equity_strata(
     if missing_equity_strata := [
         name for name, values in equity_strata_values.items() if values == {None}
     ]:
-        raise ValueError(
-            f"Equity columns provided to evaluate don't have values in the human labelled passages: {missing_equity_strata}."
+        logger.warning(
+            "Equity columns provided to evaluate don't have values in the human labelled passages: %s.",
+            missing_equity_strata,
         )
+
+        return groups
 
     # group the passages according to their values
     for equity_stratum, values in equity_strata_values.items():

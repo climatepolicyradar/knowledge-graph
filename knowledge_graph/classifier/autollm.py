@@ -102,7 +102,7 @@ class AutoLLMClassifier(LLMClassifier):
         self,
         labelled_passages: list | None = None,
         meta_prompt: str | None = None,
-        optimiser_model_name: str = "openrouter:google/gemini-3-pro-preview",
+        optimiser_model_name: str = "openrouter:google/gemini-3.1-pro-preview",
         final_classifier_model_name: str | None = None,
         n_trials: int = 3,
         beta: float = 1.0,
@@ -299,7 +299,7 @@ if __name__ == "__main__":
 
     clf.fit(
         optimiser_model_name="openrouter:google/gemini-3-flash-preview",
-        final_classifier_model_name="openrouter:google/gemini-3-pro-preview",
+        final_classifier_model_name="openrouter:google/gemini-3.1-pro-preview",
         n_trials=5,
         beta=0.5,
     )

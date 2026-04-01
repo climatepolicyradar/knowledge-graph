@@ -25,7 +25,7 @@ app = typer.Typer()
 console = Console()
 
 WIKIBASE_ID = WikibaseID("Q912")
-MODEL_NAME = "openrouter:google/gemini-3-pro-preview"
+MODEL_NAME = "openrouter:google/gemini-3.1-pro-preview"
 
 CONCEPT_DEFINITION = """Procedural justice means ensuring that decision making is fair and inclusive, emphasizing the agency and influence of vulnerable groups and those, giving them power to change processes that affect their lives."""
 

@@ -260,14 +260,16 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         try:
             response: AgentRunResult[LLMResponse | str] = self.agent.run_sync(  # type: ignore[assignment]
                 text,
-                model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
+                model_settings=ModelSettings(
+                    seed=self.random_seed or 42, temperature=0
+                ),  # type: ignore[arg-type]
             )
             if isinstance(response.output, str):
                 response.output = LLMResponse(  # type: ignore[assignment]
                     marked_up_text=response.output,
                     reasoning=None,
                 )
-        except UnexpectedModelBehavior as e:
+        except (UnexpectedModelBehavior, ValidationError) as e:
             logger.warning(
                 f"LLM failed to produce valid response after retries: {e}. "
                 f"Text (truncated): {text[:100]}..."
@@ -306,7 +308,9 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             async_responses = [
                 self.agent.run(
                     text,
-                    model_settings=ModelSettings(seed=self.random_seed or 42),  # type: ignore[arg-type]
+                    model_settings=ModelSettings(
+                        seed=self.random_seed or 42, temperature=0
+                    ),  # type: ignore[arg-type]
                 )
                 for text in texts
             ]
@@ -336,7 +340,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         for text, response in zip(texts, responses):
             # Handle exceptions that occurred during async execution
             if isinstance(response, Exception):
-                if isinstance(response, UnexpectedModelBehavior):
+                if isinstance(response, (UnexpectedModelBehavior, ValidationError)):
                     logger.warning(
                         f"LLM failed to produce valid response after retries: {response}. "
                         f"Text (truncated): {text[:100]}..."
