@@ -39,4 +39,4 @@ repos:
     rev: v1.35.5
     hooks:
       - id: typos
-        exclude: ^(tests/fixtures|tests/flows/fixtures|tests/local_vespa/test_documents|tests/__snapshots__|flows/classifier_specs/)
+        exclude: ^(tests/fixtures|tests/flows/fixtures|tests/local_vespa/test_documents|tests/__snapshots__|flows/classifier_specs|.*\.csv$)

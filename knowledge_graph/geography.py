@@ -3,7 +3,7 @@ from rapidfuzz import fuzz
 
 from knowledge_graph.config import raw_data_dir
 
-geography_data = raw_data_dir / "geography-iso-3166-backend.csv"
+geography_data = raw_data_dir / "geography-iso-3166.csv"
 geography_df = pd.read_csv(geography_data)
 
 

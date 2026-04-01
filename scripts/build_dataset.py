@@ -1,16 +1,14 @@
+import json
 import re
 from typing import Annotated
 
-import duckdb
+import snowflake.connector
 import typer
-from datasets import Dataset, disable_progress_bars, load_dataset
 from rich.console import Console
 
 from knowledge_graph.config import processed_data_dir
 from knowledge_graph.geography import iso_to_world_bank_region
 from knowledge_graph.sampling import create_balanced_sample
-
-disable_progress_bars()
 
 app = typer.Typer()
 console = Console(highlight=False)
@@ -58,92 +56,161 @@ def build_dataset(
     ] = None,
 ):
     """
-    Build a balanced, sampled dataset from the HuggingFace climate document corpus.
+    Build a balanced, sampled dataset from Snowflake climate document corpus.
 
-    This script downloads the ClimatePolicyRadar/all-document-text-data-weekly dataset,
-    filters for English text, applies stratified pre-sampling for efficiency, adds
-    geographic metadata (World Bank regions), and creates a balanced sample across
-    multiple dimensions (geography, corpus type, translation status).
+    This script queries Snowflake for English text passages, applies stratified
+    pre-sampling for efficiency, adds geographic metadata (World Bank regions),
+    and creates a balanced sample across multiple dimensions (geography, corpus
+    type, translation status).
     """
-    dataset_name = "ClimatePolicyRadar/all-document-text-data-weekly"
-
-    console.log(f"🚚 Loading [white]{dataset_name}[/white]")
     if corpus_type:
         console.log(f"🔍 Filtering for corpus type: [white]{corpus_type}[/white]")
 
-    dataset = load_dataset(dataset_name, split="train", streaming=False)
-    if not isinstance(dataset, Dataset):
-        raise TypeError(
-            f"Expected Dataset, got {type(dataset)}. This script requires a non-streaming dataset."
-        )
-
-    console.log(f"✅ The raw dataset has {len(dataset)} rows")
-
-    # Convert the dataset to an Arrow table for DuckDB querying
-    arrow_table = dataset.data.table
-    con = duckdb.connect()
-    con.register("dataset", arrow_table)
+    # Pre-sample to manageable size using stratified sampling (20x target size)
+    presample_size = n * 20
+    minimum_text_chars = 20
 
     # Build the corpus type filter clause
     corpus_filter = ""
     if corpus_type:
-        corpus_filter = f"AND \"document_metadata.corpus_type_name\" = '{corpus_type}'"
+        corpus_filter = f"AND d.METADATA_CORPUS_TYPE_NAME = '{corpus_type}'"
 
-    # Use DuckDB for super fast filtering + intelligent pre-sampling
-    console.log("🦆 Filtering for English text with length > 20 chars, using DuckDB")
+    console.log("❄️  Connecting to Snowflake")
+    try:
+        # See https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-connections#define-connections
+        # There's a config.toml generator in Snowflake's account settings.
+        con = snowflake.connector.connect(connection_name="local_dev")
+    except Exception as e:
+        console.log(
+            "[red]Failed to connect to Snowflake.[/red] "
+            f"Error: {e!r} "
+            "Ensure you have a config.toml generated. You can find one in your Snowflake account settings."
+            "See https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-connections#define-connections "
+        )
+        raise
+    cur = con.cursor()
 
-    # Pre-sample to manageable size using stratified sampling (20x target size)
-    presample_size = n * 20
-    console.log(
-        f"🎲 Pre-sampling to ~{presample_size} rows for efficient balanced sampling"
-    )
+    # First, fetch the full filtered dataset for combined_dataset
+    console.log("📥 Fetching full filtered dataset from Snowflake")
+    full_query = f"""
+    SELECT
+        p.CONTENT AS text_block_text,
+        d.DOCUMENT_ID,
+        d.TRANSLATED AS document_metadata_translated,
+        d.METADATA_CORPUS_TYPE_NAME AS document_metadata_corpus_type_name,
+        d.METADATA_GEOGRAPHIES AS document_metadata_geographies
+    FROM PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS_V1 d
+    JOIN PRODUCTION.PUBLISHED.PIPELINE_PASSAGES_V2 p
+        ON d.DOCUMENT_ID = p.DOCUMENT_ID
+    WHERE p.LANGUAGE = 'en'
+      AND p.CONTENT IS NOT NULL
+      AND LENGTH(p.CONTENT) > {minimum_text_chars}
+      {corpus_filter}
+    """
 
-    query = f"""
+    cur.execute(full_query)
+    df_full = cur.fetch_pandas_all()
+
+    # Then, fetch the stratified presample for balanced sampling
+    console.log(f"🎲 Querying with stratified pre-sampling to ~{presample_size:,} rows")
+    presample_query = f"""
     WITH filtered_data AS (
-        SELECT 
-            "text_block.text",
-            "document_id", 
-            "document_metadata.translated",
-            "document_metadata.corpus_type_name",
-            "document_metadata.geographies",
-            -- Add row numbers for stratified sampling
+        SELECT
+            p.CONTENT AS text_block_text,
+            d.DOCUMENT_ID,
+            d.TRANSLATED AS document_metadata_translated,
+            d.METADATA_CORPUS_TYPE_NAME AS document_metadata_corpus_type_name,
+            d.METADATA_GEOGRAPHIES AS document_metadata_geographies,
             ROW_NUMBER() OVER (
-                PARTITION BY 
-                    "document_metadata.corpus_type_name",
-                    "document_metadata.translated"
+                PARTITION BY
+                    d.METADATA_CORPUS_TYPE_NAME,
+                    d.TRANSLATED
                 ORDER BY RANDOM()
-            ) as rn
-        FROM dataset
-        WHERE "text_block.language" = 'en' 
-          AND "text_block.text" IS NOT NULL 
-          AND length("text_block.text") > 20
+            ) AS rn
+        FROM PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS_V1 d
+        JOIN PRODUCTION.PUBLISHED.PIPELINE_PASSAGES_V2 p
+            ON d.DOCUMENT_ID = p.DOCUMENT_ID
+        WHERE p.LANGUAGE = 'en'
+          AND p.CONTENT IS NOT NULL
+          AND LENGTH(p.CONTENT) > {minimum_text_chars}
           {corpus_filter}
     ),
     stratified_sample AS (
-        -- Take roughly equal samples from each corpus_type + translated combination
         SELECT *
-        FROM filtered_data 
-        WHERE rn <= (SELECT {presample_size} / COUNT(DISTINCT "document_metadata.corpus_type_name" || "document_metadata.translated") FROM filtered_data)
+        FROM filtered_data
+        WHERE rn <= (
+            SELECT {presample_size} / NULLIF(COUNT(DISTINCT CONCAT(document_metadata_corpus_type_name, document_metadata_translated)), 0)
+            FROM filtered_data
+        )
     )
-    SELECT 
-        "text_block.text",
-        "document_id", 
-        "document_metadata.translated",
-        "document_metadata.corpus_type_name",
-        "document_metadata.geographies"
+    SELECT
+        text_block_text,
+        DOCUMENT_ID,
+        document_metadata_translated,
+        document_metadata_corpus_type_name,
+        document_metadata_geographies
     FROM stratified_sample
     ORDER BY RANDOM()
     LIMIT {presample_size}
     """
 
-    df = con.execute(query).df()
-    console.log(f"✅ Filtered down to {len(df)} rows")
+    cur.execute(presample_query)
+    df = cur.fetch_pandas_all()
+    con.close()
+
+    rename_cols = {
+        "TEXT_BLOCK_TEXT": "text_block.text",
+        "DOCUMENT_ID": "document_id",
+        "DOCUMENT_METADATA_TRANSLATED": "document_metadata.translated",
+        "DOCUMENT_METADATA_CORPUS_TYPE_NAME": "document_metadata.corpus_type_name",
+        "DOCUMENT_METADATA_GEOGRAPHIES": "document_metadata.geographies",
+    }
+    df_full = df_full.rename(columns=rename_cols)
+    df = df.rename(columns=rename_cols)
+
+    def parse_geographies(x):
+        return json.loads(x) if isinstance(x, str) else x
+
+    df_full["document_metadata.geographies"] = df_full[
+        "document_metadata.geographies"
+    ].apply(parse_geographies)
+    df["document_metadata.geographies"] = df["document_metadata.geographies"].apply(
+        parse_geographies
+    )
+
+    console.log(f"✅ Full dataset: {len(df_full):,} rows, presample: {len(df):,} rows")
 
     console.log("🌍 Adding world bank region metadata")
+    df_full["world_bank_region"] = df_full["document_metadata.geographies"].map(
+        get_world_bank_region
+    )
     df["world_bank_region"] = df["document_metadata.geographies"].map(
         get_world_bank_region
     )
     console.log("✅ Added world bank region metadata")
+
+    # Build output filename suffix with optional corpus type
+    if corpus_type:
+        # Normalize: lowercase, spaces to underscores, remove punctuation
+        normalized = re.sub(r"[^\w\s]", "", corpus_type.lower()).replace(" ", "_")
+        corpus_suffix = f"_{normalized}"
+    else:
+        corpus_suffix = ""
+
+    # Save the full filtered dataset as combined_dataset.feather
+    df_combined = df_full.rename(
+        columns={
+            col: col.replace("document_metadata.", "")
+            for col in df.columns
+            if col != "document_metadata.corpus_type_name"
+            and col.startswith("document_metadata.")
+        }
+    )
+    combined_path = processed_data_dir / f"combined_dataset{corpus_suffix}.feather"
+    df_combined.to_feather(combined_path)
+    console.log(
+        f"✅ Saved full filtered dataset ({len(df_combined):,} rows) to {combined_path}"
+    )
 
     # Adjust balancing columns based on whether we're filtering by corpus type
     balance_columns = [
@@ -153,7 +220,9 @@ def build_dataset(
     if not corpus_type:
         balance_columns.insert(1, "document_metadata.corpus_type_name")
 
-    console.log(f"🧪 Sampling a balanced subset of {n} rows from the filtered dataset")
+    console.log(
+        f"🧪 Sampling a balanced subset of {n:,} rows from the filtered dataset"
+    )
     df_balanced = create_balanced_sample(
         df=df,
         sample_size=n,
@@ -174,15 +243,11 @@ def build_dataset(
         "document_metadata.corpus_type_name",
         "translated",
     ]:
-        console.log(df_balanced[column].value_counts(), end="\n\n")
-
-    # Build output filename with optional corpus type suffix
-    if corpus_type:
-        # Normalize: lowercase, spaces to underscores, remove punctuation
-        normalized = re.sub(r"[^\w\s]", "", corpus_type.lower()).replace(" ", "_")
-        corpus_suffix = f"_{normalized}"
-    else:
-        corpus_suffix = ""
+        vc = df_balanced[column].value_counts()
+        console.log(f"  {column}:")
+        for val, cnt in vc.items():
+            console.log(f"    {val}: {cnt:,}")
+        console.log("")
 
     dataset_path = processed_data_dir / f"sampled_dataset{corpus_suffix}.feather"
     console.log("💾 Saving the dataset to feather")
