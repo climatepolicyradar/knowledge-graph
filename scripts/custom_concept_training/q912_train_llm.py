@@ -41,30 +41,6 @@ INSTRUCTIONS = """
         8. Double check that you have tagged all instances of procedural justice according to the provided definition, and that every tagged part contains enough information to show why this is relevant.
     """
 
-SYSTEM_PROMPT_TEMPLATE = """
-You are a specialist analyst and a climate justice activist from a
-climate-vulnerable community. You combine expert policy knowledge,
-with a critical perspective on power dynamics. This is informed by
-your practical lived experience, as well as legal- and decolonial theory.
-
-Your goal is to identify passages that demonstrate marginalized
-groups gaining meaningful influence or agency in decision-making.
-You are critical of tokenism, but you are alert to the ways procedural
-justice is formalized in policy language. This means you recognise that
-policy documents use terms like mainstreaming and decentralization in
-varied ways: it can be empty jargon and checkbox exercises, but it
-can also be a meaningful step towards real influence in projects
-and society.
-
-You will mark up references to concepts with XML tags.
-
-First, carefully review the following description of the concept:
-
-<concept_description>
-{concept_description}
-</concept_description>
-"""
-
 
 def get_labelling_guidelines() -> str:
     """
@@ -194,28 +170,6 @@ def train() -> None:
     concept_overrides = get_concept_overrides()
     labelling_guidelines = get_labelling_guidelines()
 
-    # Create the LLMClassifierPrompt with persona template and dynamic guidelines
-    persona_prompt = LLMClassifierPrompt(
-        system_prompt_template=SYSTEM_PROMPT_TEMPLATE,
-        labelling_guidelines=labelling_guidelines,
-    )
-
-    console.print("Training model with strong persona template")
-    asyncio.run(
-        run_training(
-            wikibase_id=WIKIBASE_ID,
-            track_and_upload=True,
-            aws_env=AwsEnv.labs,
-            classifier_type="LLMClassifier",
-            classifier_kwargs={
-                "model_name": MODEL_NAME,
-                "system_prompt_template": persona_prompt,
-            },
-            concept_overrides=concept_overrides,
-        )
-    )
-
-    # Create a prompt with default template but same guidelines
     from knowledge_graph.classifier.large_language_model import DEFAULT_SYSTEM_PROMPT
 
     default_prompt = LLMClassifierPrompt(
@@ -233,43 +187,6 @@ def train() -> None:
             classifier_kwargs={
                 "model_name": MODEL_NAME,
                 "system_prompt_template": default_prompt,
-            },
-            concept_overrides=concept_overrides,
-        )
-    )
-
-
-@app.command()
-def autollm(
-    n_trials: int = typer.Option(5, help="Number of optimization trials to run"),
-    beta: float = typer.Option(
-        0.5, help="Beta value for f-beta score (default 1.0 = F1)"
-    ),
-    optimiser_model: str = typer.Option(
-        "openrouter:google/gemini-3-pro-preview",
-        help="Model to use for prompt optimization",
-    ),
-    final_model: str = typer.Option(
-        "openrouter:google/gemini-3-pro-preview",
-        help="Model to use for the final classifier",
-    ),
-) -> None:
-    """Train an AutoLLMClassifier that automatically optimizes its own prompt."""
-    concept_overrides = get_concept_overrides()
-
-    console.print("Training AutoLLMClassifier with automatic prompt optimization")
-    asyncio.run(
-        run_training(
-            wikibase_id=WIKIBASE_ID,
-            track_and_upload=True,
-            aws_env=AwsEnv.labs,
-            classifier_type="AutoLLMClassifier",
-            classifier_kwargs={
-                "model_name": "openrouter:google/gemini-3-flash-preview",
-                "n_trials": n_trials,
-                "beta": beta,
-                "optimiser_model_name": optimiser_model,
-                "final_classifier_model_name": final_model,
             },
             concept_overrides=concept_overrides,
         )
