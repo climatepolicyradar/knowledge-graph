@@ -1,0 +1,204 @@
+Name,Iso,Geography type,World Bank Region,Federal,Federal details,Political groups,Percent global emissions,Climate risk index,Wb income group
+Afghanistan,AFG,National,South Asia,FALSE,,LDC;G77,0.20%,41.83,Low income
+Albania,ALB,National,Europe & Central Asia,FALSE,,,0.02%,114.17,Upper middle income
+Algeria,DZA,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.44%,92.5,Upper middle income
+Andorra,AND,National,Europe & Central Asia,FALSE,,,0.00%,,High income
+Angola,AGO,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.38%,97,Lower middle income
+Antigua and Barbuda,ATG,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.00%,58,High income
+Argentina,ARG,National,Latin America & Caribbean,TRUE,"23 provinces, 1 autonomous city",G77;G20,1.01%,79.5,Upper middle income
+Armenia,ARM,National,Europe & Central Asia,FALSE,,,0.02%,145.17,Upper middle income
+Australia,AUS,National,East Asia & Pacific,TRUE,"6 states, 3 federal territories (of which 2 are self-governing) and 7 external territories",G20;OECD,1.09%,50.17,High income
+Austria,AUT,National,Europe & Central Asia,TRUE,9 Bundesländer,OECD;EU,0.15%,55.67,High income
+Azerbaijan,AZE,National,Europe & Central Asia,FALSE,,,0.16%,133.67,Upper middle income
+"Bahamas, The",BHS,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.01%,39.67,High income
+Bahrain,BHR,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.10%,171.83,High income
+Bangladesh,BGD,National,South Asia,FALSE,,LDC;G77,0.44%,30,Lower middle income
+Barbados,BRB,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.01%,141.67,High income
+Belarus,BLR,National,Europe & Central Asia,FALSE,,,0.17%,142,Upper middle income
+Belgium,BEL,National,Europe & Central Asia,TRUE,"3 communities, 3 regions",OECD;EU,0.23%,63.83,High income
+Belize,BLZ,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.01%,48.5,Upper middle income
+Benin,BEN,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.06%,141,Low income
+Bhutan,BTN,National,South Asia,FALSE,,LDC;G77,0.00%,97,Lower middle income
+Bolivia,BOL,National,Latin America & Caribbean,FALSE,,G77,0.32%,45.33,Lower middle income
+Bosnia and Herzegovina,BIH,National,Europe & Central Asia,TRUE,"2 entities, one of which is sub-divided into 10 cantons",G77,0.06%,70.17,Upper middle income
+Botswana,BWA,National,Sub-Saharan Africa,FALSE,,G77,0.15%,132.33,Upper middle income
+Brazil,BRA,National,Latin America & Caribbean,TRUE,"26 states, 1 federal district",G77;G20,2.90%,83.17,Upper middle income
+Brunei Darussalam,BRN,National,East Asia & Pacific,FALSE,,G77,0.04%,169.17,High income
+Bulgaria,BGR,National,Europe & Central Asia,FALSE,,EU,0.09%,70.83,Upper middle income
+Burkina Faso,BFA,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.08%,99.33,Low income
+Burundi,BDI,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.02%,73.67,Low income
+Cabo Verde,CPV,National,Sub-Saharan Africa,FALSE,,G77;SIDS;AOSIS,0.00%,143.5,Lower middle income
+Cambodia,KHM,National,East Asia & Pacific,FALSE,,LDC;G77,0.14%,35.33,Lower middle income
+Cameroon,CMR,National,Sub-Saharan Africa,FALSE,,G77,0.44%,133.83,Lower middle income
+Canada,CAN,National,North America,TRUE,"10 provinces, 3 territiries",G20;OECD,1.64%,88.17,High income
+Central African Republic,CAF,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.16%,149.33,Low income
+Chad,TCD,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.21%,100.83,Low income
+Chile,CHL,National,Latin America & Caribbean,FALSE,,G77;OECD,0.01%,87.83,High income
+China,CHN,National,East Asia & Pacific,TRUE,"22 provinces, 5 autonomus regions",G77;G20,24.36%,55.5,Upper middle income
+Colombia,COL,National,Latin America & Caribbean,FALSE,,G77,0.49%,55.67,Upper middle income
+Comoros,COM,National,Sub-Saharan Africa,TRUE,3 islands,LDC;G77;The Arab Group;SIDS;AOSIS,0.00%,122.67,Lower middle income
+Congo,COG,National,Sub-Saharan Africa,FALSE,,G77,0.10%,151.5,Lower middle income
+Cook Islands,COK,National,East Asia & Pacific,FALSE,,SIDS;AOSIS;PSIDS,0.00%,,
+Costa Rica,CRI,National,Latin America & Caribbean,FALSE,,G77,0.01%,88.17,Upper middle income
+Croatia,HRV,National,Europe & Central Asia,FALSE,,EU,0.04%,48.33,High income
+Cuba,CUB,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.06%,,Upper middle income
+Cyprus,CYP,National,Europe & Central Asia,FALSE,,EU,0.02%,129.67,High income
+Czechia,CZE,National,Europe & Central Asia,FALSE,,OECD;EU,0.24%,79.67,High income
+Côte d'Ivoire,CIV,National,Sub-Saharan Africa,FALSE,,G77,0.07%,142.67,Lower middle income
+Democratic Republic of Congo,COD,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.47%,125.83,Low income
+Denmark,DNK,National,Europe & Central Asia,FALSE,,OECD;EU,0.10%,112.83,High income
+Djibouti,DJI,National,Middle East & North Africa,FALSE,,LDC;G77;The Arab Group,0.00%,69.5,Lower middle income
+Dominica,DMA,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.00%,32.33,Upper middle income
+Dominican Republic,DOM,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.06%,58.5,Upper middle income
+Ecuador,ECU,National,Latin America & Caribbean,FALSE,,G77,0.21%,92.83,Upper middle income
+Egypt,EGY,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.65%,143.67,Lower middle income
+El Salvador,SLV,National,Latin America & Caribbean,FALSE,,G77,0.03%,42.5,Lower middle income
+Equatorial Guinea,GNQ,National,Sub-Saharan Africa,FALSE,,G77,0.05%,,Upper middle income
+Eritrea,ERI,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.02%,109.17,Low income
+Estonia,EST,National,Europe & Central Asia,FALSE,,EU,0.04%,148.83,High income
+Eswatini,SWZ,National,Sub-Saharan Africa,FALSE,,G77,%,,
+Ethiopia,ETH,National,Sub-Saharan Africa,TRUE,"9 regions, 2 chartered cities",LDC;G77,0.40%,64.67,Low income
+European Union,EUR,Supranational,Europe & Central Asia,TRUE,27 nation states,G20,8.01 % %,,High income
+Fiji,FJI,National,East Asia & Pacific,FALSE,,G77;SIDS;AOSIS,0.00%,37.17,Upper middle income
+Finland,FIN,National,Europe & Central Asia,FALSE,,OECD;EU,0.13%,155.67,High income
+France,FRA,National,Europe & Central Asia,FALSE,,G20;OECD;EU,0.69%,38,High income
+Gabon,GAB,National,Sub-Saharan Africa,FALSE,,G77,-0.18%,167.33,Upper middle income
+Gambia,GMB,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.01%,81,Low income
+Georgia,GEO,National,Europe & Central Asia,FALSE,,,0.04%,94.17,Upper middle income
+Germany,DEU,National,Europe & Central Asia,TRUE,16 Bundesländer,G20;OECD;EU,1.70%,38.67,High income
+Ghana,GHA,National,Sub-Saharan Africa,FALSE,,G77,0.11%,102.5,Lower middle income
+Greece,GRC,National,Europe & Central Asia,FALSE,,OECD;EU,0.18%,78.83,High income
+Grenada,GRD,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.00%,39.83,Upper middle income
+Guatemala,GTM,National,Latin America & Caribbean,FALSE,,G77,0.09%,38.33,Upper middle income
+Guinea,GIN,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.10%,161.33,Low income
+Guinea-Bissau,GNB,National,Sub-Saharan Africa,FALSE,,LDC;G77;SIDS;AOSIS,0.01%,111.33,Low income
+Guyana,GUY,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.08%,107.17,Upper middle income
+Haiti,HTI,National,Latin America & Caribbean,FALSE,,LDC;G77;SIDS;AOSIS,0.02%,13.83,Low income
+Honduras,HND,National,Latin America & Caribbean,FALSE,,G77,0.11%,55,Lower middle income
+Hong Kong,HKG,Subnational,East Asia & Pacific,FALSE,,,-,,
+Hungary,HUN,National,Europe & Central Asia,FALSE,,OECD;EU,0.13%,69,High income
+Iceland,ISL,National,Europe & Central Asia,FALSE,,OECD,0.01%,170.33,High income
+India,IND,National,South Asia,TRUE,"29 states, 7 Union Territories, including a National Capital Territory",G77;G20,6.81%,38.67,Lower middle income
+Indonesia,IDN,National,East Asia & Pacific,FALSE,,G77;G20,4.69%,76.83,Lower middle income
+International,INT,Supranational,East Asia & Pacific,FALSE,,,-,,
+Iran,IRN,National,Middle East & North Africa,FALSE,,G77,1.83%,79,Upper middle income
+Iraq,IRQ,National,Middle East & North Africa,TRUE,18 provinces,G77;The Arab Group,0.40%,141.33,Upper middle income
+Ireland,IRL,National,Europe & Central Asia,FALSE,,OECD;EU,0.14%,119.17,High income
+Israel,ISR,National,Middle East & North Africa,FALSE,,OECD,0.19%,120.5,High income
+Italy,ITA,National,Europe & Central Asia,FALSE,,G20;OECD;EU,0.78%,43.67,High income
+Jamaica,JAM,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.02%,64.83,Upper middle income
+Japan,JPN,National,East Asia & Pacific,FALSE,,G20;OECD,2.66%,69.33,High income
+Jordan,JOR,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.08%,116,Upper middle income
+Kazakhstan,KAZ,National,Europe & Central Asia,FALSE,,,0.61%,142.83,Upper middle income
+Kenya,KEN,National,Sub-Saharan Africa,FALSE,,G77,0.10%,53.67,Lower middle income
+Kiribati,KIR,National,East Asia & Pacific,FALSE,,LDC;G77;SIDS;AOSIS,0.00%,116.17,Lower middle income
+"Korea, North",PRK,National,East Asia & Pacific,FALSE,,G77,0.14%,,Low income
+Kosovo,XKX,National,Europe & Central Asia,FALSE,,,-,,
+Kuwait,KWT,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.24%,152,High income
+Kyrgyzstan,KGZ,National,Europe & Central Asia,FALSE,,,0.03%,109.33,Lower middle income
+Lao People's Democratic Republic,LAO,National,East Asia & Pacific,FALSE,,LDC;G77,0.10%,76.33,Lower middle income
+Latvia,LVA,National,Europe & Central Asia,FALSE,,EU,0.00%,83.83,High income
+Lebanon,LBN,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.07%,120,Upper middle income
+Lesotho,LSO,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.01%,106.5,Lower middle income
+Liberia,LBR,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.02%,155.33,Low income
+Libya,LBY,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.18%,158.83,Upper middle income
+Liechtenstein,LIE,National,Europe & Central Asia,FALSE,,,0.00%,,High income
+Lithuania,LTU,National,Europe & Central Asia,FALSE,,EU,0.04%,100.5,High income
+Luxembourg,LUX,National,Europe & Central Asia,FALSE,,EU,0.02%,97.17,High income
+Madagascar,MDG,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.12%,32.83,Low income
+Malawi,MWI,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.04%,77.83,Low income
+Malaysia,MYS,National,East Asia & Pacific,TRUE,"13 states, 3 federal territories",G77,0.34%,103.33,Upper middle income
+Maldives,MDV,National,South Asia,FALSE,,G77;SIDS;AOSIS,0.00%,169.17,Upper middle income
+Mali,MLI,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.10%,116.67,Low income
+Malta,MLT,National,Europe & Central Asia,FALSE,,EU,0.00%,152.83,High income
+Marshall Islands,MHL,National,East Asia & Pacific,FALSE,,G77;SIDS;AOSIS,0.00%,165,Upper middle income
+Mauritania,MRT,National,Sub-Saharan Africa,FALSE,,LDC;G77;The Arab Group,0.02%,78.5,Lower middle income
+Mauritius,MUS,National,Sub-Saharan Africa,FALSE,,G77;SIDS;AOSIS,0.01%,104.67,Upper middle income
+Mexico,MEX,National,Latin America & Caribbean,TRUE,"32 federal entities, which are 31 states and its capital Mexico City",G20;OECD;EIG,1.45%,61.83,Upper middle income
+Micronesia,FSM,National,East Asia & Pacific,TRUE,4 states,G77;SIDS;AOSIS,-,,
+Moldova,MDA,National,Europe & Central Asia,FALSE,,,0.02%,86.17,Lower middle income
+Monaco,MCO,National,Europe & Central Asia,FALSE,,EIG,-,,
+Mongolia,MNG,National,East Asia & Pacific,FALSE,,G77,0.14%,61.67,Lower middle income
+Montenegro,MNE,National,Europe & Central Asia,FALSE,,,0.01%,,Upper middle income
+Morocco,MAR,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.19%,100,Lower middle income
+Mozambique,MOZ,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.16%,37.5,Low income
+Myanmar,MMR,National,East Asia & Pacific,FALSE,,LDC;G77,0.46%,10.33,Lower middle income
+Namibia,NAM,National,Sub-Saharan Africa,FALSE,,G77,0.04%,66.67,Upper middle income
+Nauru,NRU,National,East Asia & Pacific,FALSE,,G77;SIDS;AOSIS,0.00%,,Upper middle income
+Nepal,NPL,National,South Asia,TRUE,7 provinces,LDC;G77,0.13%,31.5,Low income
+Netherlands,NLD,National,Europe & Central Asia,FALSE,,OECD;EU,0.39%,71.83,High income
+New Zealand,NZL,National,East Asia & Pacific,FALSE,,OECD,0.13%,84.17,High income
+Nicaragua,NIC,National,Latin America & Caribbean,FALSE,,G77,0.04%,53.83,Lower middle income
+Niger,NER,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.09%,74,Low income
+Nigeria,NGA,National,Sub-Saharan Africa,TRUE,"36 states, 1 federal capital territory",G77,1.01%,104.83,Lower middle income
+Niue,NIU,National,East Asia & Pacific,FALSE,,SIDS;AOSIS,0.00%,,
+North Macedonia (Republic of North Macedonia),MKD,National,Europe & Central Asia,FALSE,,,0.02%,100,Upper middle income
+Norway,NOR,National,Europe & Central Asia,FALSE,,OECD,0.05%,138.83,High income
+Oman,OMN,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.16%,41.17,High income
+Pakistan,PAK,National,South Asia,TRUE,"4 provinces, 4 federal territories including a federal capital territory",G77,0.85%,28.83,Lower middle income
+Palau,PLW,National,East Asia & Pacific,FALSE,,SIDS;AOSIS,0.00%,,High income
+Palestine,PSE,National,Middle East & North Africa,FALSE,,G77;The Arab Group,-,,
+Panama,PAN,National,Latin America & Caribbean,FALSE,,G77,0.06%,106.5,High income
+Papua New Guinea,PNG,National,East Asia & Pacific,FALSE,,G77;SIDS;AOSIS,0.13%,91.33,Lower middle income
+Paraguay,PRY,National,Latin America & Caribbean,FALSE,,G77,0.41%,73.5,Upper middle income
+Peru,PER,National,Latin America & Caribbean,FALSE,,G77,0.36%,58,Upper middle income
+Philippines,PHL,National,East Asia & Pacific,FALSE,,G77,0.31%,17.67,Lower middle income
+Poland,POL,National,Europe & Central Asia,FALSE,,OECD;EU,0.74%,77.17,High income
+Portugal,PRT,National,Europe & Central Asia,FALSE,,OECD;EU,0.15%,38.83,High income
+Qatar,QAT,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.19%,173.67,High income
+Romania,ROU,National,Europe & Central Asia,FALSE,,EU,-0.12%,53.17,Upper middle income
+Russia,RUS,National,Europe & Central Asia,TRUE,"46 oblasts, 22 republics, 9 krais, 4 autonomous okrugs, 3 federal-level cities, 1 autonomous oblast",G20,5.03%,47.67,Upper middle income
+Rwanda,RWA,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.02%,102,Low income
+Sahrawi Republic,ESH,National,Middle East & North Africa,FALSE,,,-,,
+Saint Kitts and Nevis,KNA,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.00%,113.5,High income
+Saint Lucia,LCA,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.00%,59.33,Upper middle income
+Saint Vincent and the Grenadines,VCT,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.00%,59.83,Upper middle income
+Samoa,WSM,National,East Asia & Pacific,FALSE,,G77;SIDS;AOSIS,0.00%,73.67,Upper middle income
+San Marino,SMR,National,Europe & Central Asia,FALSE,,,-,,
+Sao Tome and Principe,STP,National,Sub-Saharan Africa,FALSE,,LDC;G77;SIDS;AOSIS,0.00%,,Lower middle income
+Saudi Arabia,SAU,National,Middle East & North Africa,FALSE,,G77;The Arab Group;G20,1.40%,102.17,High income
+Senegal,SEN,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.07%,129.5,Lower middle income
+Serbia,SRB,National,Europe & Central Asia,FALSE,,,0.13%,,Upper middle income
+Seychelles,SYC,National,Sub-Saharan Africa,FALSE,,G77;SIDS;AOSIS,0.00%,159.5,High income
+Sierra Leone,SLE,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.03%,85.67,Low income
+Singapore,SGP,National,East Asia & Pacific,FALSE,,G77;SIDS;AOSIS,0.13%,172.17,High income
+Slovakia,SVK,National,Europe & Central Asia,FALSE,,OECD;EU,0.07%,108,High income
+Slovenia,SVN,National,Europe & Central Asia,FALSE,,OECD;EU,0.02%,54.33,High income
+Solomon Islands,SLB,National,East Asia & Pacific,FALSE,,LDC;G77;SIDS;AOSIS,0.01%,70,Lower middle income
+Somalia,SOM,National,Sub-Saharan Africa,TRUE,18 states,LDC;G77;The Arab Group,0.08%,,Low income
+South Africa,ZAF,National,Sub-Saharan Africa,TRUE,9 provinces,G77;G20,1.05%,77.33,Upper middle income
+South Korea,KOR,National,East Asia & Pacific,FALSE,,G77;G20;OECD;EIG,1.38%,82.83,High income
+South Sudan,SSD,National,Sub-Saharan Africa,TRUE,28 states,LDC;G77,-,,
+Spain,ESP,National,Europe & Central Asia,FALSE,,OECD;EU,0.60%,47.33,High income
+Sri Lanka,LKA,National,South Asia,FALSE,,G77,0.08%,40.17,Upper middle income
+Sudan,SDN,National,Sub-Saharan Africa,TRUE,17 states,LDC;G77;The Arab Group,0.32%,93,Lower middle income
+Suriname,SUR,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.02%,166,Upper middle income
+Sweden,SWE,National,Europe & Central Asia,FALSE,,OECD;EU,0.10%,129.5,High income
+Switzerland,CHE,National,Europe & Central Asia,TRUE,26 cantons,OECD;EIG,0.10%,52.33,High income
+Syria,SYR,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.10%,,Low income
+Taiwan,TWN,National,East Asia & Pacific,FALSE,,,-,,
+Tajikistan,TJK,National,Europe & Central Asia,FALSE,,G77,0.03%,58.17,Low income
+Tanzania,TZA,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.67%,114.33,Low income
+Thailand,THA,National,East Asia & Pacific,FALSE,,G77,0.88%,31,Upper middle income
+Timor-Leste,TLS,National,East Asia & Pacific,FALSE,,LDC;G77;SIDS;AOSIS,-,,
+Togo,TGO,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.03%,149.67,Low income
+Tonga,TON,National,East Asia & Pacific,FALSE,,G77;SIDS;AOSIS,0.00%,75.67,Upper middle income
+Trinidad and Tobago,TTO,National,Latin America & Caribbean,FALSE,,G77;SIDS;AOSIS,0.05%,150.17,High income
+Tunisia,TUN,National,Middle East & North Africa,FALSE,,G77;The Arab Group,0.08%,114.33,Lower middle income
+Turkey,TUR,National,Europe & Central Asia,FALSE,,G20;OECD,0.83%,115.17,Upper middle income
+Turkmenistan,TKM,National,Europe & Central Asia,FALSE,,G77,0.27%,,Upper middle income
+Tuvalu,TUV,National,East Asia & Pacific,FALSE,,LDC;SIDS;AOSIS,0.00%,113.67,Upper middle income
+Uganda,UGA,National,Sub-Saharan Africa,FALSE,,LDC;G77,0.17%,69.33,Low income
+Ukraine,UKR,National,Europe & Central Asia,FALSE,,,0.60%,88,Lower middle income
+United Arab Emirates,ARE,National,Middle East & North Africa,TRUE,7 emirates,G77;The Arab Group,0.55%,158.33,High income
+United Kingdom,GBR,National,Europe & Central Asia,TRUE,3 devolved governments,G20;OECD;EU,0.97%,65,High income
+United States of America,USA,National,North America,TRUE,"50 states, 1 federal district; 16 territories",G20;OECD,12.28%,44.17,High income
+Uruguay,URY,National,Latin America & Caribbean,FALSE,,G77,0.06%,88.33,High income
+Uzbekistan,UZB,National,Europe & Central Asia,FALSE,,,0.41%,162,Lower middle income
+Vanuatu,VUT,National,East Asia & Pacific,FALSE,,G77;SIDS;AOSIS,0.00%,53.83,Lower middle income
+Venezuela,VEN,National,Latin America & Caribbean,TRUE,"23 states, 1 federal district, 1 federal dependency",G77,0.74%,66,Upper middle income
+Vietnam,VNM,National,East Asia & Pacific,FALSE,,G77,0.66%,29.83,Lower middle income
+Western Sahara,ESH,UN Non-Self-Governing Territory,Middle East & North Africa,FALSE,,,,,
+Yemen,YEM,National,Middle East & North Africa,FALSE,,LDC;G77;The Arab Group,0.05%,74.67,Low income
+Zambia,ZMB,National,Sub-Saharan Africa,FALSE,,LDC;G77,1.04%,119.67,Lower middle income
+Zimbabwe,ZWE,National,Sub-Saharan Africa,FALSE,,G77,0.14%,53.33,Lower middle income
