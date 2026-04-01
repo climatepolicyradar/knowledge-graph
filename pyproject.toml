@@ -49,6 +49,7 @@ dependencies = [
   "deltalake>=1.2.1",
   "scikit-learn>=1.6.1",
   "gitpython>=3.1.45",
+  "snowflake-connector-python[secure-local-storage]>=4.4.0",
 ]
 
 [project.optional-dependencies]
