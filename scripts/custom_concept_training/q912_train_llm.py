@@ -54,10 +54,14 @@ def get_labelling_guidelines() -> str:
 
     console.log("Fetching 3 related justice concepts from Wikibase")
     distributive = wikibase.get_concept(WikibaseID("Q911"))
-    transformative = wikibase.get_concept(WikibaseID("Q1730"))
+    # transformative = wikibase.get_concept(WikibaseID("Q1730"))
     recognition = wikibase.get_concept(WikibaseID("Q1731"))
 
     criteria = f"""
+Use the following inclusion/exclusion criteria, in addition to the definition.
+These are guidelines meant to help you disambiguate. 
+Overall, your main task is to find positive examples. An EXCLUSION rule should never rule out whole passages, only specific phrases within that passage.
+
 ### THE POWER TEST
 Before tagging, ask: Does this passage describe a process that helps marginalized or impacted groups to influence, challenge, or shape a decision?
 ONLY tag if the answer is yes.
@@ -69,14 +73,12 @@ ONLY tag if the answer is yes.
 - "stakeholders will be consulted during planning and monitoring" — unclear who stakeholders are, nor if they have power to shape decisions
 
 **Examples that PASS the power test:**
-- "subsistance farmers took part in workshops on land tenure rights, including joint management" — organising of an impacted group towards inclusive decision-making
+- "subsistence farmers took part in workshops on land tenure rights, including joint management" — organising of an impacted group towards inclusive decision-making
 - "Indigenous Peoples have mandated representation in the project oversight committee" - meaningful procedural safeguards
 - "promoted PLP in 40 rural communities" - in this context, PLP is likely participatory land use planning, a strong method with a named vulnerable group
-- "the national committee's proposal reflects input from over 30,000 citizens, trade unions and advisory bodies" — large-scale public input sollicited by a powerful institution suggests meaningful change
+- "the national committee's proposal reflects input from over 30,000 citizens, trade unions and advisory bodies" — large-scale public input solicited by a powerful institution suggests meaningful change
 - "co-design with local stakeholders through sectoral workshops" — strong participatory method with stakeholders
 - "women-led FGDs resulted in" — Focus Group Discussions are not very strong, but with a named group and suggestion that outcomes were taken up
-
-More formally, use the the following criteria to tag:
 
 ### 1. MEANINGFUL PARTICIPATION vs. GENERIC MENTIONS
 - **INCLUDE**: Specific, named participatory methods (e.g. co-design, Participatory Land Use Planning) as long as impacted groups have a meaningful role.
@@ -93,7 +95,7 @@ More formally, use the the following criteria to tag:
 - **EXCLUDE**: Standard administrative law boilerplate. These are general regulatory functions, not procedural justice.
 
 ### 3. EMPOWERING TRANSPARENCY vs. COMPLIANCE
-- **INCLUDE**: Transparency processes that builds community agency. Also include transparency processes that explicitly mention accountability to impacted/vulnerable groups.
+- **INCLUDE**: Transparency processes that build community agency. Also include transparency processes that explicitly mention accountability to impacted/vulnerable groups.
 - **EXCLUDE**: Technical or bureaucratic transparency (e.g. publishing emission inventories, financial audits, standard MRV). These are for donors/regulators/other countries, not for justice.
 
 ### 4. FAIRNESS vs. PROTECTIVE SAFEGUARDS
@@ -108,16 +110,15 @@ More formally, use the the following criteria to tag:
 ### 6. INSTITUTIONAL POWER & MAINSTREAMING
 - **INCLUDE**: High-level mandates and formal commitments from those in power to give decision-making power to vulnerable stakeholders. These represent institutional commitments to justice.
 - **NOTE**: If a justice-relevant topic is being 'mainstreamed', the nominal meaning is an institution-wide consideration for the topic which should be included, unless it is very clearly used only as a buzzword or a vague goal.
-- **INCLUDE**: Decentralization/Joint-Managemen should be tagged, but only if power is (likely) being moved closer to the community.
+- **INCLUDE**: Decentralization/Joint-Management should be tagged, but only if power is (likely) being moved closer to the community.
 
-### 6. JUSTICE TYPE DIFFERENTIATION
+### 7. JUSTICE TYPE DIFFERENTIATION
 - **EXCLUDE**: generic discussions of justice, or other types of justice, such as the Justice System.
 - **EXCLUDE** passages that fit better under these definitions:
     - Recognition Justice: {recognition.definition}
-    - Transformative Justice: {transformative.definition}
-    - Distributive Justice: {distributive.definition}
+    -  Distributive Justice: {distributive.definition}
 
-### 7. CONTEXT REQUIREMENT
+### 8. CONTEXT REQUIREMENT
 - **EXCLUDE**: Single abstract words (e.g. "Democratization", "Accountability") without any context.
 - **NOTE**: When in doubt about short phrases with no means to gauge the depth of involvement nor the importance of the process, ask: does this name a specific process (consultation, FGD, workshop, input gathering) AND at least one impacted group or justice goal? If yes, include it.
 
