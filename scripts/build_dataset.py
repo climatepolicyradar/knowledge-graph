@@ -76,7 +76,18 @@ def build_dataset(
         corpus_filter = f"AND d.METADATA_CORPUS_TYPE_NAME = '{corpus_type}'"
 
     console.log("❄️  Connecting to Snowflake")
-    con = snowflake.connector.connect(connection_name="local_dev")
+    try:
+        # See https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-connections#define-connections
+        # There's a config.toml generator in Snowflake's account settings.
+        con = snowflake.connector.connect(connection_name="local_dev")
+    except Exception as e:
+        console.log(
+            "[red]Failed to connect to Snowflake.[/red] "
+            f"Error: {e!r} "
+            "Ensure you have a config.toml generated. You can find one in your Snowflake account settings."
+            "See https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-connections#define-connections "
+        )
+        raise
     cur = con.cursor()
 
     # First, fetch the full filtered dataset for combined_dataset
