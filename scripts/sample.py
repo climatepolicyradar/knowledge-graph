@@ -23,10 +23,13 @@ app = typer.Typer()
 console = Console()
 
 CORPUS_TYPES = [
-    "litigation",
-    "corporate-disclosures",
+    "Litigation",
     "Laws and Policies",
     "Intl. agreements",
+    "Reports",
+    "AF",
+    "GEF",
+    "CIF",
     "GCF",
 ]
 
