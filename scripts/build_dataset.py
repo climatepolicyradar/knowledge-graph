@@ -145,6 +145,29 @@ def build_dataset(
     )
     console.log("✅ Added world bank region metadata")
 
+    # Build output filename suffix with optional corpus type
+    if corpus_type:
+        # Normalize: lowercase, spaces to underscores, remove punctuation
+        normalized = re.sub(r"[^\w\s]", "", corpus_type.lower()).replace(" ", "_")
+        corpus_suffix = f"_{normalized}"
+    else:
+        corpus_suffix = ""
+
+    # Save the full filtered dataset as combined_dataset.feather
+    df_combined = df.rename(
+        columns={
+            col: col.replace("document_metadata.", "")
+            for col in df.columns
+            if col != "document_metadata.corpus_type_name"
+            and col.startswith("document_metadata.")
+        }
+    )
+    combined_path = processed_data_dir / f"combined_dataset{corpus_suffix}.feather"
+    df_combined.to_feather(combined_path)
+    console.log(
+        f"✅ Saved full filtered dataset ({len(df_combined)} rows) to {combined_path}"
+    )
+
     # Adjust balancing columns based on whether we're filtering by corpus type
     balance_columns = [
         "world_bank_region",
@@ -175,14 +198,6 @@ def build_dataset(
         "translated",
     ]:
         console.log(df_balanced[column].value_counts(), end="\n\n")
-
-    # Build output filename with optional corpus type suffix
-    if corpus_type:
-        # Normalize: lowercase, spaces to underscores, remove punctuation
-        normalized = re.sub(r"[^\w\s]", "", corpus_type.lower()).replace(" ", "_")
-        corpus_suffix = f"_{normalized}"
-    else:
-        corpus_suffix = ""
 
     dataset_path = processed_data_dir / f"sampled_dataset{corpus_suffix}.feather"
     console.log("💾 Saving the dataset to feather")
