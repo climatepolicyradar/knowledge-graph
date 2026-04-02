@@ -1,9 +1,9 @@
 import asyncio
 import json
+import logging
 import os
 from datetime import datetime, timezone
 from enum import Enum
-from logging import getLogger
 from typing import Any, NamedTuple, Optional
 
 import dotenv
@@ -18,6 +18,7 @@ from pydantic import (
     ValidationError,
 )
 from tenacity import (
+    before_sleep_log,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -32,8 +33,9 @@ from knowledge_graph.exceptions import (
     RevisionNotFoundError,
 )
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.utils import get_logger
 
-logger = getLogger(__name__)
+logger = get_logger()
 dotenv.load_dotenv()
 
 
@@ -124,6 +126,7 @@ class WikibaseSession:
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get the HTTP client, initializing session on first use"""
+        logger = get_logger()
         if self._client is None:
             logger.debug("Initialising Wikibase HTTP client and session")
             self._client = httpx.AsyncClient(timeout=self.DEFAULT_TIMEOUT)
@@ -531,6 +534,7 @@ class WikibaseSession:
         retry=retry_if_exception_type(
             (HTTPStatusError, RequestError, json.JSONDecodeError)
         ),
+        before_sleep=before_sleep_log(get_logger(), logging.WARNING),  # type: ignore[arg-type]
     )
     async def get_concepts_async(
         self,
