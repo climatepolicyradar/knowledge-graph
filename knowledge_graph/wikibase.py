@@ -125,9 +125,23 @@ class WikibaseSession:
     async def _get_client(self) -> httpx.AsyncClient:
         """Get the HTTP client, initializing session on first use"""
         if self._client is None:
+            logger.debug("Initialising Wikibase HTTP client and session")
             self._client = httpx.AsyncClient(timeout=self.DEFAULT_TIMEOUT)
-            await self._login()
-            self._redirects = await self._get_all_redirects()
+            try:
+                await self._login()
+                logger.debug("Wikibase login successful, fetching redirects")
+                self._redirects = await self._get_all_redirects()
+                logger.debug(
+                    "Session initialized with %d redirects", len(self._redirects)
+                )
+            except Exception as e:
+                logger.warning(
+                    "Wikibase session initialisation failed, resetting client: %s", e
+                )
+                # Reset the client, since something went wrong in
+                # initialisation.
+                self._client = None
+                raise
 
         if self._semaphore is None:
             self._semaphore = asyncio.Semaphore(self.MAX_CONCURRENT_REQUESTS)
