@@ -34,7 +34,7 @@ from flows.sync_concepts import sync_concepts
 from flows.topic_pipeline import topic_pipeline
 from flows.train import train_on_gpu
 from flows.update_neo4j import update_concepts
-from flows.utils import Compute, JsonDict, get_logger, get_prefect_job_variables
+from flows.utils import Compute, JsonDict, get_prefect_job_variables
 from flows.vibe_check import vibe_check_inference
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import (
@@ -42,6 +42,7 @@ from knowledge_graph.cloud import (
     AwsEnv,
     generate_deployment_name,
 )
+from knowledge_graph.utils import get_logger
 
 MEGABYTES_PER_GIGABYTE = 1024
 DEFAULT_FLOW_VARIABLES = {

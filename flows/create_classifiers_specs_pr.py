@@ -11,9 +11,10 @@ from typing import Protocol
 from prefect import task
 from pydantic import SecretStr
 
-from flows.utils import get_logger, get_slack_client, total_minutes
+from flows.utils import get_slack_client, total_minutes
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.result import Err, Error, Ok, Result, is_err
+from knowledge_graph.utils import get_logger
 
 
 def _run_subprocess_with_error_logging(

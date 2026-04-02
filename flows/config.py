@@ -4,11 +4,12 @@ from typing import Annotated, Optional
 
 from pydantic import AfterValidator, BaseModel, Field, SecretStr
 
-from flows.utils import Compute, get_logger, get_prefect_job_variable
+from flows.utils import Compute, get_prefect_job_variable
 from knowledge_graph.cloud import (
     AwsEnv,
     get_aws_ssm_param,
 )
+from knowledge_graph.utils import get_logger
 
 # Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results/"

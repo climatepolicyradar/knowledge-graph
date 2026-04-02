@@ -54,7 +54,6 @@ from flows.utils import (
     S3Uri,
     SlackNotify,
     collect_unique_file_stems_under_prefix,
-    get_logger,
     map_as_sub_flow,
     remove_translated_suffix,
     return_with,
@@ -63,7 +62,7 @@ from flows.utils import (
 from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.result import Err, Error, Ok, Result, is_err, unwrap_err
-from knowledge_graph.utils import iterate_batch
+from knowledge_graph.utils import get_logger, iterate_batch
 
 # A serialised Vespa span, see cpr_sdk.models.search.Passage.Span
 SerialisedVespaSpan: TypeAlias = list[dict[str, str]]

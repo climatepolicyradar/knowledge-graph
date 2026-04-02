@@ -1,7 +1,7 @@
 from prefect import flow
 
-from flows.utils import get_logger
 from knowledge_graph.concept import Concept
+from knowledge_graph.utils import get_logger
 
 
 @flow(log_prints=True)
