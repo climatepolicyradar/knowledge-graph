@@ -9,7 +9,7 @@ from typing import Any, NamedTuple, Optional
 import dotenv
 import html2text
 import httpx
-from httpx import HTTPError, HTTPStatusError, RequestError
+from httpx import HTTPError, HTTPStatusError, ReadTimeout, RequestError
 from more_itertools import chunked
 from pydantic import (
     AnyHttpUrl,
@@ -154,7 +154,7 @@ class WikibaseSession:
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
         wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
-        retry=retry_if_exception_type(HTTPStatusError),
+        retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
     )
     async def _login(self):
         """Log in to Wikibase and get a CSRF token"""
@@ -213,7 +213,7 @@ class WikibaseSession:
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
         wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
-        retry=retry_if_exception_type(HTTPStatusError),
+        retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
     )
     async def _get_all_redirects(
         self, batch_size: Optional[int] = None
@@ -256,7 +256,7 @@ class WikibaseSession:
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
         wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
-        retry=retry_if_exception_type(HTTPStatusError),
+        retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
     )
     async def _get_pages(self, extra_params: dict[str, str]) -> list[dict]:
         """Helper method to get pages from Wikibase with pagination."""
@@ -311,7 +311,7 @@ class WikibaseSession:
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
         wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
-        retry=retry_if_exception_type(HTTPStatusError),
+        retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
     )
     async def _fetch_concept_async(
         self,
