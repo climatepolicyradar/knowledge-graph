@@ -1,5 +1,7 @@
+import logging
 from unittest.mock import patch
 
+import httpx
 import pytest
 
 from knowledge_graph.concept import Concept
@@ -64,6 +66,26 @@ def test_wikibase__get_concepts(MockedWikibaseSession):
         "Q1006",
         "Q1005",
     }
+
+
+@pytest.mark.asyncio
+async def test_get_concepts_async__logs_warning_on_retry(MockedWikibaseSession, caplog):
+    """`before_sleep_log` should emit a warning each time `get_concepts_async retries`."""
+    wikibase = MockedWikibaseSession()
+
+    with (
+        patch.object(
+            wikibase,
+            "get_all_concept_ids_async",
+            side_effect=httpx.RequestError("Connection failed"),
+        ),
+        patch("asyncio.sleep"),  # Don't actually wait between retries
+        caplog.at_level(logging.WARNING),  # Don't get too much noise
+    ):
+        with pytest.raises(Exception):
+            await wikibase.get_concepts_async()
+
+    assert any("Retrying" in r.message for r in caplog.records)
 
 
 @pytest.mark.skip(reason="Not implemented")
