@@ -10,10 +10,10 @@ from prefect import flow
 from pydantic import SecretStr
 
 from flows.config import Config
-from flows.utils import get_logger
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaConfig
+from knowledge_graph.utils import get_logger
 from knowledge_graph.wikibase import WikibaseConfig
 from scripts.train import run_training
 

@@ -53,7 +53,6 @@ from flows.utils import (
     JsonDict,
     S3Uri,
     SlackNotify,
-    get_logger,
     get_run_name,
     get_slack_client,
 )
@@ -76,6 +75,7 @@ from knowledge_graph.result import (
     unwrap_err,
     unwrap_ok,
 )
+from knowledge_graph.utils import get_logger
 from knowledge_graph.version import Version, get_latest_model_version
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
 from scripts.update_classifier_spec import refresh_all_available_classifiers

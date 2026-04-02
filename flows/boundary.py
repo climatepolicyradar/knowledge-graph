@@ -37,13 +37,13 @@ from flows.utils import (
     DocumentImportId,
     DocumentObjectUri,
     S3Uri,
-    get_logger,
     total_milliseconds,
 )
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.exceptions import QueryError
 from knowledge_graph.identifiers import FamilyDocumentID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.utils import get_logger
 
 # Provide a generic type to use instead of `Any` for types hints
 T = TypeVar("T")

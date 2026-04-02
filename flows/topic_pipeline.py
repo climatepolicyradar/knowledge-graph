@@ -36,9 +36,9 @@ from flows.utils import (
     Fault,
     SlackNotify,
     build_inference_result_s3_uri,
-    get_logger,
 )
 from knowledge_graph.cloud import AwsEnv, get_async_session
+from knowledge_graph.utils import get_logger
 
 
 async def create_topic_pipeline_summary_artifact(

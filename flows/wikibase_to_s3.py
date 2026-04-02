@@ -8,10 +8,11 @@ from prefect import flow
 from pydantic import SecretStr
 from types_aiobotocore_s3.client import S3Client
 
-from flows.utils import SlackNotify, file_name_from_path, get_logger
+from flows.utils import SlackNotify, file_name_from_path
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.utils import get_logger
 from knowledge_graph.wikibase import WikibaseSession
 
 CDN_BUCKET_NAME_SSM_NAME = "/S3/CDNBucketName"
