@@ -95,7 +95,11 @@ def build_dataset(
     full_query = f"""
     SELECT
         p.CONTENT AS text_block_text,
+        p.content_type AS text_block_type,
         d.DOCUMENT_ID,
+        d.content_type AS document_content_type,
+        d.document_name AS document_name,
+        d.document_slug AS document_slug,
         d.TRANSLATED AS document_metadata_translated,
         d.METADATA_CORPUS_TYPE_NAME AS document_metadata_corpus_type_name,
         d.METADATA_GEOGRAPHIES AS document_metadata_geographies
@@ -117,7 +121,11 @@ def build_dataset(
     WITH filtered_data AS (
         SELECT
             p.CONTENT AS text_block_text,
+            p.content_type AS text_block_type,
             d.DOCUMENT_ID,
+            d.content_type AS document_content_type,
+            d.document_name AS document_name,
+            d.document_slug AS document_slug,
             d.TRANSLATED AS document_metadata_translated,
             d.METADATA_CORPUS_TYPE_NAME AS document_metadata_corpus_type_name,
             d.METADATA_GEOGRAPHIES AS document_metadata_geographies,
@@ -145,7 +153,11 @@ def build_dataset(
     )
     SELECT
         text_block_text,
+        text_block_type,
         DOCUMENT_ID,
+        document_content_type,
+        document_name,
+        document_slug,
         document_metadata_translated,
         document_metadata_corpus_type_name,
         document_metadata_geographies
@@ -160,7 +172,11 @@ def build_dataset(
 
     rename_cols = {
         "TEXT_BLOCK_TEXT": "text_block.text",
+        "TEXT_BLOCK_TYPE": "text_block.type",
         "DOCUMENT_ID": "document_id",
+        "DOCUMENT_CONTENT_TYPE": "document_content_type",
+        "DOCUMENT_NAME": "document_name",
+        "DOCUMENT_SLUG": "document_slug",
         "DOCUMENT_METADATA_TRANSLATED": "document_metadata.translated",
         "DOCUMENT_METADATA_CORPUS_TYPE_NAME": "document_metadata.corpus_type_name",
         "DOCUMENT_METADATA_GEOGRAPHIES": "document_metadata.geographies",
