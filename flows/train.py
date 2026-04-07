@@ -68,7 +68,7 @@ async def _set_up_training_environment(
 async def train_on_gpu(
     wikibase_id: WikibaseID,
     track_and_upload: bool = False,
-    aws_env: AwsEnv = AwsEnv.labs,
+    aws_env: AwsEnv = AwsEnv.production,
     evaluate: bool = True,
     classifier_type: Optional[str] = None,
     classifier_kwargs: Optional[dict[str, Any]] = None,
@@ -132,7 +132,7 @@ def _load_wikibase_ids_from_config(
 async def train_from_config(
     config_file_path: str,
     track_and_upload: bool = True,
-    aws_env: AwsEnv = AwsEnv.labs,
+    aws_env: AwsEnv = AwsEnv.production,
     config: Config | None = None,
     force: bool = True,
     concurrency_limit: int = 3,
