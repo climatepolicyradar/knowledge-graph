@@ -1,5 +1,4 @@
 import os
-from typing import Optional
 
 import boto3
 import wandb
@@ -45,12 +44,12 @@ async def predict_adhoc(
     labelled_passages_wandb_run_path: str,
     track_and_upload: bool = True,
     batch_size: int = 15,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     deduplicate_inputs: bool = True,
     exclude_training_data: bool = True,
-    prediction_threshold: Optional[float] = None,
-    stop_after_n_positives: Optional[int] = None,
-    restart_from_wandb_run: Optional[str] = None,
+    prediction_threshold: float | None = None,
+    stop_after_n_positives: int | None = None,
+    restart_from_wandb_run: str | None = None,
     aws_env: AwsEnv = AwsEnv.labs,
     config: Config | None = None,
 ) -> None:

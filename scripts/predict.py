@@ -2,7 +2,7 @@ import asyncio
 import os
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 import wandb
@@ -50,16 +50,16 @@ def deduplicate_labelled_passages(
 async def run_prediction(
     wikibase_id: WikibaseID,
     classifier_wandb_path: str,
-    labelled_passages_path: Optional[Path] = None,
-    labelled_passages_wandb_run_path: Optional[str] = None,
+    labelled_passages_path: Path | None = None,
+    labelled_passages_wandb_run_path: str | None = None,
     track_and_upload: bool = True,
     batch_size: int = 15,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     deduplicate_inputs: bool = True,
     exclude_training_data: bool = True,
-    prediction_threshold: Optional[float] = None,
-    stop_after_n_positives: Optional[int] = None,
-    restart_from_wandb_run: Optional[str] = None,
+    prediction_threshold: float | None = None,
+    stop_after_n_positives: int | None = None,
+    restart_from_wandb_run: str | None = None,
     aws_env: AwsEnv = AwsEnv.labs,
 ) -> None:
     """
@@ -331,7 +331,7 @@ def main(
         ),
     ],
     labelled_passages_path: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option(
             help="Optional local path to labelled passages .jsonl file.",
             dir_okay=False,
@@ -339,7 +339,7 @@ def main(
         ),
     ] = None,
     labelled_passages_wandb_run_path: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             help="""Optional W&B run name to look for a labelled passages artifact in.
 
@@ -360,7 +360,7 @@ def main(
         help="Number of passages to process in each batch",
     ),
     limit: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             ...,
             help="Optionally limit the number of passages predicted on",
@@ -378,13 +378,13 @@ def main(
         None, help="Optional prediction threshold for the classifier."
     ),
     stop_after_n_positives: Annotated[
-        Optional[int],
+        int | None,
         typer.Option(
             help="Stop prediction after finding this many positive passages",
         ),
     ] = None,
     restart_from_wandb_run: Annotated[
-        Optional[str],
+        str | None,
         typer.Option(
             help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
         ),
