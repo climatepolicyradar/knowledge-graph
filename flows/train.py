@@ -67,7 +67,7 @@ async def _set_up_training_environment(
 @flow()
 async def train_on_gpu(
     wikibase_id: WikibaseID,
-    track_and_upload: bool = False,
+    track_and_upload: bool = True,
     aws_env: AwsEnv = AwsEnv.production,
     evaluate: bool = True,
     classifier_type: Optional[str] = None,
