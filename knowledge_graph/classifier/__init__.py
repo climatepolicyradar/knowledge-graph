@@ -53,6 +53,9 @@ def __getattr__(name):
     elif name == "BertBasedClassifier":
         module = importlib.import_module(".bert_based", __package__)
         return getattr(module, name)
+    elif name == "BertTokenClassifier":
+        module = importlib.import_module(".bert_token_classifier", __package__)
+        return getattr(module, name)
     elif name in (
         "EmissionsReductionTargetClassifier",
         "NetZeroTargetClassifier",
@@ -78,6 +81,7 @@ __all__ = [
     "NetZeroTargetClassifier",  # type: ignore
     "TargetClassifier",  # type: ignore
     "BertBasedClassifier",  # type: ignore
+    "BertTokenClassifier",  # type: ignore
     "LLMClassifier",  # type: ignore
     "LocalLLMClassifier",  # type: ignore
     "AutoLLMClassifier",  # type: ignore

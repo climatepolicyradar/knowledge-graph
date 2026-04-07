@@ -176,8 +176,10 @@ def move_model_to_cpu(classifier: Classifier) -> None:
 
     console = Console()
 
-    if isinstance(classifier, BertBasedClassifier):
-        classifier.move_model_to_device(torch.device("cpu"))
+    if isinstance(classifier, BertBasedClassifier) or hasattr(
+        classifier, "move_model_to_device"
+    ):
+        classifier.move_model_to_device(torch.device("cpu"))  # type: ignore[attr-defined]
         console.log("Moved model to CPU")
 
 
