@@ -30,6 +30,7 @@ from flows.inference import (
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.predict import predict_adhoc
 from flows.sync_concepts import sync_concepts
 from flows.topic_pipeline import topic_pipeline
 from flows.train import train_on_gpu
@@ -201,6 +202,11 @@ async def main() -> None:
         description="Train concept classifiers with GPU compute",
         gpu=True,
         flow_variables={},
+    )
+
+    await create_deployment(
+        flow=predict_adhoc,
+        description="Run ad-hoc prediction on labelled passages using a trained classifier",
     )
 
     # Inference
