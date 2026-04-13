@@ -39,9 +39,9 @@ jobs:
           docker-images: true
           swap-storage: true
 
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
         with:
-          just-version: 1.36.0
+          just-version: 1.46.0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v6
