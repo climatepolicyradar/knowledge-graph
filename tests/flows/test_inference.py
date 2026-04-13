@@ -839,6 +839,68 @@ async def test_inference_batch_of_documents_cpu(
 
 
 @pytest.mark.asyncio
+async def test_inference_batch_of_documents_cpu_with_embeddings_input_v2(
+    test_config,
+    mock_classifiers_dir,
+    mock_wandb,
+    mock_s3_async_client,
+    mock_async_bucket_documents_v2,
+    mock_prefect_s3_block,
+):
+    """Test that v2 embeddings input can run inference and produce outputs."""
+    test_config.local_classifier_dir = mock_classifiers_dir
+    test_config.inference_document_source_prefix = "embeddings_input_v2/"
+    test_config.inference_document_target_prefix = "labelled_passages_v2/"
+
+    batch = [DocumentStem(Path(mock_async_bucket_documents_v2[0]).stem)]
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id="6vxrmcuf",
+        wandb_registry_version="v7",
+    )
+    config_json = JsonDict(test_config.to_json())
+
+    inference_batch_of_documents_cpu.flow_run_name = (
+        "test-inference-batch-of-documents-cpu-v2"
+    )
+    with patch(
+        "flows.inference.get_aws_ssm_param", return_value="retrieved-wandb-api-key"
+    ):
+        result_state = await inference_batch_of_documents_cpu(
+            batch=batch,
+            config_json=config_json,
+            classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+            return_state=True,
+        )
+
+    result = await result_state.result()
+    assert isinstance(result, BatchInferenceResult)
+    assert not result.failed
+    assert result.successful_document_stems == batch
+
+    expected_key = (
+        f"labelled_passages_v2/{classifier_spec.wikibase_id}/"
+        + f"{classifier_spec.classifier_id}/{batch[0]}.json"
+    )
+    response = await mock_s3_async_client.head_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
+    assert response["ContentLength"] > 0
+
+    response = await mock_s3_async_client.get_object(
+        Bucket=test_config.cache_bucket, Key=expected_key
+    )
+    jsonl_content = await response["Body"].read()
+    lines = [
+        line.strip()
+        for line in jsonl_content.decode("utf-8").split("\n")
+        if line.strip()
+    ]
+    assert len(lines) > 0
+    json.loads(lines[0])
+
+
+@pytest.mark.asyncio
 async def test_inference_batch_of_documents_cpu_with_failures(
     test_config,
     mock_classifiers_dir,
