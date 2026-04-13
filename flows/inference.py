@@ -38,7 +38,7 @@ from flows.classifier_specs.spec_interface import (
     load_classifier_specs,
     should_skip_doc,
 )
-from flows.config import Config
+from flows.config import Config, validate_s3_prefix
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -1269,6 +1269,8 @@ async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     document_ids_s3_path: str | None = None,
+    inference_document_source_prefix: str | None = None,
+    inference_document_target_prefix: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
@@ -1282,6 +1284,8 @@ async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     document_ids_s3_path: str | None = None,
+    inference_document_source_prefix: str | None = None,
+    inference_document_target_prefix: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
@@ -1298,6 +1302,8 @@ async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     document_ids_s3_path: str | None = None,
+    inference_document_source_prefix: str | None = None,
+    inference_document_target_prefix: str | None = None,
     config: Config | None = None,
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
@@ -1317,6 +1323,10 @@ async def inference(
     - document_ids_s3_path: S3 path string (e.g., "s3://bucket/key") to a file
         containing document IDs (one per line). Mutually exclusive with document_ids
         parameter.
+    - inference_document_source_prefix: Optional source prefix override for reading
+        input documents.
+    - inference_document_target_prefix: Optional target prefix override for writing
+        inference results.
     - classifier_spec: List of classifier names and aliases (alias tag
       for the version) to run inference with
     - config: A Config object, uses the default if not given. Usually
@@ -1331,6 +1341,15 @@ async def inference(
     logger = get_logger()
     if not config:
         config = await Config.create()
+
+    if inference_document_source_prefix is not None:
+        config.inference_document_source_prefix = validate_s3_prefix(
+            inference_document_source_prefix
+        )
+    if inference_document_target_prefix is not None:
+        config.inference_document_target_prefix = validate_s3_prefix(
+            inference_document_target_prefix
+        )
     logger.info(f"Running with config: {config}")
 
     run_output_identifier = build_run_output_identifier()
