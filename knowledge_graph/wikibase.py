@@ -66,6 +66,7 @@ class WikibaseSession:
 
     # Magic numbers
     DEFAULT_TIMEOUT = 30
+    REDIRECT_REQUEST_TIMEOUT = 90
     DEFAULT_BATCH_SIZE = 50
     PAGE_REQUEST_SIZE = 500
     MAX_PAGE_REQUESTS = 2000  # Suitable up to 1M pages (500*2000)
@@ -247,7 +248,7 @@ class WikibaseSession:
                             "ids": "|".join(ids_to_fetch),
                             "props": "info",
                         },
-                        timeout=self.DEFAULT_TIMEOUT,
+                        timeout=self.REDIRECT_REQUEST_TIMEOUT,
                     )
 
             if response is None:
