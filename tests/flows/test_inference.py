@@ -735,48 +735,15 @@ async def test_run_classifier_inference_on_document_v2_schema():
         classifier_id=ClassifierID("6vxrmcuf"),
         wandb_registry_version="v7",
     )
-    document = BaseParserOutputV2.model_validate(
-        {
-            "document_id": "AF.chunked.1.1",
-            "document_metadata": {},
-            "document_name": "test document",
-            "document_description": "test description",
-            "document_slug": "test-document",
-            "document_content_type": "application/pdf",
-            "languages": ["en"],
-            "translated": False,
-            "html_data": None,
-            "pdf_data": {
-                "page_metadata": [{"page_number": 0, "dimensions": [100.0, 100.0]}],
-                "md5sum": "test-md5",
-                "text_blocks": [
-                    {
-                        "id": "v2-block-1",
-                        "idx": 0,
-                        "pages": [
-                            {
-                                "number": 0,
-                                "bounding_boxes": [
-                                    {
-                                        "coordinates": [
-                                            {"x": 0.0, "y": 0.0},
-                                            {"x": 10.0, "y": 0.0},
-                                            {"x": 10.0, "y": 10.0},
-                                            {"x": 0.0, "y": 10.0},
-                                        ]
-                                    }
-                                ],
-                            }
-                        ],
-                        "text": "test pdf text",
-                        "type": "Text",
-                        "type_confidence": 1.0,
-                    }
-                ],
-            },
-            "pipeline_metadata": {},
-        }
+    document_data = json.loads(
+        (
+            Path(__file__).parent
+            / "fixtures"
+            / "embeddings_input_v2"
+            / "AF.chunked.1.1.json"
+        ).read_text()
     )
+    document = BaseParserOutputV2.model_validate(document_data)
     store_result = SingleDocumentInferenceResult(
         document_stem=DocumentStem("AF.chunked.1.1"),
         labelled_passages=[],
@@ -791,9 +758,15 @@ async def test_run_classifier_inference_on_document_v2_schema():
     )
 
     assert classifier.predict.call_count == 1
-    assert classifier.predict.call_args.args[0] == ["test pdf text"]
+    assert document.pdf_data is not None
+    assert set(classifier.predict.call_args.args[0]) == set(
+        [
+            "PART I: PROJECT INFORMATION",
+            "ADAPTATION FUND\nPROJECT PROPOSAL TO THE ADAPTATION FUND",
+        ]
+    )
     assert len(result.labelled_passages) == 1
-    assert result.labelled_passages[0].id == "v2-block-1"
+    assert result.labelled_passages[0].id == document.pdf_data.text_blocks[0].id
 
 
 @pytest.mark.asyncio
