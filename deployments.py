@@ -225,6 +225,7 @@ async def main() -> None:
         deployment_name_suffix="v2",
         deployment_parameters=JsonDict(
             {
+                "input_schema": "v2",
                 "inference_document_source_prefix": "embeddings_input_v2/",
                 "inference_document_target_prefix": "labelled_passages_v2/",
             }
