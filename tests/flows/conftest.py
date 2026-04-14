@@ -433,6 +433,8 @@ def parser_output_html(parser_output) -> Generator[BaseParserOutput, None, None]
             HTMLTextBlock(
                 text=["test html text"],
                 text_block_id="1",
+                type=BlockType.TEXT,
+                type_confidence=0.5,
             )
         ],
     )
