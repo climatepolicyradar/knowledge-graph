@@ -14,6 +14,7 @@ import pytest
 from botocore.client import ClientError
 from cpr_sdk.parser_models import (
     BaseParserOutput,
+    BaseParserOutputV2,
     BlockType,
     PDFData,
     PDFTextBlock,
@@ -725,6 +726,77 @@ async def test_run_classifier_inference_on_document(
 
 
 @pytest.mark.asyncio
+async def test_run_classifier_inference_on_document_v2_schema():
+    classifier = MagicMock()
+    classifier.predict.return_value = [[]]
+
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q788"),
+        classifier_id=ClassifierID("6vxrmcuf"),
+        wandb_registry_version="v7",
+    )
+    document = BaseParserOutputV2.model_validate(
+        {
+            "document_id": "AF.chunked.1.1",
+            "document_metadata": {},
+            "document_name": "test document",
+            "document_description": "test description",
+            "document_slug": "test-document",
+            "document_content_type": "application/pdf",
+            "languages": ["en"],
+            "translated": False,
+            "html_data": None,
+            "pdf_data": {
+                "page_metadata": [{"page_number": 0, "dimensions": [100.0, 100.0]}],
+                "md5sum": "test-md5",
+                "text_blocks": [
+                    {
+                        "id": "v2-block-1",
+                        "idx": 0,
+                        "pages": [
+                            {
+                                "number": 0,
+                                "bounding_boxes": [
+                                    {
+                                        "coordinates": [
+                                            {"x": 0.0, "y": 0.0},
+                                            {"x": 10.0, "y": 0.0},
+                                            {"x": 10.0, "y": 10.0},
+                                            {"x": 0.0, "y": 10.0},
+                                        ]
+                                    }
+                                ],
+                            }
+                        ],
+                        "text": "test pdf text",
+                        "type": "Text",
+                        "type_confidence": 1.0,
+                    }
+                ],
+            },
+            "pipeline_metadata": {},
+        }
+    )
+    store_result = SingleDocumentInferenceResult(
+        document_stem=DocumentStem("AF.chunked.1.1"),
+        labelled_passages=[],
+        document=document,
+        classifier_spec=classifier_spec,
+    )
+
+    result = await run_classifier_inference_on_document(
+        result=store_result,
+        classifier=classifier,
+        input_schema="v2",
+    )
+
+    assert classifier.predict.call_count == 1
+    assert classifier.predict.call_args.args[0] == ["test pdf text"]
+    assert len(result.labelled_passages) == 1
+    assert result.labelled_passages[0].id == "v2-block-1"
+
+
+@pytest.mark.asyncio
 async def test_inference_batch_of_documents_cpu(
     test_config,
     mock_classifiers_dir,
@@ -839,7 +911,7 @@ async def test_inference_batch_of_documents_cpu(
 
 
 @pytest.mark.asyncio
-async def test_inference_batch_of_documents_cpu_with_embeddings_input_v2(
+async def test_inference_batch_of_documents_cpu__v2_input(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -848,9 +920,8 @@ async def test_inference_batch_of_documents_cpu_with_embeddings_input_v2(
     mock_prefect_s3_block,
 ):
     """Test that v2 embeddings input can run inference and produce outputs."""
+    mock_wandb_init, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
-    test_config.inference_document_source_prefix = "embeddings_input_v2/"
-    test_config.inference_document_target_prefix = "labelled_passages_v2/"
 
     batch = [DocumentStem(Path(mock_async_bucket_documents_v2[0]).stem)]
     classifier_spec = ClassifierSpec(
@@ -858,8 +929,19 @@ async def test_inference_batch_of_documents_cpu_with_embeddings_input_v2(
         classifier_id="6vxrmcuf",
         wandb_registry_version="v7",
     )
-    config_json = JsonDict(test_config.to_json())
+    config_json = JsonDict(
+        {
+            "cache_bucket": test_config.cache_bucket,
+            "wandb_model_registry": test_config.wandb_model_registry,
+            "wandb_entity": test_config.wandb_entity,
+            "aws_env": test_config.aws_env.value,
+            "local_classifier_dir": str(test_config.local_classifier_dir),
+            "inference_document_source_prefix": "embeddings_input_v2/",
+            "inference_document_target_prefix": "labelled_passages_v2/",
+        }
+    )
 
+    # Should not raise any exceptions for successful processing
     inference_batch_of_documents_cpu.flow_run_name = (
         "test-inference-batch-of-documents-cpu-v2"
     )
@@ -870,6 +952,7 @@ async def test_inference_batch_of_documents_cpu_with_embeddings_input_v2(
             batch=batch,
             config_json=config_json,
             classifier_spec_json=JsonDict(classifier_spec.model_dump()),
+            input_schema="v2",
             return_state=True,
         )
 
