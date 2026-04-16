@@ -71,6 +71,10 @@ def main(
         500_000,
         help="Maximum number of passages to load from the dataset before sampling",
     ),
+    max_negative_proportion: Optional[float] = typer.Option(
+        None,
+        help="Maximum proportion of the sample that can be negative. If not set, fills remaining sample_size after positives.",
+    ),
     track_and_upload: bool = typer.Option(
         True,
         help="Whether to track the run and upload the labelled passages to W&B",
@@ -244,6 +248,11 @@ def main(
 
         # Calculate the number of negative samples we need to take
         negative_sample_size = sample_size - len(positive_samples)
+        if max_negative_proportion is not None:
+            negative_sample_size = min(
+                negative_sample_size,
+                math.floor(sample_size * max_negative_proportion),
+            )
 
         # Get negative samples (passages not identified by any classifier)
         negative_indices = ~dataset[[model.name for model in models]].any(axis=1)
@@ -255,10 +264,13 @@ def main(
             sample_size=negative_sample_size,
             on_columns=equity_columns,
         )
+        # create_balanced_sample can return more than the requested number of negatives
+        if len(negative_samples) > negative_sample_size:
+            negative_samples = negative_samples.sample(negative_sample_size)
 
         console.log(
             f"📊 Sampled {len(positive_samples)} positive passages, "
-            f"{negative_sample_size} negative passages"
+            f"{len(negative_samples)} negative passages"
         )
 
         # Combine positive and negative samples
