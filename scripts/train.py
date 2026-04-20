@@ -12,7 +12,6 @@ import wandb
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
 from pydantic import BaseModel, Field
-from rich.console import Console
 from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
@@ -38,6 +37,7 @@ from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.openrouter_pricing import get_openrouter_pricing
+from knowledge_graph.utils import get_logger
 from knowledge_graph.version import Version
 from knowledge_graph.wandb_helpers import (
     load_labelled_passages_from_wandb,
@@ -92,16 +92,16 @@ def deduplicate_training_data(
     evaluation_data: list[LabelledPassage],
 ) -> list[LabelledPassage]:
     """Remove passages from training data that appear in evaluation data."""
-    console = Console()
+    logger = get_logger()
 
     eval_texts = {passage.text for passage in evaluation_data}
 
-    console.log(f"📊 Starting with {len(training_data)} passages for training")
+    logger.info(f"📊 Starting with {len(training_data)} passages for training")
 
     filtered = [p for p in training_data if p.text not in eval_texts]
 
     removed_count = len(training_data) - len(filtered)
-    console.log(
+    logger.info(
         f"🔍 Removed {removed_count} duplicate passages, training with {len(filtered)} passages"
     )
 
@@ -125,12 +125,12 @@ def limit_training_samples(
     :return: A (mostly) balanced subset of the training data.
     :rtype: list[LabelledPassage]
     """
-    console = Console()
+    logger = get_logger()
 
     positive_passages = [p for p in training_data if p.spans]
     negative_passages = [p for p in training_data if not p.spans]
 
-    console.log(
+    logger.info(
         f"📊 Starting with {len(positive_passages)} positive and "
         f"{len(negative_passages)} negative passages"
     )
@@ -154,7 +154,7 @@ def limit_training_samples(
     limited_positive = positive_passages[:pos_count]
     limited_negative = negative_passages[:neg_count]
 
-    console.log(
+    logger.info(
         f"✂️  Limited to {len(limited_positive)} positive and "
         f"{len(limited_negative)} negative passages "
         f"({len(limited_positive) + len(limited_negative)} total)"
@@ -174,11 +174,9 @@ def move_model_to_cpu(classifier: Classifier) -> None:
     able to load a classifier stored on CUDA and vice-versa.
     """
 
-    console = Console()
-
     if isinstance(classifier, BertBasedClassifier):
         classifier.move_model_to_device(torch.device("cpu"))
-        console.log("Moved model to CPU")
+        get_logger().info("Moved model to CPU")
 
 
 class StorageUpload(BaseModel):
@@ -240,7 +238,7 @@ def create_and_link_model_artifact(
         "concept_wikibase_revision": classifier.concept.wikibase_revision,
     }
     if isinstance(classifier, GPUBoundClassifier):
-        Console().log("Adding GPU requirement to metadata")
+        get_logger().info("Adding GPU requirement to metadata")
         compute_environment: ComputeEnvironment = {"gpu": True}
         metadata["compute_environment"] = compute_environment
 
@@ -315,7 +313,7 @@ def get_next_version(
         wikibase_id = classifier.concept.wikibase_id
         pattern = rf"artifact membership '.*?' not found in '{namespace.entity}/{wikibase_id}'"
         if re.search(pattern, error_message):
-            Console().log(
+            get_logger().info(
                 f"No previous wandb version found, '{target_path}' will be at v0"
             )
             next_version = Version("v0")
@@ -353,7 +351,7 @@ def upload_model_artifact(
         wandb_model_artifact_filename,
     )
 
-    Console().log(f"Uploading {classifier.name} to {key} in bucket {bucket}")
+    get_logger().info(f"Uploading {classifier.name} to {key} in bucket {bucket}")
 
     s3_client.upload_file(
         classifier_path,
@@ -363,7 +361,7 @@ def upload_model_artifact(
         Callback=lambda bytes_transferred: None,
     )
 
-    Console().log(f"Uploaded {classifier.name} to {key} in bucket {bucket}")
+    get_logger().info(f"Uploaded {classifier.name} to {key} in bucket {bucket}")
 
     return bucket, key
 
@@ -486,8 +484,8 @@ def main(
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
-        Console().print(
-            f"Deployment started. [blue][link={get_flow_run_ui_url(flow_run)}]Click here to open flow run on Prefect.[/link][/blue]"
+        get_logger().info(
+            f"Deployment started. Flow run URL: {get_flow_run_ui_url(flow_run)}"
         )
 
         return None  # Can't return the classifier when running remotely
@@ -520,8 +518,7 @@ async def train_classifier(
     force: bool = True,
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
-    # Create console locally to avoid serialization issues
-    console = Console()
+    logger = get_logger()
 
     project = wikibase_id
     namespace = Namespace(project=project, entity=WANDB_ENTITY)
@@ -538,7 +535,7 @@ async def train_classifier(
         if classifier_exists_in_wandb(namespace=namespace, target_path=target_path):
             # If the classifier already exists, just log and return the classifier without
             # running the redundant training/uploading process
-            console.log(
+            logger.info(
                 f"Classifier {classifier.id} already exists in W&B. Skipping training."
             )
             return classifier
@@ -592,12 +589,12 @@ async def train_classifier(
                 [p for p in deduplicated_training_data if p.spans]
             )
             train_num_negatives = len(deduplicated_training_data) - train_num_positives
-            Console().print(
+            logger.info(
                 f"Training data has length {len(deduplicated_training_data)} with {train_num_positives} positive and {train_num_negatives} negative examples after deduplication."
             )
 
             if track_and_upload and run and deduplicated_training_data:
-                console.log("📄 Creating artifact for deduplicated training data")
+                logger.info("📄 Creating artifact for deduplicated training data")
                 log_labelled_passages_artifact_to_wandb_run(
                     labelled_passages=deduplicated_training_data,
                     run=run,
@@ -605,7 +602,7 @@ async def train_classifier(
                     classifier=classifier,
                     artifact_name="training-data",
                 )
-                console.log("✅ Training data artifact uploaded successfully")
+                logger.info("✅ Training data artifact uploaded successfully")
         else:
             deduplicated_training_data = []
 
@@ -643,7 +640,7 @@ async def train_classifier(
             classifier=classifier,
         )
 
-        console.log(f"Using next version {next_version}")
+        logger.info(f"Using next version {next_version}")
 
         # Set this _before_ the model is saved to disk
         classifier.version = Version(next_version)
@@ -655,7 +652,7 @@ async def train_classifier(
         )
         classifier_path.parent.mkdir(parents=True, exist_ok=True)
         classifier.save(classifier_path)
-        console.log(f"Saved {classifier} to {classifier_path}")
+        logger.info(f"Saved {classifier} to {classifier_path}")
 
         if track_and_upload:
             region_name = "eu-west-1"
@@ -699,14 +696,14 @@ async def train_classifier(
             )
 
             if track_and_upload and run:
-                console.log("📄 Creating labelled passages artifact")
+                logger.info("📄 Creating labelled passages artifact")
                 log_labelled_passages_artifact_to_wandb_run(
                     labelled_passages=model_labelled_passages,
                     run=run,
                     concept=classifier.concept,
                     classifier=classifier,
                 )
-                console.log("✅ Labelled passages uploaded successfully")
+                logger.info("✅ Labelled passages uploaded successfully")
 
     return classifier
 
@@ -731,7 +728,7 @@ async def run_training(
 
     Optionally evaluate, track in W&B and upload the model to S3.
     """
-    console = Console()
+    logger = get_logger()
 
     # Validate parameter dependencies
     validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
@@ -745,26 +742,24 @@ async def run_training(
     )
 
     if concept_overrides:
-        console.log(f"🔧 Applying custom concept properties: {concept_overrides}")
+        logger.info(f"🔧 Applying custom concept properties: {concept_overrides}")
         for key, value in concept_overrides.items():
             if hasattr(concept, key):
                 setattr(concept, key, value)
-                console.log(f"  ✓ Set concept.{key} = {value}")
+                logger.info(f"  ✓ Set concept.{key} = {value}")
             else:
-                console.log(
-                    f"  ⚠️  Warning: concept has no attribute '{key}'", style="yellow"
-                )
+                logger.warning(f"  ⚠️  Warning: concept has no attribute '{key}'")
 
     # Fetch labelled passages from W&B if specified
     labelled_passages = None
     if training_data_wandb_path:
-        console.log(
+        logger.info(
             f"📥 Fetching training data from W&B artifact path: {training_data_wandb_path}"
         )
         labelled_passages = load_labelled_passages_from_wandb(
             wandb_path=training_data_wandb_path
         )
-        console.log(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
+        logger.info(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
 
     classifier = ClassifierFactory.create(
         concept=concept,
