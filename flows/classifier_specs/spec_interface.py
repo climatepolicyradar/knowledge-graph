@@ -129,8 +129,13 @@ def should_skip_doc(stem: DocumentStem, spec: ClassifierSpec) -> bool:
     If the source (i.e. the first part of the id), is in the dont_run_on field, this
     will return true to recommend filtering out.
     """
-    source = stem.split(".")[0]
-    return DontRunOnEnum(source.lower()) in (spec.dont_run_on or [])
+    source = stem.split(".")[0].lower()
+    try:
+        source_enum = DontRunOnEnum(source)
+    except ValueError:
+        return False
+
+    return source_enum in (spec.dont_run_on or [])
 
 
 def yaml_spec_to_json(aws_env: AwsEnv):

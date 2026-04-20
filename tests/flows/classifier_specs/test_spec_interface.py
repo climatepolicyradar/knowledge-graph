@@ -124,3 +124,13 @@ def test_should_skip_doc(stem, expected):
         dont_run_on=["af", "sabin"],
     )
     assert expected == should_skip_doc(stem, spec)
+
+
+def test_should_skip_doc__new_source_allowed_by_default():
+    spec = ClassifierSpec(
+        wikibase_id="Q1",
+        classifier_id="9999zzzz",
+        wandb_registry_version="v1",
+        dont_run_on=["af", "sabin"],
+    )
+    assert not should_skip_doc("random_new_corpus", spec)
