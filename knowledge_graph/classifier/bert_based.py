@@ -164,11 +164,20 @@ class BertBasedClassifier(
         Uses the class's `model_name` property.
         """
 
-        self.model: PreTrainedModel = AutoModelForSequenceClassification.from_pretrained(
-            self.model_name,
-            # `reference_compile=False` disables ModernBERT's torch.compile path, which
-            # would otherwise require a C compiler at runtime (absent from our slim image)
-            reference_compile=False,
+        if "ModernBERT" in self.model_name:
+            extra_clf_kwargs = {
+                # `reference_compile=False` disables ModernBERT's torch.compile path, which
+                # would otherwise require a C compiler at runtime (absent from our slim image)
+                "reference_compile": False,
+            }
+        else:
+            extra_clf_kwargs = {}
+
+        self.model: PreTrainedModel = (
+            AutoModelForSequenceClassification.from_pretrained(
+                self.model_name,
+                **extra_clf_kwargs,
+            )
         )
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
             self.model_name
