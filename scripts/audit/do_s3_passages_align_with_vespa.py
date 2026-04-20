@@ -102,7 +102,7 @@ def get_filtered_passage_count_from_s3(bucket_name: str, s3_key: str) -> int:
     filtered_text_blocks = [
         block
         for block in parser_output.text_blocks
-        if block.type not in BLOCKS_FILTERED_IN_INDEXER
+        if block.type not in BLOCKS_FILTERED_IN_INDEXER  # pyright: ignore[reportAttributeAccessIssue]
     ]
 
     return len(filtered_text_blocks)

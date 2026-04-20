@@ -70,7 +70,7 @@ def __getattr__(name):
         module = importlib.import_module(".autollm", __package__)
         return getattr(module, name)
     else:
-        return globals()[name]
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [

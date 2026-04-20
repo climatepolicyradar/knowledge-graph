@@ -30,6 +30,7 @@ class DontRunOnEnum(Enum):
     oep = "oep"
     unfccc = "unfccc"
     uncdb = "uncdb"
+    iccn = "iccn"
 
     def __str__(self) -> str:
         """Return a string representation"""

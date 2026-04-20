@@ -29,18 +29,6 @@ MODEL_NAME = "openrouter:google/gemini-3.1-pro-preview"
 
 CONCEPT_DEFINITION = """Procedural justice means ensuring that decision making is fair and inclusive, emphasizing the agency and influence of vulnerable groups and those, giving them power to change processes that affect their lives."""
 
-INSTRUCTIONS = """
-    Instructions:
-        1. Read through the passage carefully, thinking about the concept and different ways it is used in documents, including acronyms, jargon and global differences.
-        2. Identify any mentions of the concept, including direct references and indirect descriptions of the concept which match the definition.
-        3. Surround each identified mention with <concept> tags.
-        4. If the passage contains multiple instances, each one should be tagged separately.
-        5. If the passage does not contain any instances, it should be reproduced exactly as given, without any additional tags.
-        6. If the entire passage refers to the concept without specific mentions, the entire passage should be wrapped in a <concept> tag.
-        7. The input text must be reproduced exactly, down to the last character, even including typos if relevant, only adding concept tags.
-        8. Double check that you have tagged all instances of procedural justice according to the provided definition, and that every tagged part contains enough information to show why this is relevant.
-    """
-
 
 def get_labelling_guidelines() -> str:
     """
@@ -127,7 +115,7 @@ ONLY tag if the answer is yes.
 - **NOTE**: Even in reference lists or citations, tag the participation-relevant portion of the title. The title indicates the document substantively addresses procedural justice.
 """
 
-    return INSTRUCTIONS + "\n\n" + criteria
+    return criteria
 
 
 def get_concept_description() -> str:
@@ -218,6 +206,7 @@ def sample(
         wikibase_id=WIKIBASE_ID,
         sample_size=sample_size,
         min_negative_proportion=0.1,
+        max_negative_proportion=0.3,
         dataset_name=dataset_name,
         max_size_to_sample_from=max_size_to_sample_from,
         track_and_upload=track_and_upload,

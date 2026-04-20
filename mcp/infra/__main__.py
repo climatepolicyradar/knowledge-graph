@@ -4,6 +4,7 @@ import subprocess
 import pulumi
 import pulumi_aws as aws
 import pulumi_docker as docker
+from pulumi_aws import acm, route53
 
 from knowledge_graph.config import get_git_root
 
@@ -24,6 +25,12 @@ def get_ssm_parameter_arn(parameter_name):
         parameter_name,
     )
 
+
+# Look up the existing hosted zone and certificate
+hosted_zone = route53.get_zone(name="labs.climatepolicyradar.org")
+certificate = acm.get_certificate(
+    domain="*.labs.climatepolicyradar.org", statuses=["ISSUED"], most_recent=True
+)
 
 ssm_username_arn = get_ssm_parameter_arn("/Wikibase/Cloud/ServiceAccount/Username")
 ssm_password_arn = get_ssm_parameter_arn("/Wikibase/Cloud/ServiceAccount/Password")
@@ -92,17 +99,32 @@ default_subnet_ids = aws.ec2.get_subnets(
     filters=[aws.ec2.GetSubnetsFilterArgs(name="vpc-id", values=[default_vpc.id])]
 ).ids
 
-# Create a security group that allows HTTP ingress and all egress
+# Create a security group that allows HTTP/HTTPS ingress and all egress
 sg = aws.ec2.SecurityGroup(
     f"{application_name}-security-group",
     vpc_id=default_vpc.id,
-    description="Allow HTTP ingress",
+    description="Allow HTTP and HTTPS ingress",
     ingress=[
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=80,
+            to_port=80,
+            cidr_blocks=["0.0.0.0/0"],
+            description="HTTP",
+        ),
+        aws.ec2.SecurityGroupIngressArgs(
+            protocol="tcp",
+            from_port=443,
+            to_port=443,
+            cidr_blocks=["0.0.0.0/0"],
+            description="HTTPS",
+        ),
         aws.ec2.SecurityGroupIngressArgs(
             protocol="tcp",
             from_port=8000,
             to_port=8000,
             cidr_blocks=["0.0.0.0/0"],
+            description="Application port for ALB health checks and traffic",
         ),
     ],
     egress=[
@@ -142,14 +164,51 @@ target_group = aws.lb.TargetGroup(
     ),
 )
 
+# HTTP listener that redirects to HTTPS
+http_listener = aws.lb.Listener(
+    f"{application_name}-http-listener",
+    load_balancer_arn=alb.arn,
+    port=80,
+    protocol="HTTP",
+    default_actions=[
+        aws.lb.ListenerDefaultActionArgs(
+            type="redirect",
+            redirect=aws.lb.ListenerDefaultActionRedirectArgs(
+                port="443",
+                protocol="HTTPS",
+                status_code="HTTP_301",
+            ),
+        )
+    ],
+)
+
+# HTTPS listener
 listener = aws.lb.Listener(
     f"{application_name}-listener",
     load_balancer_arn=alb.arn,
-    port=8000,
+    port=443,
+    protocol="HTTPS",
+    ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06",
+    certificate_arn=certificate.arn,
     default_actions=[
         aws.lb.ListenerDefaultActionArgs(
             type="forward",
             target_group_arn=target_group.arn,
+        )
+    ],
+)
+
+# Route53 A record pointing to the ALB
+route53_record = route53.Record(
+    f"{application_name}-dns",
+    zone_id=hosted_zone.zone_id,
+    name="concept-store-mcp",
+    type="A",
+    aliases=[
+        route53.RecordAliasArgs(
+            name=alb.dns_name,
+            zone_id=alb.zone_id,
+            evaluate_target_health=True,
         )
     ],
 )
@@ -282,10 +341,12 @@ service = aws.ecs.Service(
     opts=pulumi.ResourceOptions(depends_on=[listener]),
 )
 
-pulumi.export("url", alb.dns_name)
-pulumi.export("mcp_url", pulumi.Output.concat("http://", alb.dns_name, ":8000/mcp"))
+pulumi.export("alb_dns_name", alb.dns_name)
+pulumi.export("url", "https://concept-store-mcp.labs.climatepolicyradar.org")
+pulumi.export("mcp_url", "https://concept-store-mcp.labs.climatepolicyradar.org/mcp")
 pulumi.export(
-    "health_check_url", pulumi.Output.concat("http://", alb.dns_name, ":8000/health")
+    "health_check_url",
+    "https://concept-store-mcp.labs.climatepolicyradar.org/health",
 )
 pulumi.export("image_version", git_commit_hash)
 pulumi.export("image_name", image.image_name)

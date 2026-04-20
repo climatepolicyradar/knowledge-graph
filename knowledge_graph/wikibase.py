@@ -18,6 +18,7 @@ from pydantic import (
     ValidationError,
 )
 from tenacity import (
+    AsyncRetrying,
     before_sleep_log,
     retry,
     retry_if_exception_type,
@@ -65,6 +66,7 @@ class WikibaseSession:
 
     # Magic numbers
     DEFAULT_TIMEOUT = 30
+    REDIRECT_REQUEST_TIMEOUT = 90
     DEFAULT_BATCH_SIZE = 50
     PAGE_REQUEST_SIZE = 500
     MAX_PAGE_REQUESTS = 2000  # Suitable up to 1M pages (500*2000)
@@ -210,11 +212,6 @@ class WikibaseSession:
             )
         return self._redirects.get(wikibase_id, wikibase_id)
 
-    @retry(
-        stop=stop_after_attempt(MAX_RETRIES),
-        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
-        retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
-    )
     async def _get_all_redirects(
         self, batch_size: Optional[int] = None
     ) -> dict[WikibaseID, WikibaseID]:
@@ -231,17 +228,33 @@ class WikibaseSession:
             ids_to_fetch = [
                 page["title"].removeprefix(self.ITEM_PREFIX) for page in batch
             ]
+            response: httpx.Response | None = None
 
-            response = await client.get(
-                url=self.api_url,
-                params={
-                    "action": "wbgetentities",
-                    "format": "json",
-                    "ids": "|".join(ids_to_fetch),
-                    "props": "info",
-                },
-                timeout=self.DEFAULT_TIMEOUT,
-            )
+            async for attempt in AsyncRetrying(
+                stop=stop_after_attempt(MAX_RETRIES),
+                wait=wait_exponential_jitter(
+                    initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT
+                ),
+                retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
+                before_sleep=before_sleep_log(get_logger(), logging.WARNING),  # type: ignore[arg-type]
+                reraise=True,
+            ):
+                with attempt:
+                    response = await client.get(
+                        url=self.api_url,
+                        params={
+                            "action": "wbgetentities",
+                            "format": "json",
+                            "ids": "|".join(ids_to_fetch),
+                            "props": "info",
+                        },
+                        timeout=self.REDIRECT_REQUEST_TIMEOUT,
+                    )
+
+            if response is None:
+                raise RuntimeError(
+                    "Redirect batch request completed without a response"
+                )
             response.raise_for_status()
             data = response.json()
 
@@ -535,6 +548,7 @@ class WikibaseSession:
             (HTTPStatusError, RequestError, json.JSONDecodeError)
         ),
         before_sleep=before_sleep_log(get_logger(), logging.WARNING),  # type: ignore[arg-type]
+        reraise=True,
     )
     async def get_concepts_async(
         self,
