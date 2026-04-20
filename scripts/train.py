@@ -778,6 +778,10 @@ async def run_training(
         extra_wandb_config["training_data_wandb_path"] = training_data_wandb_path
     if limit_training_samples is not None:
         extra_wandb_config["limit_training_samples"] = limit_training_samples
+    if hasattr(classifier, "model_name"):
+        wandb_classifier_kwargs: dict[str, object] = dict(classifier_kwargs or {})
+        wandb_classifier_kwargs["model_name"] = getattr(classifier, "model_name")
+        extra_wandb_config["classifier_kwargs"] = wandb_classifier_kwargs
 
     return await train_classifier(
         classifier=classifier,
