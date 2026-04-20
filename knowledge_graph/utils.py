@@ -31,7 +31,14 @@ def get_logger() -> logging.Logger | LoggingAdapter:
     try:
         return prefect.logging.get_run_logger()
     except prefect.exceptions.MissingContextError:
-        return prefect.logging.get_logger()
+        logger = prefect.logging.get_logger()
+        if not logger.handlers:
+            handler = logging.StreamHandler()
+            handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+            logger.propagate = False
+        return logger
 
 
 T = TypeVar("T")
