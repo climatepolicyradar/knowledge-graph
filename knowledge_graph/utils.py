@@ -31,14 +31,7 @@ def get_logger() -> logging.Logger | LoggingAdapter:
     try:
         return prefect.logging.get_run_logger()
     except prefect.exceptions.MissingContextError:
-        logger = prefect.logging.get_logger()
-        if not logger.handlers:
-            handler = logging.StreamHandler()
-            handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
-            logger.addHandler(handler)
-            logger.setLevel(logging.INFO)
-            logger.propagate = False
-        return logger
+        return logging.getLogger("knowledge_graph")
 
 
 T = TypeVar("T")
