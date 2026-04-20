@@ -278,7 +278,7 @@ class BertTokenClassifier(
         concept: Concept,
         model_name: str = "answerdotai/ModernBERT-base",
         download_pretrained_model_on_init: bool = True,
-        unfreeze_layers: int = 0,
+        unfreeze_layers: int = 2,
     ):
         super().__init__(concept)
         self.model_name = model_name
