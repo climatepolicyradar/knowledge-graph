@@ -469,9 +469,9 @@
   wandb_registry_version: v3
 - wikibase_id: Q1829
   concept_id: d2sckcja
-  classifier_id: fuqmphf9
+  classifier_id: 7n27za9e
   classifiers_profile: primary
-  wandb_registry_version: v0
+  wandb_registry_version: v1
   compute_environment:
     gpu: true
 - wikibase_id: Q1830
