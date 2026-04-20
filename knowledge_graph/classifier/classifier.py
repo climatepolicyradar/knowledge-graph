@@ -277,9 +277,10 @@ class Classifier(ABC):
 
         # Avoids circular import
         from knowledge_graph.classifier.bert_based import BertBasedClassifier  # noqa: I001
+        from knowledge_graph.classifier.bert_token_classifier import BertTokenClassifier  # noqa: I001
 
-        if isinstance(classifier, BertBasedClassifier):
-            new_classifier = BertBasedClassifier(
+        if isinstance(classifier, (BertBasedClassifier, BertTokenClassifier)):
+            new_classifier = classifier.__class__(
                 concept=classifier.concept,
                 model_name=classifier.model_name,
                 download_pretrained_model_on_init=False,
