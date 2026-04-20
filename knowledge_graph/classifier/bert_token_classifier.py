@@ -587,6 +587,8 @@ class BertTokenClassifier(
             for name, _ in self.model.named_parameters():
                 if match := re.search(r"layers?\.(\d+)\.", name):
                     layer_indices.add(int(match.group(1)))
+                else:
+                    logger.warning(f"No layers found in the model with name {name}")
             if layer_indices:
                 max_layer = max(layer_indices)
                 unfrozen_layer_indices = {
