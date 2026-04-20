@@ -31,7 +31,7 @@ def get_logger() -> logging.Logger | LoggingAdapter:
     try:
         return prefect.logging.get_run_logger()
     except prefect.exceptions.MissingContextError:
-        return prefect.logging.get_logger()
+        return logging.getLogger("knowledge_graph")
 
 
 T = TypeVar("T")
