@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import re
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime
@@ -104,6 +105,7 @@ class BertBasedClassifier(
         concept: Concept,
         model_name: str = "answerdotai/ModernBERT-base",
         download_pretrained_model_on_init: bool = True,
+        unfreeze_layers: int = 0,
     ):
         """
         Initialise a BERT classifier.
@@ -112,10 +114,14 @@ class BertBasedClassifier(
         :param model_name: model name from Huggingface, defaults to "answerdotai/ModernBERT-base"
         :param download_pretrained_model_on_init: whether to download the pretrained model and tokenizer on init, defaults to True.
             Disable this if planning to overwrite the model and tokenizer elsewhere.
+        :param unfreeze_layers: number of final encoder layers to fine-tune in addition
+            to the classification head. 0 keeps the full backbone frozen (head-only
+            training).
         """
 
         super().__init__(concept)
         self.model_name = model_name
+        self.unfreeze_layers = unfreeze_layers
 
         # Private properties for creating and running inference on classifier variants
         self._use_dropout_during_inference = False
@@ -210,6 +216,7 @@ class BertBasedClassifier(
             self.concept.id,
             self.model_name,
             self.prediction_threshold,
+            self.unfreeze_layers,
             self._random_id_component,
         )
 
@@ -363,7 +370,11 @@ class BertBasedClassifier(
         Returns:
             A new classifier instance with dropout enabled during inference.
         """
-        variant = self.__class__(concept=self.concept, model_name=self.model_name)
+        variant = self.__class__(
+            concept=self.concept,
+            model_name=self.model_name,
+            unfreeze_layers=self.unfreeze_layers,
+        )
         variant.model.load_state_dict(self.model.state_dict())
         variant.device = self.device
 
@@ -511,13 +522,42 @@ class BertBasedClassifier(
             .to_markdown(index=False, tablefmt="rounded_grid")
         )
 
-        logger.info(
-            "Freezing base model. The model's prediction head and classifier will be trained."
-        )
-        # More efficient parameter freezing - single pass through parameters
+        # Determine which transformer layers to unfreeze (if any)
+        unfrozen_layer_indices: set[int] = set()
+        if self.unfreeze_layers > 0:
+            layer_indices = set()
+            for name, _ in self.model.named_parameters():
+                if match := re.search(r"layers?\.(\d+)\.", name):
+                    layer_indices.add(int(match.group(1)))
+                else:
+                    logger.warning(f"No layers found in the model with name {name}")
+            if layer_indices:
+                max_layer = max(layer_indices)
+                unfrozen_layer_indices = {
+                    i
+                    for i in layer_indices
+                    if i >= max_layer - self.unfreeze_layers + 1
+                }
+
+        if unfrozen_layer_indices:
+            logger.info(
+                "Unfreezing transformer layers %s (plus classification head).",
+                sorted(unfrozen_layer_indices),
+            )
+        else:
+            logger.info(
+                "Freezing base model. The model's prediction head and classifier will be trained."
+            )
+
         for name, param in self.model.named_parameters():
             if "classifier" in name or "head" in name:
                 param.requires_grad = True
+            elif unfrozen_layer_indices:
+                match = re.search(r"layers?\.(\d+)\.", name)
+                if match and int(match.group(1)) in unfrozen_layer_indices:
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
             else:
                 param.requires_grad = False
 
@@ -556,7 +596,7 @@ class BertBasedClassifier(
                 per_device_eval_batch_size=64,
                 # gradient clipping for more stable updates
                 max_grad_norm=1.0,
-                learning_rate=5e-4,
+                learning_rate=2e-4 if self.unfreeze_layers > 0 else 5e-4,
                 weight_decay=0.01,
                 warmup_ratio=0.1,
                 lr_scheduler_type="cosine",
