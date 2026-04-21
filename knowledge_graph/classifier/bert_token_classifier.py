@@ -310,11 +310,22 @@ class BertTokenClassifier(
 
     def download_model_and_tokenizer(self) -> None:
         """Download pretrained base model and tokenizer"""
+
+        if "ModernBERT" in self.model_name:
+            extra_clf_kwargs = {
+                # `reference_compile=False` disables ModernBERT's torch.compile path, which
+                # would otherwise require a C compiler at runtime (absent from our slim image)
+                "reference_compile": False,
+            }
+        else:
+            extra_clf_kwargs = {}
+
         self.model: PreTrainedModel = AutoModelForTokenClassification.from_pretrained(
             self.model_name,
             num_labels=NUM_LABELS,
             id2label=ID2LABEL,
             label2id=LABEL2ID,
+            **extra_clf_kwargs,
         )
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
             self.model_name
