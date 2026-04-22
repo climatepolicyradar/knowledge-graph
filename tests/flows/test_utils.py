@@ -10,6 +10,7 @@ import pytest
 from prefect.client.schemas.objects import FlowRun, State, StateType, TaskRun
 from prefect.context import FlowRunContext, TaskRunContext
 from prefect.flows import flow
+from prefect.types.names import raise_on_name_alphanumeric_dashes_only
 from prefect.variables import Variable
 
 from flows.utils import (
@@ -33,6 +34,7 @@ from flows.utils import (
     map_as_sub_flow,
     remove_translated_suffix,
     s3_file_exists,
+    sanitise_artifact_key_component,
 )
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.utils import iterate_batch
@@ -48,6 +50,23 @@ from knowledge_graph.utils import iterate_batch
 )
 def test_file_name_from_path(path, expected):
     assert file_name_from_path(path) == expected
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("exuberant-dragonfly (Copy)", "exuberant-dragonfly-copy"),
+        ("UPPER_case.and spaces", "upper-case-and-spaces"),
+        ("!!!", "unknown"),
+    ],
+)
+def test_sanitise_artifact_key_component(value: str, expected: str) -> None:
+    actual = sanitise_artifact_key_component(value)
+    assert actual == expected
+    assert (
+        raise_on_name_alphanumeric_dashes_only(actual, field_name="Artifact key")
+        == actual
+    )
 
 
 @pytest.mark.asyncio
