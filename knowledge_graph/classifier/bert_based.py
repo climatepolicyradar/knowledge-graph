@@ -293,62 +293,60 @@ class BertBasedClassifier(
         self, texts: Sequence[str], threshold: float | None = None
     ) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
-        if self._use_dropout_during_inference:
-            with self._dropout_enabled():
-                with torch.no_grad():
-                    scores, predicted_classes = self._forward(texts)
-        else:
-            self.model.eval()  # type: ignore[attr-defined]
-            with torch.no_grad():
-                scores, predicted_classes = self._forward(texts)
+        positive_probs = self.predict_proba_batch(texts)
 
-        effective_threshold = (
-            threshold if threshold is not None else self.prediction_threshold
-        )
+        if threshold is not None:
+            effective_threshold = threshold
+        elif self.prediction_threshold is not None:
+            effective_threshold = self.prediction_threshold
+        else:
+            effective_threshold = 0.5
 
         now = datetime.now()
         labeller = str(self)
         results = []
-        for text, score, cls in zip(texts, scores, predicted_classes):
+        for text, pos_prob in zip(texts, positive_probs):
             text_results = []
-            # LABEL_1 (class index 1) is the positive prediction.
-            if cls == 1:
-                if effective_threshold is None or score >= effective_threshold:
-                    span = Span(
-                        text=text,
-                        concept_id=self.concept.wikibase_id,
-                        prediction_probability=score,
-                        start_index=0,
-                        end_index=len(text),
-                        labellers=[labeller],
-                        timestamps=[now],
-                    )
-                    text_results.append(span)
+            if pos_prob >= effective_threshold:
+                span = Span(
+                    text=text,
+                    concept_id=self.concept.wikibase_id,
+                    prediction_probability=pos_prob,
+                    start_index=0,
+                    end_index=len(text),
+                    labellers=[labeller],
+                    timestamps=[now],
+                )
+                text_results.append(span)
             results.append(text_results)
 
         return results
 
-    def _forward(self, texts: Sequence[str]) -> tuple[list[float], list[int]]:
+    def predict_proba_batch(self, texts: Sequence[str]) -> list[float]:
         """
-        Run a batched forward pass and return per-text scores and predicted classes.
+        Return P(class=1) per text, independent of the argmax decision.
 
-        :param texts: Texts to classify.
-        :returns: Tuple of `(scores, predicted_classes)` where `scores[i]` is the
-            probability of the predicted class for text `i`
+        This is needed because `predict` only returns a `Span` for positive examples,
+        but probability calibration needs examples from probabilities 0 <= p <= 1.
         """
-        device = self.device
+        if self._use_dropout_during_inference:
+            with self._dropout_enabled():
+                with torch.no_grad():
+                    return self._forward_positive_probs(texts)
+        self.model.eval()  # type: ignore[attr-defined]
+        with torch.no_grad():
+            return self._forward_positive_probs(texts)
+
+    def _forward_positive_probs(self, texts: Sequence[str]) -> list[float]:
         inputs = self.tokenizer(
             list(texts),
             padding=True,
             truncation=True,
             max_length=512,
             return_tensors="pt",
-        ).to(device)
+        ).to(self.device)
         logits = self.model(**inputs).logits
-        probs = torch.softmax(logits, dim=-1)
-        predicted_classes = torch.argmax(probs, dim=-1)
-        scores = probs[torch.arange(len(probs)), predicted_classes]
-        return scores.tolist(), predicted_classes.tolist()
+        return torch.softmax(logits, dim=-1)[:, 1].tolist()
 
     def get_variant(
         self, random_seed: int | None = None, dropout_rate: float = 0.1
