@@ -271,8 +271,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 )
         except (UnexpectedModelBehavior, ValidationError) as e:
             logger.warning(
-                f"LLM failed to produce valid response after retries: {e}. "
-                f"Text (truncated): {text[:100]}..."
+                f"LLM failed to produce valid response after retries: {e}. Text: {text}"
             )
             return []
 
@@ -343,12 +342,11 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 if isinstance(response, (UnexpectedModelBehavior, ValidationError)):
                     logger.warning(
                         f"LLM failed to produce valid response after retries: {response}. "
-                        f"Text (truncated): {text[:100]}..."
+                        f"Text: {text}"
                     )
                 else:
                     logger.warning(
-                        f"Prediction failed with exception: {response}. "
-                        f"Text (truncated): {text[:100]}..."
+                        f"Prediction failed with exception: {response}. Text: {text}"
                     )
                 batch_spans.append([])
                 continue
