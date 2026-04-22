@@ -386,6 +386,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 class LLMClassifier(BaseLLMClassifier):
     """A classifier which uses a third-party LLM to identify concept mentions in text"""
 
+    N_RETRIES = 3
+
     def __init__(
         self,
         concept: Concept,
@@ -441,6 +443,7 @@ class LLMClassifier(BaseLLMClassifier):
             model=self.model_name,
             system_prompt=self.system_prompt,
             output_type=output_type,
+            retries=self.N_RETRIES,
         )
 
 
