@@ -54,6 +54,7 @@ from flows.utils import (
     filter_non_english_language_file_stems,
     map_as_sub_flow,
     return_with,
+    sanitise_artifact_key_component,
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
@@ -853,8 +854,10 @@ async def create_inference_on_batch_summary_artifact(
     if not flow_run_name:
         flow_run_name = f"unknown-{generate_slug(2)}"
 
+    sanitised_flow_run_name = sanitise_artifact_key_component(flow_run_name)
+
     await acreate_table_artifact(
-        key=f"batch-inference-{config.aws_env.value}-{flow_run_name}",
+        key=f"batch-inference-{config.aws_env.value}-{sanitised_flow_run_name}",
         table=document_details,
         description=overview_description,
     )
