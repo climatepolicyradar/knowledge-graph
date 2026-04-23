@@ -467,6 +467,13 @@
   classifier_id: 6y38j2hv
   classifiers_profile: primary
   wandb_registry_version: v3
+- wikibase_id: Q1829
+  concept_id: d2sckcja
+  classifier_id: ds667yyj
+  classifiers_profile: primary
+  wandb_registry_version: v2
+  compute_environment:
+    gpu: true
 - wikibase_id: Q1830
   concept_id: p8hgdgwd
   classifier_id: v32gpea3
