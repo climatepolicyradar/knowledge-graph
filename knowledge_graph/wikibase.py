@@ -65,8 +65,8 @@ class WikibaseSession:
     """Async-first session for interacting with Wikibase, with sync proxy methods"""
 
     # Magic numbers
-    DEFAULT_TIMEOUT = 30
-    REDIRECT_REQUEST_TIMEOUT = 90
+    DEFAULT_TIMEOUT = 60
+    REDIRECT_REQUEST_TIMEOUT = 120
     DEFAULT_BATCH_SIZE = 50
     PAGE_REQUEST_SIZE = 500
     MAX_PAGE_REQUESTS = 2000  # Suitable up to 1M pages (500*2000)
