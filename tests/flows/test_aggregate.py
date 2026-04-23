@@ -126,7 +126,7 @@ async def test_aggregate_batch_of_documents(
     flow_run = FlowRun(
         id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
         flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
-        name="test-flow-run",
+        name="test-flow-run (Copy)",
         state=Running(),
     )
 
@@ -196,7 +196,7 @@ async def test_aggregate_batch_of_documents(
         f"Expected {COUNT} concepts to be outputted, found: {len(all_collected_ids)}"
     )
 
-    summary_artifact = await Artifact.get("batch-aggregate-sandbox-test-flow-run")
+    summary_artifact = await Artifact.get("batch-aggregate-sandbox-test-flow-run-copy")
     assert summary_artifact and summary_artifact.description
     assert summary_artifact.data == "[]"
 
@@ -219,7 +219,7 @@ async def test_aggregate_batch_of_documents__with_failures(
     flow_run = FlowRun(
         id=uuid.UUID("0199bef8-7e41-7afc-9b4c-d3abd406be84"),
         flow_id=uuid.UUID("b213352f-3214-48e3-8f5d-ec19959cb28e"),
-        name="test-flow-run",
+        name="test-flow-run (Copy)",
         state=Running(),
     )
 
@@ -237,7 +237,7 @@ async def test_aggregate_batch_of_documents__with_failures(
             return_state=True,  # type: ignore[reportArgumentType]
         )
 
-    summary_artifact = await Artifact.get("batch-aggregate-sandbox-test-flow-run")
+    summary_artifact = await Artifact.get("batch-aggregate-sandbox-test-flow-run-copy")
     assert summary_artifact and summary_artifact.description
     artifact_data = json.loads(summary_artifact.data)
     failure_stems = [f["Failed document Stem"] for f in artifact_data]

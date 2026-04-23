@@ -6,13 +6,25 @@ import tempfile
 from collections.abc import Sequence
 from contextlib import contextmanager
 from datetime import datetime
+from typing import cast
 
 import numpy as np
 import pandas as pd
 import torch
 from datasets import Dataset
 from rich.logging import RichHandler
-from sklearn.metrics import accuracy_score
+from seqeval.metrics import (
+    accuracy_score as seqeval_accuracy_score,
+)
+from seqeval.metrics import (
+    f1_score as seqeval_f1_score,
+)
+from seqeval.metrics import (
+    precision_score as seqeval_precision_score,
+)
+from seqeval.metrics import (
+    recall_score as seqeval_recall_score,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from transformers import (
@@ -192,42 +204,39 @@ def _count_bio_labels(label_sequences: list[list[int]]) -> dict[int, int]:
     return counts
 
 
-def _compute_token_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
+def _compute_entity_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
     """
-    Compute token-level metrics from token predictions.
+    Compute entity-level metrics from BIO token predictions via seqeval.
 
-    Note: precision/recall/F1 here are token-level, not span-level. A 5-token
-    entity counts as 5 positives. This is used for early stopping during
-    training; the production quality signal is the span-level Jaccard metric
-    computed by evaluate_classifier.
+    A predicted span counts as a true positive only if its boundary matches a
+    gold span exactly.
     """
     predictions = np.argmax(eval_pred.predictions, axis=2)  # [batch, seq_len]
     labels = eval_pred.label_ids  # [batch, seq_len]
 
-    # Flatten, ignoring positions with IGNORE_LABEL
-    mask = labels != IGNORE_LABEL
-    flat_preds = predictions[mask]
-    flat_labels = labels[mask]
+    true_labels: list[list[str]] = [
+        [
+            ID2LABEL[int(lbl)]
+            for (_, lbl) in zip(pred_seq, lbl_seq)
+            if lbl != IGNORE_LABEL
+        ]
+        for pred_seq, lbl_seq in zip(predictions, labels)
+    ]
+    true_predictions: list[list[str]] = [
+        [ID2LABEL[int(p)] for (p, lbl) in zip(pred_seq, lbl_seq) if lbl != IGNORE_LABEL]
+        for pred_seq, lbl_seq in zip(predictions, labels)
+    ]
 
-    accuracy = accuracy_score(flat_labels, flat_preds)
-
-    # Token-level positives: any non-O token
-    pred_positive = flat_preds != O_LABEL
-    gold_positive = flat_labels != O_LABEL
-
-    tp = int(np.sum(pred_positive & gold_positive))
-    fp = int(np.sum(pred_positive & ~gold_positive))
-    fn = int(np.sum(~pred_positive & gold_positive))
-
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if (precision + recall) > 0
-        else 0.0
-    )
-
-    return {"accuracy": accuracy, "f1": f1, "precision": precision, "recall": recall}
+    # seqeval's *_score return `float | list[float]` depending on `average`; the
+    # default returns a scalar.
+    return {
+        "accuracy": cast(float, seqeval_accuracy_score(true_labels, true_predictions)),
+        "f1": cast(float, seqeval_f1_score(true_labels, true_predictions)),
+        "precision": cast(
+            float, seqeval_precision_score(true_labels, true_predictions)
+        ),
+        "recall": cast(float, seqeval_recall_score(true_labels, true_predictions)),
+    }
 
 
 class WeightedTokenTrainer(Trainer):
@@ -310,11 +319,22 @@ class BertTokenClassifier(
 
     def download_model_and_tokenizer(self) -> None:
         """Download pretrained base model and tokenizer"""
+
+        if "ModernBERT" in self.model_name:
+            extra_clf_kwargs = {
+                # `reference_compile=False` disables ModernBERT's torch.compile path, which
+                # would otherwise require a C compiler at runtime (absent from our slim image)
+                "reference_compile": False,
+            }
+        else:
+            extra_clf_kwargs = {}
+
         self.model: PreTrainedModel = AutoModelForTokenClassification.from_pretrained(
             self.model_name,
             num_labels=NUM_LABELS,
             id2label=ID2LABEL,
             label2id=LABEL2ID,
+            **extra_clf_kwargs,
         )
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
             self.model_name
@@ -674,7 +694,7 @@ class BertTokenClassifier(
                 load_best_model_at_end=True,
                 metric_for_best_model="eval_f1",
                 greater_is_better=True,
-                dataloader_num_workers=2,
+                dataloader_num_workers=0,
                 report_to=["wandb"] if enable_wandb else [],
                 disable_tqdm=True,
                 run_name=(f"{self.concept.id}_{self.name}" if enable_wandb else None),
@@ -686,7 +706,7 @@ class BertTokenClassifier(
                 args=training_args,
                 train_dataset=train_dataset,
                 eval_dataset=validation_dataset,
-                compute_metrics=_compute_token_metrics,
+                compute_metrics=_compute_entity_metrics,
                 class_weights=weight_tensor,
                 callbacks=[
                     EarlyStoppingCallback(

@@ -10,7 +10,7 @@ from knowledge_graph.classifier.bert_token_classifier import (
     IGNORE_LABEL,
     O_LABEL,
     _align_labels_with_tokens,
-    _compute_token_metrics,
+    _compute_entity_metrics,
     _reconstruct_spans_from_predictions,
 )
 from knowledge_graph.identifiers import WikibaseID
@@ -275,8 +275,8 @@ def _make_eval_prediction(
     )
 
 
-class TestComputeTokenMetrics:
-    """Tests for _compute_token_metrics"""
+class TestComputeEntityMetrics:
+    """Tests for _compute_entity_metrics (seqeval entity-level scoring)."""
 
     def test_perfect_predictions(self):
         """All correct predictions should give F1=1, accuracy=1."""
@@ -285,7 +285,7 @@ class TestComputeTokenMetrics:
             [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         ]
         labels = [[O_LABEL, B_LABEL, I_LABEL]]
-        result = _compute_token_metrics(_make_eval_prediction(preds, labels))
+        result = _compute_entity_metrics(_make_eval_prediction(preds, labels))
         assert result["accuracy"] == pytest.approx(1.0)
         assert result["f1"] == pytest.approx(1.0)
         assert result["precision"] == pytest.approx(1.0)
@@ -297,7 +297,7 @@ class TestComputeTokenMetrics:
             [[1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
         ]
         labels = [[O_LABEL, B_LABEL, I_LABEL]]
-        result = _compute_token_metrics(_make_eval_prediction(preds, labels))
+        result = _compute_entity_metrics(_make_eval_prediction(preds, labels))
         assert result["recall"] == pytest.approx(0.0)
         assert result["f1"] == pytest.approx(0.0)
 
@@ -308,31 +308,32 @@ class TestComputeTokenMetrics:
             [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]],
         ]
         labels = [[IGNORE_LABEL, B_LABEL, I_LABEL, IGNORE_LABEL]]
-        result = _compute_token_metrics(_make_eval_prediction(preds, labels))
-        # Only positions 1 and 2 count: both predicted correctly
+        result = _compute_entity_metrics(_make_eval_prediction(preds, labels))
+        # Only positions 1 and 2 count: both predicted correctly → 1 entity matched
         assert result["accuracy"] == pytest.approx(1.0)
         assert result["f1"] == pytest.approx(1.0)
 
-    def test_token_level_not_span_level(self):
-        """A 3-token entity contributes 3 TPs, not 1 (token-level semantics)."""
+    def test_multi_token_entity_counts_once(self):
+        """A perfectly-predicted 3-token entity contributes a single TP (entity-level)."""
         # Gold: B I I (one 3-token entity). Predict: B I I (perfect).
         preds = [
             [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 1.0]],
         ]
         labels = [[B_LABEL, I_LABEL, I_LABEL]]
-        result = _compute_token_metrics(_make_eval_prediction(preds, labels))
-        # 3 TP, 0 FP, 0 FN → precision=1, recall=1, f1=1
+        result = _compute_entity_metrics(_make_eval_prediction(preds, labels))
         assert result["precision"] == pytest.approx(1.0)
         assert result["recall"] == pytest.approx(1.0)
+        assert result["f1"] == pytest.approx(1.0)
 
-    def test_partial_overlap(self):
-        """Predicting only part of an entity: precision=1, recall=0.5."""
-        # Gold: B I. Predict: B O (miss the I token).
+    def test_partial_span_match_scores_zero(self):
+        """Partial span recovery should score 0 at entity level (boundary must match)."""
+        # Gold: B I (one 2-token entity). Predict: B O (truncated — entity boundary wrong).
         preds = [
             [[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]],
         ]
         labels = [[B_LABEL, I_LABEL]]
-        result = _compute_token_metrics(_make_eval_prediction(preds, labels))
-        assert result["precision"] == pytest.approx(1.0)
-        assert result["recall"] == pytest.approx(0.5)
-        assert result["f1"] == pytest.approx(2 / 3)
+        result = _compute_entity_metrics(_make_eval_prediction(preds, labels))
+        # Predicted entity [B] does not match gold entity [B, I] → 0 TP, 1 FP, 1 FN
+        assert result["precision"] == pytest.approx(0.0)
+        assert result["recall"] == pytest.approx(0.0)
+        assert result["f1"] == pytest.approx(0.0)

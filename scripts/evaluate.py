@@ -495,6 +495,12 @@ def evaluate_classifier(
         gold_standard_labelled_passages, model_labelled_passages
     )
 
+    pred_probabilities: list[float] | None = None
+    if hasattr(classifier, "predict_proba_batch"):
+        pred_probabilities = classifier.predict_proba_batch(  # type: ignore[attr-defined]
+            [p.text for p in gold_standard_labelled_passages]
+        )
+
     if wandb_run:
         log_metrics_to_wandb(wandb_run, df)  # type: ignore
         console.log("📊 Logging validation set predictions to W&B")
@@ -507,6 +513,7 @@ def evaluate_classifier(
             wandb_run,
             predictions=model_labelled_passages,
             ground_truth=gold_standard_labelled_passages,
+            pred_probabilities=pred_probabilities,
         )
 
     return df, model_labelled_passages, passage_level_cm
@@ -516,6 +523,7 @@ def create_wandb_model_evaluation_charts(
     wandb_run: Run,
     predictions: list[LabelledPassage],
     ground_truth: list[LabelledPassage],
+    pred_probabilities: list[float] | None = None,
 ) -> None:
     """
     Plot ROC, precision-recall and confusion matrix plots in the W&B run.
@@ -529,7 +537,7 @@ def create_wandb_model_evaluation_charts(
     ground_truth_labels = [1 if lp.spans else 0 for lp in ground_truth]
     binary_predictions = [1 if lp.spans else 0 for lp in predictions]
 
-    if all(
+    if pred_probabilities is None and all(
         [
             span.prediction_probability is not None
             for pred in predictions
@@ -548,6 +556,7 @@ def create_wandb_model_evaluation_charts(
             for pred in predictions
         ]
 
+    if pred_probabilities is not None:
         precision, recall, pr_thresholds = precision_recall_curve(
             ground_truth_labels, pred_probabilities
         )
