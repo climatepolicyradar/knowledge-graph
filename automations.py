@@ -18,6 +18,7 @@ from prefect.exceptions import ObjectNotFound
 from prefect_slack.credentials import SlackWebhook
 
 from flows.classifiers_profiles import SYNC_FINISHED_EVENT_NAME, SYNC_RESOURCE_ID
+from flows.inference import inference
 from flows.topic_pipeline import topic_pipeline
 from knowledge_graph.cloud import AwsEnv, generate_deployment_name
 
@@ -245,10 +246,23 @@ async def main() -> None:
     logger.info(
         f"Loaded deployment: name={topic_pipeline_deployment.name}, flow_id={topic_pipeline_deployment.flow_id}",
     )
+    inference_v2_deployment_name = (
+        f"{generate_deployment_name(inference.name, aws_env)}-v2"
+    )
+    logger.info(
+        "Loading deployment for sync classifiers profiles trigger: %s",
+        inference_v2_deployment_name,
+    )
+    inference_v2_deployment = await client.read_deployment_by_name(
+        name=flow_deployment_names_id(inference.name, inference_v2_deployment_name)
+    )
+    logger.info(
+        f"Loaded deployment: name={inference_v2_deployment.name}, flow_id={inference_v2_deployment.flow_id}",
+    )
 
     sync_automation = Automation(
         name=f"sync-classifiers-profiles-triggers-{topic_pipeline_deployment.name}",
-        description=f"Trigger topic pipeline when syncing classifiers profiles finishes in {aws_env.value}.",
+        description=f"Trigger topic pipeline and inference-v2 when syncing classifiers profiles finishes in {aws_env.value}.",
         enabled=True,
         trigger=automations.EventTrigger(
             expect={SYNC_FINISHED_EVENT_NAME},
@@ -266,7 +280,13 @@ async def main() -> None:
                 deployment_id=topic_pipeline_deployment.id,
                 parameters={},
                 schedule_after=timedelta(hours=3),
-            )
+            ),
+            RunDeployment(
+                source="selected",
+                deployment_id=inference_v2_deployment.id,
+                parameters={},
+                schedule_after=timedelta(hours=3),
+            ),
         ],
     )
 
