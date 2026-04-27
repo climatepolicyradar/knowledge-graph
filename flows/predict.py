@@ -55,7 +55,7 @@ async def predict_adhoc(
     prediction_threshold: float | None = None,
     stop_after_n_positives: int | None = None,
     restart_from_wandb_run: str | None = None,
-    aws_env: AwsEnv = AwsEnv.labs,
+    aws_env: AwsEnv = AwsEnv.production,
     config: Config | None = None,
 ) -> None:
     """Run prediction on a single classifier using labelled passages from W&B."""

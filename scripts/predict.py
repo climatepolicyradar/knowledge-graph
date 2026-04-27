@@ -60,7 +60,7 @@ async def run_prediction(
     prediction_threshold: float | None = None,
     stop_after_n_positives: int | None = None,
     restart_from_wandb_run: str | None = None,
-    aws_env: AwsEnv = AwsEnv.labs,
+    aws_env: AwsEnv = AwsEnv.production,
 ) -> None:
     """
     Load labelled passages from local dir or W&B, and run a classifier on them.
