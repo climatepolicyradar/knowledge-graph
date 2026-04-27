@@ -35,8 +35,8 @@ RUN apt-get update \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
     && apt-get update \
     && apt-get install -y gh \
-    && rm -rf /var/lib/apt/lists/*
-RUN git lfs install
+    && rm -rf /var/lib/apt/lists/* \
+    && git lfs install
 
 # Copy Python packages from builder stage
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
@@ -45,7 +45,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --from=builder /bin/uv /bin/uvx /bin/
 
 # Copy the project into the image
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 COPY knowledge_graph ./knowledge_graph/
 COPY flows ./flows/
 COPY scripts ./scripts/
@@ -53,7 +53,7 @@ COPY static_sites ./static_sites/
 COPY vibe-checker ./vibe-checker/
 
 # Install the project
-RUN uv pip install --system -e .
+RUN uv pip install --system --no-deps -e .
 
 # Set PYTHONPATH to ensure modules can be found for distributed tasks
 # This is a workaround for when running on coiled when functions are serialised 

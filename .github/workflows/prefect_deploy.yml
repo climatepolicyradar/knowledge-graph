@@ -76,7 +76,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          load: true
           push: true
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ github.event.repository.name }}:${{ steps.get_version.outputs.version }}
