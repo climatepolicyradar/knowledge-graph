@@ -1,7 +1,8 @@
+import asyncio
 import os
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 import wandb
@@ -44,82 +45,21 @@ def deduplicate_labelled_passages(
     return deduplicated_passages
 
 
-@app.command()
-def main(
-    wikibase_id: Annotated[
-        WikibaseID,
-        typer.Option(
-            ...,
-            help="The Wikibase ID of the concept classifier to run",
-            parser=WikibaseID,
-        ),
-    ],
-    classifier_wandb_path: Annotated[
-        str,
-        typer.Option(
-            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
-        ),
-    ],
-    labelled_passages_path: Annotated[
-        Optional[Path],
-        typer.Option(
-            help="Optional local path to labelled passages .jsonl file.",
-            dir_okay=False,
-            exists=True,
-        ),
-    ] = None,
-    labelled_passages_wandb_run_path: Annotated[
-        Optional[str],
-        typer.Option(
-            help="""Optional W&B run name to look for a labelled passages artifact in.
-            
-            Will look for an artifact of type `labelled-passages` in the project 
-            <wikibase_id>.
-            """
-        ),
-    ] = None,
-    track_and_upload: Annotated[
-        bool,
-        typer.Option(
-            ...,
-            help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
-        ),
-    ] = True,
-    batch_size: int = typer.Option(
-        15,
-        help="Number of passages to process in each batch",
-    ),
-    limit: Annotated[
-        Optional[int],
-        typer.Option(
-            ...,
-            help="Optionally limit the number of passages predicted on",
-        ),
-    ] = None,
-    deduplicate_inputs: bool = typer.Option(
-        True,
-        help="Remove duplicate passages based on text content before prediction",
-    ),
-    exclude_training_data: bool = typer.Option(
-        True,
-        help="Exclude passages that were in the model's training data from prediction",
-    ),
-    prediction_threshold: float | None = typer.Option(
-        None, help="Optional prediction threshold for the classifier."
-    ),
-    stop_after_n_positives: Annotated[
-        Optional[int],
-        typer.Option(
-            help="Stop prediction after finding this many positive passages",
-        ),
-    ] = None,
-    restart_from_wandb_run: Annotated[
-        Optional[str],
-        typer.Option(
-            help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
-        ),
-    ] = None,
-):
+async def run_prediction(
+    wikibase_id: WikibaseID,
+    classifier_wandb_path: str,
+    labelled_passages_path: Path | None = None,
+    labelled_passages_wandb_run_path: str | None = None,
+    track_and_upload: bool = True,
+    batch_size: int = 15,
+    limit: int | None = None,
+    deduplicate_inputs: bool = True,
+    exclude_training_data: bool = True,
+    prediction_threshold: float | None = None,
+    stop_after_n_positives: int | None = None,
+    restart_from_wandb_run: str | None = None,
+    aws_env: AwsEnv = AwsEnv.production,
+) -> None:
     """
     Load labelled passages from local dir or W&B, and run a classifier on them.
 
@@ -268,7 +208,6 @@ def main(
 
         # 3. load model
         region_name = "eu-west-1"
-        aws_env = AwsEnv.labs
         # When running in prefect the client is instantiated earlier
         # Set this, so W&B knows where to look for AWS credentials profile
         os.environ["AWS_PROFILE"] = aws_env
@@ -368,6 +307,106 @@ def main(
         # Re-raise the exception after saving
         if prediction_exception:
             raise prediction_exception
+
+
+@app.command()
+def main(
+    wikibase_id: Annotated[
+        WikibaseID,
+        typer.Option(
+            ...,
+            help="The Wikibase ID of the concept classifier to run",
+            parser=WikibaseID,
+        ),
+    ],
+    classifier_wandb_path: Annotated[
+        str,
+        typer.Option(
+            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
+        ),
+    ],
+    labelled_passages_path: Annotated[
+        Path | None,
+        typer.Option(
+            help="Optional local path to labelled passages .jsonl file.",
+            dir_okay=False,
+            exists=True,
+        ),
+    ] = None,
+    labelled_passages_wandb_run_path: Annotated[
+        str | None,
+        typer.Option(
+            help="""Optional W&B run name to look for a labelled passages artifact in.
+
+            Will look for an artifact of type `labelled-passages` in the project
+            <wikibase_id>.
+            """
+        ),
+    ] = None,
+    track_and_upload: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
+        ),
+    ] = True,
+    batch_size: int = typer.Option(
+        15,
+        help="Number of passages to process in each batch",
+    ),
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            ...,
+            help="Optionally limit the number of passages predicted on",
+        ),
+    ] = None,
+    deduplicate_inputs: bool = typer.Option(
+        True,
+        help="Remove duplicate passages based on text content before prediction",
+    ),
+    exclude_training_data: bool = typer.Option(
+        True,
+        help="Exclude passages that were in the model's training data from prediction",
+    ),
+    prediction_threshold: float | None = typer.Option(
+        None, help="Optional prediction threshold for the classifier."
+    ),
+    stop_after_n_positives: Annotated[
+        int | None,
+        typer.Option(
+            help="Stop prediction after finding this many positive passages",
+        ),
+    ] = None,
+    restart_from_wandb_run: Annotated[
+        str | None,
+        typer.Option(
+            help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
+        ),
+    ] = None,
+):
+    """
+    Load labelled passages from local dir or W&B, and run a classifier on them.
+
+    Saves predicted passages to a local directory. Tracks the run and uploads results
+    if `track_and_upload` is set.
+    """
+    asyncio.run(
+        run_prediction(
+            wikibase_id=wikibase_id,
+            classifier_wandb_path=classifier_wandb_path,
+            labelled_passages_path=labelled_passages_path,
+            labelled_passages_wandb_run_path=labelled_passages_wandb_run_path,
+            track_and_upload=track_and_upload,
+            batch_size=batch_size,
+            limit=limit,
+            deduplicate_inputs=deduplicate_inputs,
+            exclude_training_data=exclude_training_data,
+            prediction_threshold=prediction_threshold,
+            stop_after_n_positives=stop_after_n_positives,
+            restart_from_wandb_run=restart_from_wandb_run,
+        )
+    )
 
 
 if __name__ == "__main__":
