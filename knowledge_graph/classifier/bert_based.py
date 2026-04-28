@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import re
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime
@@ -104,6 +105,7 @@ class BertBasedClassifier(
         concept: Concept,
         model_name: str = "answerdotai/ModernBERT-base",
         download_pretrained_model_on_init: bool = True,
+        unfreeze_layers: int = 0,
     ):
         """
         Initialise a BERT classifier.
@@ -112,10 +114,14 @@ class BertBasedClassifier(
         :param model_name: model name from Huggingface, defaults to "answerdotai/ModernBERT-base"
         :param download_pretrained_model_on_init: whether to download the pretrained model and tokenizer on init, defaults to True.
             Disable this if planning to overwrite the model and tokenizer elsewhere.
+        :param unfreeze_layers: number of final encoder layers to fine-tune in addition
+            to the classification head. 0 keeps the full backbone frozen (head-only
+            training).
         """
 
         super().__init__(concept)
         self.model_name = model_name
+        self.unfreeze_layers = unfreeze_layers
 
         # Private properties for creating and running inference on classifier variants
         self._use_dropout_during_inference = False
@@ -164,8 +170,20 @@ class BertBasedClassifier(
         Uses the class's `model_name` property.
         """
 
+        if "ModernBERT" in self.model_name:
+            extra_clf_kwargs = {
+                # `reference_compile=False` disables ModernBERT's torch.compile path, which
+                # would otherwise require a C compiler at runtime (absent from our slim image)
+                "reference_compile": False,
+            }
+        else:
+            extra_clf_kwargs = {}
+
         self.model: PreTrainedModel = (
-            AutoModelForSequenceClassification.from_pretrained(self.model_name)
+            AutoModelForSequenceClassification.from_pretrained(
+                self.model_name,
+                **extra_clf_kwargs,
+            )
         )
         self.tokenizer: PreTrainedTokenizer = AutoTokenizer.from_pretrained(
             self.model_name
@@ -198,6 +216,7 @@ class BertBasedClassifier(
             self.concept.id,
             self.model_name,
             self.prediction_threshold,
+            self.unfreeze_layers,
             self._random_id_component,
         )
 
@@ -274,62 +293,60 @@ class BertBasedClassifier(
         self, texts: Sequence[str], threshold: float | None = None
     ) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
-        if self._use_dropout_during_inference:
-            with self._dropout_enabled():
-                with torch.no_grad():
-                    scores, predicted_classes = self._forward(texts)
-        else:
-            self.model.eval()  # type: ignore[attr-defined]
-            with torch.no_grad():
-                scores, predicted_classes = self._forward(texts)
+        positive_probs = self.predict_proba_batch(texts)
 
-        effective_threshold = (
-            threshold if threshold is not None else self.prediction_threshold
-        )
+        if threshold is not None:
+            effective_threshold = threshold
+        elif self.prediction_threshold is not None:
+            effective_threshold = self.prediction_threshold
+        else:
+            effective_threshold = 0.5
 
         now = datetime.now()
         labeller = str(self)
         results = []
-        for text, score, cls in zip(texts, scores, predicted_classes):
+        for text, pos_prob in zip(texts, positive_probs):
             text_results = []
-            # LABEL_1 (class index 1) is the positive prediction.
-            if cls == 1:
-                if effective_threshold is None or score >= effective_threshold:
-                    span = Span(
-                        text=text,
-                        concept_id=self.concept.wikibase_id,
-                        prediction_probability=score,
-                        start_index=0,
-                        end_index=len(text),
-                        labellers=[labeller],
-                        timestamps=[now],
-                    )
-                    text_results.append(span)
+            if pos_prob >= effective_threshold:
+                span = Span(
+                    text=text,
+                    concept_id=self.concept.wikibase_id,
+                    prediction_probability=pos_prob,
+                    start_index=0,
+                    end_index=len(text),
+                    labellers=[labeller],
+                    timestamps=[now],
+                )
+                text_results.append(span)
             results.append(text_results)
 
         return results
 
-    def _forward(self, texts: Sequence[str]) -> tuple[list[float], list[int]]:
+    def predict_proba_batch(self, texts: Sequence[str]) -> list[float]:
         """
-        Run a batched forward pass and return per-text scores and predicted classes.
+        Return P(class=1) per text, independent of the argmax decision.
 
-        :param texts: Texts to classify.
-        :returns: Tuple of `(scores, predicted_classes)` where `scores[i]` is the
-            probability of the predicted class for text `i`
+        This is needed because `predict` only returns a `Span` for positive examples,
+        but probability calibration needs examples from probabilities 0 <= p <= 1.
         """
-        device = self.device
+        if self._use_dropout_during_inference:
+            with self._dropout_enabled():
+                with torch.no_grad():
+                    return self._forward_positive_probs(texts)
+        self.model.eval()  # type: ignore[attr-defined]
+        with torch.no_grad():
+            return self._forward_positive_probs(texts)
+
+    def _forward_positive_probs(self, texts: Sequence[str]) -> list[float]:
         inputs = self.tokenizer(
             list(texts),
             padding=True,
             truncation=True,
             max_length=512,
             return_tensors="pt",
-        ).to(device)
+        ).to(self.device)
         logits = self.model(**inputs).logits
-        probs = torch.softmax(logits, dim=-1)
-        predicted_classes = torch.argmax(probs, dim=-1)
-        scores = probs[torch.arange(len(probs)), predicted_classes]
-        return scores.tolist(), predicted_classes.tolist()
+        return torch.softmax(logits, dim=-1)[:, 1].tolist()
 
     def get_variant(
         self, random_seed: int | None = None, dropout_rate: float = 0.1
@@ -351,7 +368,11 @@ class BertBasedClassifier(
         Returns:
             A new classifier instance with dropout enabled during inference.
         """
-        variant = self.__class__(concept=self.concept, model_name=self.model_name)
+        variant = self.__class__(
+            concept=self.concept,
+            model_name=self.model_name,
+            unfreeze_layers=self.unfreeze_layers,
+        )
         variant.model.load_state_dict(self.model.state_dict())
         variant.device = self.device
 
@@ -499,13 +520,42 @@ class BertBasedClassifier(
             .to_markdown(index=False, tablefmt="rounded_grid")
         )
 
-        logger.info(
-            "Freezing base model. The model's prediction head and classifier will be trained."
-        )
-        # More efficient parameter freezing - single pass through parameters
+        # Determine which transformer layers to unfreeze (if any)
+        unfrozen_layer_indices: set[int] = set()
+        if self.unfreeze_layers > 0:
+            layer_indices = set()
+            for name, _ in self.model.named_parameters():
+                if match := re.search(r"layers?\.(\d+)\.", name):
+                    layer_indices.add(int(match.group(1)))
+                else:
+                    logger.warning(f"No layers found in the model with name {name}")
+            if layer_indices:
+                max_layer = max(layer_indices)
+                unfrozen_layer_indices = {
+                    i
+                    for i in layer_indices
+                    if i >= max_layer - self.unfreeze_layers + 1
+                }
+
+        if unfrozen_layer_indices:
+            logger.info(
+                "Unfreezing transformer layers %s (plus classification head).",
+                sorted(unfrozen_layer_indices),
+            )
+        else:
+            logger.info(
+                "Freezing base model. The model's prediction head and classifier will be trained."
+            )
+
         for name, param in self.model.named_parameters():
             if "classifier" in name or "head" in name:
                 param.requires_grad = True
+            elif unfrozen_layer_indices:
+                match = re.search(r"layers?\.(\d+)\.", name)
+                if match and int(match.group(1)) in unfrozen_layer_indices:
+                    param.requires_grad = True
+                else:
+                    param.requires_grad = False
             else:
                 param.requires_grad = False
 
@@ -544,7 +594,7 @@ class BertBasedClassifier(
                 per_device_eval_batch_size=64,
                 # gradient clipping for more stable updates
                 max_grad_norm=1.0,
-                learning_rate=5e-4,
+                learning_rate=2e-4 if self.unfreeze_layers > 0 else 5e-4,
                 weight_decay=0.01,
                 warmup_ratio=0.1,
                 lr_scheduler_type="cosine",
@@ -559,7 +609,7 @@ class BertBasedClassifier(
                 load_best_model_at_end=True,
                 metric_for_best_model="eval_f1",
                 greater_is_better=True,
-                dataloader_num_workers=2,
+                dataloader_num_workers=0,
                 report_to=["wandb"] if enable_wandb else [],
                 disable_tqdm=True,
                 # W&B-specific settings when enabled

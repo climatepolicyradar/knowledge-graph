@@ -337,6 +337,22 @@ async def mock_async_bucket_multiple_sources(mock_s3_async_client, mock_async_bu
     yield fixture_files
 
 
+@pytest_asyncio.fixture
+async def mock_async_bucket_documents_v2(mock_s3_async_client, mock_async_bucket):
+    fixture_rel_path = "embeddings_input_v2/AF.chunked.1.1.json"
+    fixture_path = FIXTURE_DIR / fixture_rel_path
+    with open(fixture_path) as f:
+        data = f.read()
+
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
+        Key=fixture_rel_path,
+        Body=BytesIO(data.encode("utf-8")),
+        ContentType="application/json",
+    )
+    yield [Path(fixture_rel_path).name]
+
+
 async def create_mock_new_and_updated_documents_json(
     mock_s3_async_client, mock_async_bucket, doc_names: tuple[str, str], timestamp: str
 ):
@@ -417,6 +433,8 @@ def parser_output_html(parser_output) -> Generator[BaseParserOutput, None, None]
             HTMLTextBlock(
                 text=["test html text"],
                 text_block_id="1",
+                type=BlockType.TEXT,
+                type_confidence=0.5,
             )
         ],
     )

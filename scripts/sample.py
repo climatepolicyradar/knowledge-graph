@@ -6,7 +6,6 @@ import click
 import pandas as pd
 import typer
 import wandb
-from rich.console import Console
 
 from knowledge_graph.classifier import EmbeddingClassifier, KeywordClassifier
 from knowledge_graph.classifier.classifier import Classifier
@@ -14,13 +13,12 @@ from knowledge_graph.config import WANDB_ENTITY, equity_columns, processed_data_
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.sampling import create_balanced_sample, split_evenly
-from knowledge_graph.utils import serialise_pydantic_list_as_jsonl
+from knowledge_graph.utils import get_logger, serialise_pydantic_list_as_jsonl
 from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb_run
 from knowledge_graph.wikibase import WikibaseSession
 from scripts.train import parse_kwargs_from_strings
 
 app = typer.Typer()
-console = Console()
 
 CORPUS_TYPES = [
     "Litigation",
@@ -71,6 +69,10 @@ def main(
         500_000,
         help="Maximum number of passages to load from the dataset before sampling",
     ),
+    max_negative_proportion: Optional[float] = typer.Option(
+        None,
+        help="Maximum proportion of the sample that can be negative. If not set, fills remaining sample_size after positives.",
+    ),
     track_and_upload: bool = typer.Option(
         True,
         help="Whether to track the run and upload the labelled passages to W&B",
@@ -102,6 +104,8 @@ def main(
     :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
     :type concept_override: Optional[list[str]]
     """
+    logger = get_logger()
+
     # Calculate the optimal number of positive and negative samples to take
     negative_sample_size = math.floor(sample_size * min_negative_proportion)
     positive_sample_size = sample_size - negative_sample_size
@@ -118,7 +122,7 @@ def main(
 
         try:
             dataset = pd.read_feather(dataset_path)
-            console.log(f"Loaded {len(dataset)} passages from {dataset_path}")
+            logger.info(f"Loaded {len(dataset)} passages from {dataset_path}")
         except FileNotFoundError as e:
             raise FileNotFoundError(
                 f"{dataset_path} not found. If you haven't already, you should run:\n"
@@ -131,7 +135,7 @@ def main(
         dataset = cast(
             pd.DataFrame, dataset[dataset[corpus_type_col].isin(corpus_types_include)]
         )
-        console.log(
+        logger.info(
             f"Filtered to corpus types {corpus_types_include}: "
             f"{len(dataset)} passages remain"
         )
@@ -140,14 +144,14 @@ def main(
         dataset = cast(
             pd.DataFrame, dataset[~dataset[corpus_type_col].isin(corpus_types_exclude)]
         )
-        console.log(
+        logger.info(
             f"Excluded corpus types {corpus_types_exclude}: "
             f"{len(dataset)} passages remain"
         )
 
     # Limit dataset size if needed
     if len(dataset) > max_size_to_sample_from:
-        console.log(
+        logger.info(
             f"Limiting input data from {len(dataset)} rows to {max_size_to_sample_from}"
         )
         dataset = cast(pd.DataFrame, dataset.iloc[:max_size_to_sample_from])
@@ -157,15 +161,13 @@ def main(
     concept = wikibase.get_concept(wikibase_id, include_labels_from_subconcepts=True)
 
     if concept_overrides := parse_kwargs_from_strings(concept_override):
-        console.log(f"🔧 Applying custom concept properties: {concept_overrides}")
+        logger.info(f"🔧 Applying custom concept properties: {concept_overrides}")
         for key, value in concept_overrides.items():
             if hasattr(concept, key):
                 setattr(concept, key, value)
-                console.log(f"  ✓ Set concept.{key} = {value}")
+                logger.info(f"  ✓ Set concept.{key} = {value}")
             else:
-                console.log(
-                    f"  ⚠️  Warning: concept has no attribute '{key}'", style="yellow"
-                )
+                logger.warning(f"  ⚠️  Warning: concept has no attribute '{key}'")
 
     job_type = "sample"
     wandb_config = {
@@ -198,9 +200,9 @@ def main(
 
         for model in models:
             model.fit()
-            console.log(f"🤖 Created a {model}")
+            logger.info(f"🤖 Created a {model}")
             classifier_ids.append(model.id)
-            console.log(f"Running {model} on {len(raw_text_passages)} passages.")
+            logger.info(f"Running {model} on {len(raw_text_passages)} passages.")
 
             predictions = model.predict(
                 raw_text_passages, batch_size=100, show_progress=True
@@ -208,7 +210,7 @@ def main(
 
             # Add a column to the dataset for each classifier's predictions
             dataset[model.name] = predictions
-            console.log(
+            logger.info(
                 f"📊 Found {sum(bool(pred) for pred in predictions)} positive passages "
                 f"using the {model}"
             )
@@ -244,6 +246,11 @@ def main(
 
         # Calculate the number of negative samples we need to take
         negative_sample_size = sample_size - len(positive_samples)
+        if max_negative_proportion is not None:
+            negative_sample_size = min(
+                negative_sample_size,
+                math.floor(sample_size * max_negative_proportion),
+            )
 
         # Get negative samples (passages not identified by any classifier)
         negative_indices = ~dataset[[model.name for model in models]].any(axis=1)
@@ -255,10 +262,13 @@ def main(
             sample_size=negative_sample_size,
             on_columns=equity_columns,
         )
+        # create_balanced_sample can return more than the requested number of negatives
+        if len(negative_samples) > negative_sample_size:
+            negative_samples = negative_samples.sample(negative_sample_size)
 
-        console.log(
+        logger.info(
             f"📊 Sampled {len(positive_samples)} positive passages, "
-            f"{negative_sample_size} negative passages"
+            f"{len(negative_samples)} negative passages"
         )
 
         # Combine positive and negative samples
@@ -270,16 +280,16 @@ def main(
         sampled_passages = sampled_passages.sample(frac=1)
 
         # Log the distribution of samples for the user
-        console.log("📊 Distribution of samples by classifier:")
+        logger.info("📊 Distribution of samples by classifier:")
         for model in models:
             positive_samples = sampled_passages[
                 sampled_passages[model.name].astype(bool)
             ]
-            console.log(f"{model.name}: {len(positive_samples)}")
+            logger.info(f"{model.name}: {len(positive_samples)}")
 
-        console.log("\n📊 Value counts for the sampled dataset:")
+        logger.info("\n📊 Value counts for the sampled dataset:")
         for column in equity_columns:
-            console.log(sampled_passages[column].value_counts(), end="\n\n")
+            logger.info(str(sampled_passages[column].value_counts()))
 
         # Convert sampled passage rows to LabelledPassage objects and save them
         labelled_passages = []
@@ -305,16 +315,16 @@ def main(
         with open(sampled_passages_path, "w", encoding="utf-8") as f:
             f.write(serialise_pydantic_list_as_jsonl(labelled_passages))
 
-        console.log(f"Saved sampled passages to {sampled_passages_path}")
+        logger.info(f"Saved sampled passages to {sampled_passages_path}")
 
         if track_and_upload and run:
-            console.log("📄 Creating labelled passages artifact")
+            logger.info("📄 Creating labelled passages artifact")
             log_labelled_passages_artifact_to_wandb_run(
                 labelled_passages=labelled_passages,
                 run=run,
                 concept=concept,
             )
-            console.log("✅ Labelled passages uploaded successfully")
+            logger.info("✅ Labelled passages uploaded successfully")
 
 
 if __name__ == "__main__":

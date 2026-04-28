@@ -32,6 +32,7 @@ from knowledge_graph.wandb_helpers import load_classifier_from_wandb
 from scripts.train import (
     StorageUpload,
     get_next_version,
+    move_model_to_cpu,
     upload_model_artifact,
 )
 
@@ -127,6 +128,8 @@ def main(
     )
     console.log(f"Saving classifier to {classifier_path}...")
     classifier_path.parent.mkdir(parents=True, exist_ok=True)
+
+    move_model_to_cpu(classifier)
     classifier.save(classifier_path)
 
     # Upload to S3

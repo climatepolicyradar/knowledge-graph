@@ -17,7 +17,6 @@ from prefect.cache_policies import NONE
 from prefect.context import FlowRunContext, get_run_context
 from prefect_slack.credentials import AsyncWebClient
 from pydantic import AnyHttpUrl, SecretStr, ValidationError
-from tenacity import RetryError
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
@@ -288,19 +287,7 @@ async def load_concepts(
         logger.info(f"loaded {len(concepts)} concepts from cache")
     else:
         logger.info("getting concepts from Wikibase")
-
-        try:
-            concepts = await wikibase.get_concepts_async(limit=None)
-        except RetryError as e:
-            # RetryError contains unpicklable objects (Future, Lock).
-            # Prefect's JSON serialiser does work with it, but I
-            # decided to handle it here, this way.
-            #
-            # Extract the underlying exception and re-raise with a
-            # clean message.
-            underlying_error = e.last_attempt.exception() if e.last_attempt else None
-            error_msg = f"Failed to fetch concepts from Wikibase after retries: {underlying_error}"
-            raise RuntimeError(error_msg) from underlying_error
+        concepts = await wikibase.get_concepts_async(limit=None)
 
         logger.info(f"got {len(concepts)} concepts")
 

@@ -1,0 +1,1227 @@
+{
+  "document_id": "AF.chunked.1.1",
+  "document_metadata": {
+    "name": "Building Resilience",
+    "document_title": "Project document",
+    "description": "...",
+    "import_id": "AF.chunked.1.1",
+    "slug": "project-document_1",
+    "family_import_id": "AF.family.1.1",
+    "family_slug": "chunked-document-sample_0da5",
+    "publication_ts": "2026-01-12T00:00:00Z",
+    "date": null,
+    "source_url": "https://climatepolicyradar.org/test.pdf",
+    "download_url": null,
+    "corpus_import_id": "MCF.corpus.AF.n0000",
+    "corpus_type_name": "AF",
+    "collection_title": null,
+    "collection_summary": null,
+    "type": "",
+    "source": "AF",
+    "category": "MCF",
+    "geography": "ZAF",
+    "geographies": [
+      "ZAF"
+    ],
+    "languages": [
+      "English"
+    ],
+    "metadata": {}
+  },
+  "document_name": "Building Resilience",
+  "document_description": "...",
+  "document_source_url": "https://climatepolicyradar.org/test.pdf",
+  "document_cdn_object": "SOME/1990/pdf-object",
+  "document_content_type": "application/pdf",
+  "document_md5_sum": "dad18bb27a04a750bde7b9be28de069a",
+  "document_slug": "project-document_1",
+  "languages": [
+    "en"
+  ],
+  "translated": false,
+  "html_data": null,
+  "pdf_data": {
+    "page_metadata": [
+      {
+        "page_number": 0,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 1,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 2,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 3,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 4,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 5,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 6,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 7,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 8,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 9,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 10,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 11,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 12,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 13,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 14,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 15,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 16,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 17,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 18,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 19,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 20,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 21,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 22,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 23,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 24,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 25,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 26,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 27,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 28,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 29,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 30,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 31,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 32,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 33,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 34,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 35,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 36,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 37,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 38,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 39,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 40,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 41,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 42,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 43,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 44,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 45,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 46,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 47,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 48,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 49,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 50,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 51,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 52,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 53,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 54,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 55,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 56,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 57,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 58,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 59,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 60,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 61,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 62,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 63,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 64,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 65,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 66,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 67,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 68,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 69,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 70,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 71,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 72,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 73,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 74,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 75,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 76,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 77,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 78,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 79,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 80,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 81,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 82,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 83,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 84,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 85,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 86,
+        "dimensions": [
+          841.0032,
+          595.0008
+        ]
+      },
+      {
+        "page_number": 87,
+        "dimensions": [
+          841.0032,
+          595.0008
+        ]
+      },
+      {
+        "page_number": 88,
+        "dimensions": [
+          841.0032,
+          595.0008
+        ]
+      },
+      {
+        "page_number": 89,
+        "dimensions": [
+          841.0032,
+          595.0008
+        ]
+      },
+      {
+        "page_number": 90,
+        "dimensions": [
+          841.0032,
+          595.0008
+        ]
+      },
+      {
+        "page_number": 91,
+        "dimensions": [
+          841.0032,
+          595.0008
+        ]
+      },
+      {
+        "page_number": 92,
+        "dimensions": [
+          841.0032,
+          595.0008
+        ]
+      },
+      {
+        "page_number": 93,
+        "dimensions": [
+          841.0032,
+          595.0008
+        ]
+      },
+      {
+        "page_number": 94,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 95,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 96,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 97,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 98,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 99,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 100,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      },
+      {
+        "page_number": 101,
+        "dimensions": [
+          595.0008,
+          841.0032
+        ]
+      }
+    ],
+    "md5sum": "dad18bb27a04a750bde7b9be28de069a",
+    "text_blocks": [
+      {
+        "language": "en",
+        "type": "title",
+        "type_confidence": 1.0,
+        "text": "ADAPTATION FUND\nPROJECT PROPOSAL TO THE ADAPTATION FUND",
+        "id": "019cb9d0-da80-7eb0-9ebb-eafa83205cba",
+        "idx": 0,
+        "pages": [
+          {
+            "number": 0,
+            "bounding_boxes": [
+              {
+                "coordinates": [
+                  {
+                    "x": 238.7304,
+                    "y": 146.36880000000002
+                  },
+                  {
+                    "x": 363.24719999999996,
+                    "y": 146.736
+                  },
+                  {
+                    "x": 363.204,
+                    "y": 161.3376
+                  },
+                  {
+                    "x": 238.68720000000002,
+                    "y": 160.9704
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 110.60640000000001,
+                    "y": 183.6072
+                  },
+                  {
+                    "x": 501.552,
+                    "y": 183.6072
+                  },
+                  {
+                    "x": 501.552,
+                    "y": 199.296
+                  },
+                  {
+                    "x": 110.60640000000001,
+                    "y": 199.296
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "heading_id": null,
+        "tokens": [
+          "ADAPTATION",
+          "FUND",
+          "PROJECT",
+          "PROPOSAL",
+          "TO",
+          "THE",
+          "ADAPTATION",
+          "FUND"
+        ],
+        "serialised_text": "ADAPTATION FUND\nPROJECT PROPOSAL TO THE ADAPTATION FUND"
+      },
+      {
+        "language": "en",
+        "type": "sectionHeading",
+        "type_confidence": 1.0,
+        "text": "PART I: PROJECT INFORMATION",
+        "id": "019cb9d0-d8fd-7e82-a51f-42d515ce7ca4",
+        "idx": 1,
+        "pages": [
+          {
+            "number": 0,
+            "bounding_boxes": [
+              {
+                "coordinates": [
+                  {
+                    "x": 70.8192,
+                    "y": 228.4992
+                  },
+                  {
+                    "x": 295.308,
+                    "y": 228.4992
+                  },
+                  {
+                    "x": 295.308,
+                    "y": 242.73360000000002
+                  },
+                  {
+                    "x": 70.8192,
+                    "y": 242.73360000000002
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "heading_id": "019cb9d0-da80-7eb0-9ebb-eafa83205cba",
+        "tokens": [
+          "PART",
+          "I",
+          ":",
+          "PROJECT",
+          "INFORMATION"
+        ],
+        "serialised_text": "Section context: this excerpt is from the section titled 'ADAPTATION FUND\nPROJECT PROPOSAL TO THE ADAPTATION FUND'. PART I: PROJECT INFORMATION"
+      },
+      {
+        "language": "en",
+        "type": "Table",
+        "type_confidence": 1.0,
+        "text": "Project Category:\nRegular\nCountry:\nSouth Africa\nTitle of Project:\nBuilding Resilience in the Greater uMngeni Catchment\nType of Implementing Entity:\nNational\nImplementing Entity:\nSouth African National Biodiversity Institute\nExecuting Entity:\nuMgungundlovu District Municipality\nAmount of Financing Requested:\nUSD 7,495,055",
+        "id": "019cb9d0-da77-73e2-b057-7888320a7861",
+        "idx": 2,
+        "pages": [
+          {
+            "number": 0,
+            "bounding_boxes": [
+              {
+                "coordinates": [
+                  {
+                    "x": 67.4208,
+                    "y": 251.5896
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 252.4608
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 268.1712
+                  },
+                  {
+                    "x": 67.4208,
+                    "y": 267.2928
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 231.6096,
+                    "y": 252.4608
+                  },
+                  {
+                    "x": 492.7464,
+                    "y": 252.9
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 268.1712
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 268.1712
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 67.4208,
+                    "y": 267.2928
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 268.1712
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 278.64
+                  },
+                  {
+                    "x": 67.4208,
+                    "y": 278.64
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 231.6096,
+                    "y": 268.1712
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 268.1712
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 278.64
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 278.64
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 67.4208,
+                    "y": 278.64
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 278.64
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 290.4192
+                  },
+                  {
+                    "x": 67.4208,
+                    "y": 289.548
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 231.6096,
+                    "y": 278.64
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 278.64
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 290.4192
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 290.4192
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 67.4208,
+                    "y": 289.548
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 290.4192
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 301.76640000000003
+                  },
+                  {
+                    "x": 67.4208,
+                    "y": 301.76640000000003
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 231.6096,
+                    "y": 290.4192
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 290.4192
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 301.76640000000003
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 301.76640000000003
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 67.4208,
+                    "y": 301.76640000000003
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 301.76640000000003
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 313.5456
+                  },
+                  {
+                    "x": 67.4208,
+                    "y": 313.5456
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 231.6096,
+                    "y": 301.76640000000003
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 301.76640000000003
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 313.5456
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 313.5456
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 67.4208,
+                    "y": 313.5456
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 313.5456
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 324.88559999999995
+                  },
+                  {
+                    "x": 67.4208,
+                    "y": 324.88559999999995
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 231.6096,
+                    "y": 313.5456
+                  },
+                  {
+                    "x": 493.1856,
+                    "y": 313.5456
+                  },
+                  {
+                    "x": 493.61760000000004,
+                    "y": 325.3248
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 324.88559999999995
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 67.4208,
+                    "y": 324.88559999999995
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 324.88559999999995
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 340.596
+                  },
+                  {
+                    "x": 66.9816,
+                    "y": 340.15680000000003
+                  }
+                ]
+              },
+              {
+                "coordinates": [
+                  {
+                    "x": 231.6096,
+                    "y": 324.88559999999995
+                  },
+                  {
+                    "x": 493.61760000000004,
+                    "y": 325.3248
+                  },
+                  {
+                    "x": 493.61760000000004,
+                    "y": 340.596
+                  },
+                  {
+                    "x": 231.6096,
+                    "y": 340.596
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "heading_id": "019cb9d0-d8fd-7e82-a51f-42d515ce7ca4",
+        "tokens": [
+          "Project",
+          "Category",
+          ":",
+          "Regular",
+          "Country",
+          ":",
+          "South",
+          "Africa",
+          "Title",
+          "of",
+          "Project",
+          ":",
+          "Building",
+          "Resilience",
+          "in",
+          "the",
+          "Greater",
+          "uMngeni",
+          "Catchment",
+          "Type",
+          "of",
+          "Implementing",
+          "Entity",
+          ":",
+          "National",
+          "Implementing",
+          "Entity",
+          ":",
+          "South",
+          "African",
+          "National",
+          "Biodiversity",
+          "Institute",
+          "Executing",
+          "Entity",
+          ":",
+          "uMgungundlovu",
+          "District",
+          "Municipality",
+          "Amount",
+          "of",
+          "Financing",
+          "Requested",
+          ":",
+          "USD",
+          "7,495,055"
+        ],
+        "serialised_text": "Section context: this excerpt is from the section titled 'PART I: PROJECT INFORMATION'. Project Category:\nRegular\nCountry:\nSouth Africa\nTitle of Project:\nBuilding Resilience in the Greater uMngeni Catchment\nType of Implementing Entity:\nNational\nImplementing Entity:\nSouth African National Biodiversity Institute\nExecuting Entity:\nuMgungundlovu District Municipality\nAmount of Financing Requested:\nUSD 7,495,055"
+      }
+    ]
+  },
+  "pipeline_metadata": {
+    "parser_metadata": {
+      "azure_api_version": "2023-07-31",
+      "azure_model_id": "prebuilt-document",
+      "parsing_date": "2025-05-22T17:35:22.344845"
+    }
+  }
+}

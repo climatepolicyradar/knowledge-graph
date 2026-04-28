@@ -101,6 +101,8 @@ async def create_deployment(
     env_schedules: dict[AwsEnv, str] | None = None,
     extra_tags: list[str] = [],
     env_parameters: dict[AwsEnv, JsonDict] = {},
+    deployment_name_suffix: str | None = None,
+    deployment_parameters: JsonDict | None = None,
     concurrency_limit: int | ConcurrencyLimitConfig | None = None,
 ) -> None:
     """Create a deployment for the specified flow"""
@@ -172,8 +174,12 @@ async def create_deployment(
         env_parameters,
     )
 
+    deployment_name = generate_deployment_name(flow_name, aws_env)
+    if deployment_name_suffix:
+        deployment_name = f"{deployment_name}-{deployment_name_suffix}"
+
     _ = await flow.deploy(
-        generate_deployment_name(flow_name, aws_env),
+        deployment_name,
         work_pool_name=work_pool_name,
         version=version,
         image=DockerImage(
@@ -187,6 +193,7 @@ async def create_deployment(
         schedule=schedule,
         build=False,
         push=False,
+        parameters=deployment_parameters,
         concurrency_limit=concurrency_limit,
     )
 
@@ -215,6 +222,20 @@ async def main() -> None:
         flow=inference,
         description="Run concept classifier inference on document passages",
         extra_tags=["type:entry"],
+    )
+
+    await create_deployment(
+        flow=inference,
+        description="Run concept classifier inference on v2 document passages",
+        extra_tags=["type:entry"],
+        deployment_name_suffix="v2",
+        deployment_parameters=JsonDict(
+            {
+                "input_schema": "v2",
+                "inference_document_source_prefix": "embeddings_input_v2/",
+                "inference_document_target_prefix": "labelled_passages_v2/",
+            }
+        ),
     )
 
     await create_deployment(

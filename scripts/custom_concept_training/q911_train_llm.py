@@ -208,6 +208,8 @@ def sample(
         wikibase_id=WIKIBASE_ID,
         sample_size=sample_size,
         min_negative_proportion=0.1,
+        max_negative_proportion=0.3,
+        corpus_types_exclude=["Litigation"],
         dataset_name=dataset_name,
         max_size_to_sample_from=max_size_to_sample_from,
         track_and_upload=track_and_upload,

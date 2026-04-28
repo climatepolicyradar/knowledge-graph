@@ -7,7 +7,6 @@ from typing import Annotated
 import typer
 import wandb
 from dotenv import load_dotenv
-from rich.console import Console
 
 from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import WANDB_ENTITY, predictions_dir
@@ -16,6 +15,7 @@ from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import label_passages_with_classifier
 from knowledge_graph.utils import (
     deserialise_pydantic_list_with_fallback,
+    get_logger,
     serialise_pydantic_list_as_jsonl,
 )
 from knowledge_graph.wandb_helpers import (
@@ -24,8 +24,6 @@ from knowledge_graph.wandb_helpers import (
     load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
 )
-
-console = Console()
 
 app = typer.Typer()
 
@@ -68,6 +66,9 @@ async def run_prediction(
     Saves predicted passages to a local directory. Tracks the run and uploads results
     if `track_and_upload` is set.
     """
+
+    logger = get_logger()
+
     wandb_config = {
         "batch_size": batch_size,
         "limit": limit,
@@ -117,7 +118,7 @@ async def run_prediction(
 
         already_predicted_passages: list[LabelledPassage] = []
         if restart_from_wandb_run:
-            console.print(
+            logger.info(
                 f"Loading already-predicted passages from {restart_from_wandb_run} to skip..."
             )
             try:
@@ -125,8 +126,8 @@ async def run_prediction(
                 already_predicted_passages = load_labelled_passages_from_wandb(
                     run=restart_run
                 )
-                console.print(
-                    f"[green]✓ Loaded {len(already_predicted_passages)} already-predicted passages[/green]"
+                logger.info(
+                    f"✓ Loaded {len(already_predicted_passages)} already-predicted passages"
                 )
 
                 # Filter out already-predicted passages based on ID
@@ -136,31 +137,29 @@ async def run_prediction(
                     p for p in labelled_passages if p.id not in already_predicted_ids
                 ]
                 num_skipped = len_before - len(labelled_passages)
-                console.print(
+                logger.info(
                     f"Skipped {num_skipped} already-predicted passages. {len(labelled_passages)} remaining to predict."
                 )
             except Exception as e:
-                console.print(
-                    f"[red]⚠ Could not load already-predicted passages: {e}[/red]"
-                )
-                console.print("Continuing without skipping any passages")
+                logger.warning(f"⚠ Could not load already-predicted passages: {e}")
+                logger.info("Continuing without skipping any passages")
 
         if deduplicate_inputs:
             original_count = len(labelled_passages)
             labelled_passages = deduplicate_labelled_passages(labelled_passages)
             deduplicated_count = len(labelled_passages)
-            console.print(
+            logger.info(
                 f"Deduplicated {original_count} passages to {deduplicated_count} based on their text field"
                 f"(removed {original_count - deduplicated_count} duplicates)"
             )
 
         if limit:
             labelled_passages = labelled_passages[:limit]
-            console.print(f"Limited number of passages to {len(labelled_passages)}")
+            logger.info(f"Limited number of passages to {len(labelled_passages)}")
 
         # 2. optionally exclude training data
         if exclude_training_data:
-            console.print(
+            logger.info(
                 "Fetching training data from classifier's W&B run to exclude from prediction..."
             )
             try:
@@ -177,7 +176,7 @@ async def run_prediction(
                             artifact_dir
                         )
 
-                        console.print(
+                        logger.info(
                             f"✓ Loaded {len(training_data)} passages from training data artifact"
                         )
 
@@ -194,16 +193,16 @@ async def run_prediction(
                         num_labelled_passages_removed = (
                             len_labelled_passages_before - len(labelled_passages)
                         )
-                        console.print(
+                        logger.info(
                             f"Removed {num_labelled_passages_removed} passages from labelled passages dataset. {len(labelled_passages)} remaining."
                         )
 
                     else:
-                        console.print(
+                        logger.warning(
                             "⚠ No training-data artifact found in classifier's run, skipping exclusion"
                         )
             except Exception as e:
-                console.print(
+                logger.warning(
                     f"⚠ Could not load training data: {e}\nContinuing with prediction without excluding training data"
                 )
 
@@ -218,7 +217,7 @@ async def run_prediction(
 
         if prediction_threshold is not None:
             classifier.set_prediction_threshold(prediction_threshold)
-            console.print(
+            logger.info(
                 f"Classifier prediction threshold set to {prediction_threshold}"
             )
 
@@ -232,12 +231,12 @@ async def run_prediction(
             passages_processed = 0
 
             if stop_after_n_positives is not None:
-                console.print(
-                    f"[cyan]Early stopping enabled: will stop after finding {stop_after_n_positives} positive passages[/cyan]"
+                logger.info(
+                    f"Early stopping enabled: will stop after finding {stop_after_n_positives} positive passages"
                 )
 
-            console.print(
-                "[cyan]You can end prediction early by pressing Ctrl+C. This will save passages predicted thus far.[/cyan]"
+            logger.info(
+                "You can end prediction early by pressing Ctrl+C. This will save passages predicted thus far."
             )
 
             for i in range(0, len(labelled_passages), batch_size):
@@ -258,28 +257,26 @@ async def run_prediction(
                     batch_positives = sum(1 for p in batch_output if len(p.spans) > 0)
                     positives_found += batch_positives
 
-                    console.print(
-                        f"[cyan]Processed {passages_processed}/{len(labelled_passages)} passages, "
-                        f"found {positives_found} positives ({batch_positives} in batch)[/cyan]"
+                    logger.info(
+                        f"Processed {passages_processed}/{len(labelled_passages)} passages, "
+                        f"found {positives_found} positives ({batch_positives} in batch)"
                     )
 
                     if positives_found >= stop_after_n_positives:
-                        console.print(
-                            f"[green]✓ Reached target of {stop_after_n_positives} positives. "
-                            f"Stopping early (skipped {len(labelled_passages) - passages_processed} passages)[/green]"
+                        logger.info(
+                            f"✓ Reached target of {stop_after_n_positives} positives. "
+                            f"Stopping early (skipped {len(labelled_passages) - passages_processed} passages)"
                         )
                         break
                 else:
-                    console.print(
-                        f"[cyan]Processed {passages_processed}/{len(labelled_passages)} passages[/cyan]"
+                    logger.info(
+                        f"Processed {passages_processed}/{len(labelled_passages)} passages"
                     )
 
         except Exception as e:
             prediction_exception = e
-            console.print(
-                f"[red]⚠ Prediction failed: {e}[/red]\n"
-                f"[yellow]Saving {len(output_labelled_passages)} partial results...[/yellow]"
-            )
+            logger.error(f"⚠ Prediction failed: {e}")
+            logger.info(f"Saving {len(output_labelled_passages)} partial results...")
 
         finally:
             if output_labelled_passages or already_predicted_passages:
@@ -297,17 +294,15 @@ async def run_prediction(
 
                 labelled_passages_path.parent.mkdir(parents=True, exist_ok=True)
                 labelled_passages_path.write_text(labelled_passages_jsonl)
-                console.print(
-                    f"[green]✓ Saved {len(all_passages)} passages to {labelled_passages_path}[/green]"
+                logger.info(
+                    f"✓ Saved {len(all_passages)} passages to {labelled_passages_path}"
                 )
 
                 if track_and_upload and run:
                     log_labelled_passages_artifact_to_wandb_run(
                         all_passages, run=run, concept=classifier.concept
                     )
-                    console.print(
-                        f"[green]✓ Uploaded passages to W&B run {run.name}[/green]"
-                    )
+                    logger.info(f"✓ Uploaded passages to W&B run {run.name}")
 
         # Re-raise the exception after saving
         if prediction_exception:
