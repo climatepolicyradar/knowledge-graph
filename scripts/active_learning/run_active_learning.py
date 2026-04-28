@@ -1,5 +1,6 @@
 from contextlib import nullcontext
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
 
@@ -42,6 +43,14 @@ class EnsembleConfig(BaseModel):
     ensemble_metric_threshold: UnitInterval
 
 
+class BertPredictionFilter(StrEnum):
+    """Filter applied to BERT-uncertain passages before passing them to the LLM."""
+
+    POSITIVE = "positive"
+    NEGATIVE = "negative"
+    ALL = "all"
+
+
 ensemble_config_bert = EnsembleConfig(
     n_classifiers=5,
     ensemble_metric=ensemble_metrics.Disagreement(),
@@ -60,7 +69,7 @@ def annotate_passages_with_ensemble(
     model: Classifier,
     ensemble_config: EnsembleConfig,
     batch_size: int = 50,
-) -> tuple[list[LabelledPassage], list[LabelledPassage]]:
+) -> tuple[list[LabelledPassage], list[LabelledPassage], list[float]]:
     """
     Annotate passages using an ensemble of classifiers.
 
@@ -69,9 +78,11 @@ def annotate_passages_with_ensemble(
     :param model: The base classifier to create ensemble from
     :param ensemble_config: Configuration for ensemble and thresholding
     :param batch_size: Number of passages to process in each batch
-    :return: Tuple of (annotated_passages, unannotated_passages) where annotated_passages
-        contains passages with metric <= threshold (confident predictions) and
-        uncertain_passages contains the rest of the passages
+    :return: Tuple of (annotated_passages, unannotated_passages, unannotated_majority_votes)
+        where annotated_passages contains passages with metric <= threshold (confident
+        predictions), unannotated_passages contains the rest, and
+        unannotated_majority_votes is the ensemble majority vote (0, 0.5 or 1) for each
+        unannotated passage, in the same order.
     """
     console = Console()
 
@@ -105,6 +116,7 @@ def annotate_passages_with_ensemble(
     # and remove them from passages_to_annotate
     annotated_passages: list[LabelledPassage] = []
     unannotated_passages: list[LabelledPassage] = []
+    unannotated_majority_votes: list[float] = []
 
     for passage, metric_value, majority_vote_value in zip(
         passages, ensemble_metrics, ensemble_majority_votes
@@ -127,12 +139,13 @@ def annotate_passages_with_ensemble(
             annotated_passages.append(passage.model_copy(update={"spans": spans}))
         else:
             unannotated_passages.append(passage)
+            unannotated_majority_votes.append(float(majority_vote_value))
 
     console.print(
         f"Annotated {len(annotated_passages)} passages with metric {ensemble_config.ensemble_metric.name} <= {ensemble_config.ensemble_metric_threshold}. {len(unannotated_passages)} remaining."
     )
 
-    return annotated_passages, unannotated_passages
+    return annotated_passages, unannotated_passages, unannotated_majority_votes
 
 
 def run_active_learning(
@@ -141,6 +154,7 @@ def run_active_learning(
     llm_classifier: Classifier,
     ensemble_config_bert: EnsembleConfig,
     ensemble_config_llm: EnsembleConfig,
+    bert_prediction_filter: BertPredictionFilter = BertPredictionFilter.ALL,
     batch_size: int = 50,
 ) -> tuple[list[LabelledPassage], list[LabelledPassage], list[LabelledPassage]]:
     """
@@ -152,25 +166,64 @@ def run_active_learning(
     :param llm_classifier: LLM-based classifier for second ensemble
     :param ensemble_config_bert: Configuration for BERT ensemble
     :param ensemble_config_llm: Configuration for LLM ensemble
+    :param bert_prediction_filter: Filter BERT-uncertain passages by BERT majority
+        vote before passing to the LLM ensemble. POSITIVE keeps only passages where
+        BERT's majority leans positive, NEGATIVE only those that lean negative, ALL
+        passes every BERT-uncertain passage through.
     :param batch_size: Number of passages to process in each batch
     :return: Tuple of (bert_labelled_passages, llm_labelled_passages, unlabelled_passages)
         where bert_labelled_passages are passages labelled by BERT ensemble,
         llm_labelled_passages are passages labelled by LLM ensemble (that BERT was uncertain about),
-        and unlabelled_passages are passages both ensembles were uncertain about
+        and unlabelled_passages are passages both ensembles were uncertain about. Excludes
+        predictions filtered out by a value of `bert_prediction_filter` not equal to 'all'.
     """
     console = Console()
 
     # Run BERT ensemble annotation
-    bert_labelled_passages, passages_after_bert = annotate_passages_with_ensemble(
+    (
+        bert_labelled_passages,
+        passages_after_bert,
+        bert_uncertain_majority_votes,
+    ) = annotate_passages_with_ensemble(
         passages=labelled_passages,
         model=bert_classifier,
         ensemble_config=ensemble_config_bert,
         batch_size=batch_size,
     )
 
+    # Filter BERT-uncertain passages before LLM based on BERT's majority vote
+    passages_for_llm: list[LabelledPassage] = []
+    passages_filtered_out: list[LabelledPassage] = []
+    for passage, majority_vote in zip(
+        passages_after_bert, bert_uncertain_majority_votes
+    ):
+        if bert_prediction_filter == BertPredictionFilter.ALL:
+            passages_for_llm.append(passage)
+        elif bert_prediction_filter == BertPredictionFilter.POSITIVE:
+            if majority_vote > 0:
+                passages_for_llm.append(passage)
+            else:
+                passages_filtered_out.append(passage)
+        elif bert_prediction_filter == BertPredictionFilter.NEGATIVE:
+            if majority_vote == 0:
+                passages_for_llm.append(passage)
+            else:
+                passages_filtered_out.append(passage)
+
+    if bert_prediction_filter != BertPredictionFilter.ALL:
+        console.print(
+            f"BERT prediction filter '{bert_prediction_filter.value}' kept "
+            f"{len(passages_for_llm)} passages for LLM, excluded "
+            f"{len(passages_filtered_out)}."
+        )
+
     # Run LLM ensemble annotation on passages that BERT was uncertain about
-    llm_labelled_passages, unlabelled_passages = annotate_passages_with_ensemble(
-        passages=passages_after_bert,
+    (
+        llm_labelled_passages,
+        unlabelled_passages_from_llm,
+        _,
+    ) = annotate_passages_with_ensemble(
+        passages=passages_for_llm,
         model=llm_classifier,
         ensemble_config=ensemble_config_llm,
         batch_size=batch_size,
@@ -178,15 +231,19 @@ def run_active_learning(
 
     total_labelled = len(bert_labelled_passages) + len(llm_labelled_passages)
     percent_labelled = round(total_labelled / len(labelled_passages) * 100, 1)
-    percent_unlabelled = round(100 - percent_labelled, 1)
+    percent_unlabelled = round(
+        len(unlabelled_passages_from_llm) / len(labelled_passages), 1
+    )
+    percent_filtered_out = round(len(passages_filtered_out) / len(labelled_passages), 1)
 
     console.print(
         f"Complete: {total_labelled} ({percent_labelled}%) labelled "
         f"(BERT: {len(bert_labelled_passages)}, LLM: {len(llm_labelled_passages)}), "
-        f"{len(unlabelled_passages)} ({percent_unlabelled}%) unlabelled."
+        f"{len(unlabelled_passages_from_llm)} ({percent_unlabelled}%) unlabelled."
+        f"{len(passages_filtered_out)} ({percent_filtered_out}%) filtered out (not uploaded to W&B)."
     )
 
-    return bert_labelled_passages, llm_labelled_passages, unlabelled_passages
+    return bert_labelled_passages, llm_labelled_passages, unlabelled_passages_from_llm
 
 
 @app.command()
@@ -232,6 +289,18 @@ def main(
             help="Optional limit on the number of passages to annotate",
         ),
     ] = None,
+    bert_prediction_filter: Annotated[
+        BertPredictionFilter,
+        typer.Option(
+            help=(
+                "Filter BERT-uncertain passages by BERT's majority vote before "
+                "passing them to the LLM ensemble. 'positive' keeps only passages "
+                "where BERT's majority leans positive, 'negative' only those that "
+                "lean negative, 'all' passes every BERT-uncertain passage through."
+            ),
+            case_sensitive=False,
+        ),
+    ] = BertPredictionFilter.ALL,
     track_and_upload: Annotated[
         bool,
         typer.Option(
@@ -259,6 +328,7 @@ def main(
     wandb_config = {
         "batch_size": batch_size,
         "limit": limit,
+        "bert_prediction_filter": bert_prediction_filter.value,
         "labelled_passages_wandb_path": labelled_passages_wandb_path,
         "classifier_wandb_path_bert": classifier_wandb_path_bert,
         "classifier_wandb_path_llm": classifier_wandb_path_llm,
@@ -401,6 +471,7 @@ def main(
                 llm_classifier=llm_classifier,
                 ensemble_config_bert=ensemble_config_bert,
                 ensemble_config_llm=ensemble_config_llm,
+                bert_prediction_filter=bert_prediction_filter,
                 batch_size=batch_size,
             )
         )
