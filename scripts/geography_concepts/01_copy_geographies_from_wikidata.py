@@ -6,9 +6,9 @@ https://www.notion.so/3119109609a480fd884ededd6b1af8aa
 
 Three subcommands cover the three ISO 3166 levels:
 
-  national     — ISO 3166-1 (alpha-2/alpha-3), e.g. France, United States
+  national     — ISO 3166-1, e.g. France, United States
   subnational  — ISO 3166-2, e.g. California (US-CA), nested under their parent country
-  historical   — ISO 3166-3 (alpha-4), e.g. Czechoslovakia (CSHH)
+  historical   — ISO 3166-3, e.g. Czechoslovakia (CSHH)
 
 Output filenames are fixed per subcommand (iso_3166-1, iso_3166-2, iso_3166-3).
 Use --format to choose json (default) or csv.
@@ -251,7 +251,12 @@ def subnational(
 def historical(
     fmt: Annotated[Format, typer.Option("--format")] = Format.json,
 ) -> None:
-    """Fetch ISO 3166-3 historical geography concepts from Wikidata."""
+    """
+    Fetch ISO 3166-3 historical geography concepts from Wikidata.
+
+    ISO 3166-3 is the subdivision of ISO 3166 which denotes "Code for formerly used
+    names of countries." See more here: https://en.wikipedia.org/wiki/ISO_3166-3
+    """
     wikidata = WikidataSession()
     console.log("Fetching historical geography concepts from Wikidata...")
     bindings = wikidata.run_sparql_query(HISTORICAL_SPARQL_QUERY)
