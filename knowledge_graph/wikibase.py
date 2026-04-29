@@ -1521,12 +1521,14 @@ class WikibaseSession:
         target_id: WikibaseID,
     ) -> None:
         """
-        Add an item-valued claim to an existing Wikibase entity.
+        Add a claim to an existing Wikibase entity
+
+        The value of the claim should be another Wikibase entity.
 
         Args:
             entity_id: The entity to update
             property_id: The property ID of the claim
-            target_id: The target entity ID
+            target_id: The entity to use as the claim value
         """
         client = await self._get_client()
 
@@ -1566,12 +1568,14 @@ class WikibaseSession:
         target_id: WikibaseID,
     ) -> None:
         """
-        Add an item-valued claim to an existing Wikibase entity.
+        Add a claim to an existing Wikibase entity.
+
+        The value of the claim should be another Wikibase entity.
 
         Args:
             entity_id: The entity to update
             property_id: The property ID of the claim
-            target_id: The target entity ID
+            target_id: The entity to use as the claim value
         """
         return await self.add_claim_async(entity_id, property_id, target_id)
 
