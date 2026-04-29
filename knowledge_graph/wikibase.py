@@ -4,19 +4,14 @@ import logging
 import os
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, NamedTuple, Optional
+from typing import Any, Final, NamedTuple, Optional
 
 import dotenv
 import html2text
 import httpx
 from httpx import HTTPError, HTTPStatusError, ReadTimeout, RequestError
 from more_itertools import chunked
-from pydantic import (
-    AnyHttpUrl,
-    BaseModel,
-    SecretStr,
-    ValidationError,
-)
+from pydantic import AnyHttpUrl, BaseModel, SecretStr, ValidationError
 from tenacity import (
     AsyncRetrying,
     before_sleep_log,
@@ -77,20 +72,30 @@ class WikibaseSession:
     ITEM_PREFIX = "Item:"
 
     # Property IDs
-    has_subconcept_property_id = os.getenv("WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID", "P1")
-    subconcept_of_property_id = os.getenv("WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID", "P2")
-    related_concept_property_id = os.getenv(
+    has_subconcept_property_id: Final[str] = os.getenv(
+        "WIKIBASE_HAS_SUBCONCEPT_PROPERTY_ID", "P1"
+    )
+    subconcept_of_property_id: Final[str] = os.getenv(
+        "WIKIBASE_SUBCONCEPT_OF_PROPERTY_ID", "P2"
+    )
+    related_concept_property_id: Final[str] = os.getenv(
         "WIKIBASE_RELATED_CONCEPT_PROPERTY_ID", "P3"
     )
-    negative_labels_property_id = os.getenv(
+    negative_labels_property_id: Final[str] = os.getenv(
         "WIKIBASE_NEGATIVE_LABELS_PROPERTY_ID", "P9"
     )
-    definition_property_id = os.getenv("WIKIBASE_DEFINITION_PROPERTY_ID", "P7")
-    negative_concept_property_id = os.getenv(
+    definition_property_id: Final[str] = os.getenv(
+        "WIKIBASE_DEFINITION_PROPERTY_ID", "P7"
+    )
+    negative_concept_property_id: Final[str] = os.getenv(
         "WIKIBASE_NEGATIVE_CONCEPT_PROPERTY_ID", "P11"
     )
-    classifier_id_property_id = os.getenv("WIKIBASE_CLASSIFIER_ID_PROPERTY_ID", "P20")
-    wikidata_id_property_id = os.getenv("WIKIBASE_WIKIDATA_ID_PROPERTY_ID", "P13")
+    classifier_id_property_id: Final[str] = os.getenv(
+        "WIKIBASE_CLASSIFIER_ID_PROPERTY_ID", "P20"
+    )
+    wikidata_id_property_id: Final[str] = os.getenv(
+        "WIKIBASE_WIKIDATA_ID_PROPERTY_ID", "P13"
+    )
 
     def __init__(
         self,
