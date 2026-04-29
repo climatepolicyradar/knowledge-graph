@@ -4,7 +4,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Final, NamedTuple, Optional
+from typing import Any, Final, NamedTuple
 
 import dotenv
 import html2text
@@ -99,9 +99,9 @@ class WikibaseSession:
 
     def __init__(
         self,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        url: Optional[str] = None,
+        username: str | None = None,
+        password: str | None = None,
+        url: str | None = None,
     ):
         """Initialize session - login happens on first use"""
         self.username = username or os.getenv("WIKIBASE_USERNAME")
@@ -123,10 +123,10 @@ class WikibaseSession:
             )
 
         # These will be initialized on first use
-        self._client: Optional[httpx.AsyncClient] = None
-        self._csrf_token: Optional[str] = None
-        self._redirects: Optional[dict[WikibaseID, WikibaseID]] = None
-        self._semaphore: Optional[asyncio.Semaphore] = None
+        self._client: httpx.AsyncClient | None = None
+        self._csrf_token: str | None = None
+        self._redirects: dict[WikibaseID, WikibaseID] | None = None
+        self._semaphore: asyncio.Semaphore | None = None
 
     def __repr__(self) -> str:
         """Return a string representation of the Wikibase session"""
@@ -219,7 +219,7 @@ class WikibaseSession:
         return self._redirects.get(wikibase_id, wikibase_id)
 
     async def _get_all_redirects(
-        self, batch_size: Optional[int] = None
+        self, batch_size: int | None = None
     ) -> dict[WikibaseID, WikibaseID]:
         """Get all redirects from Wikibase."""
         if batch_size is None:
@@ -337,7 +337,7 @@ class WikibaseSession:
         wikibase_id: WikibaseID,
         timestamp: datetime,
         entity_info: dict[str, Any],
-    ) -> Optional[Concept]:
+    ) -> Concept | None:
         """Async helper to fetch a single concept."""
         client = await self._get_client()
 
@@ -433,7 +433,7 @@ class WikibaseSession:
         self,
         wikibase_id: WikibaseID,
         entity: dict[str, Any],
-        wikibase_revision: Optional[int] = None,
+        wikibase_revision: int | None = None,
     ) -> Concept:
         """Parse a Wikibase entity (given in dict format) into a Concept object."""
         # Extract basic concept information
@@ -558,9 +558,9 @@ class WikibaseSession:
     )
     async def get_concepts_async(
         self,
-        limit: Optional[int] = None,
-        wikibase_ids: Optional[list[WikibaseID]] = None,
-        timestamp: Optional[datetime] = None,
+        limit: int | None = None,
+        wikibase_ids: list[WikibaseID] | None = None,
+        timestamp: datetime | None = None,
     ) -> list[Concept]:
         """
         Async method to get concepts from Wikibase with concurrent fetching.
@@ -700,9 +700,9 @@ class WikibaseSession:
     @async_to_sync
     async def get_concepts(
         self,
-        limit: Optional[int] = None,
-        wikibase_ids: Optional[list[WikibaseID]] = None,
-        timestamp: Optional[datetime] = None,
+        limit: int | None = None,
+        wikibase_ids: list[WikibaseID] | None = None,
+        timestamp: datetime | None = None,
     ) -> list[Concept]:
         """
         Fetches concepts from Wikibase with optional filtering and historical data.
@@ -726,7 +726,7 @@ class WikibaseSession:
     async def get_concept_async(
         self,
         wikibase_id: WikibaseID,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
         include_labels_from_subconcepts: bool = False,
         include_recursive_subconcept_of: bool = False,
         include_recursive_has_subconcept: bool = False,
@@ -837,7 +837,7 @@ class WikibaseSession:
     async def get_concept(
         self,
         wikibase_id: WikibaseID,
-        timestamp: Optional[datetime] = None,
+        timestamp: datetime | None = None,
         include_labels_from_subconcepts: bool = False,
         include_recursive_subconcept_of: bool = False,
         include_recursive_has_subconcept: bool = False,
@@ -1221,8 +1221,8 @@ class WikibaseSession:
     async def search_concepts_async(
         self,
         search_term: str,
-        limit: Optional[int] = None,
-        timestamp: Optional[datetime] = None,
+        limit: int | None = None,
+        timestamp: datetime | None = None,
     ) -> list[Concept]:
         """
         Search for concepts by matching against labels and descriptions in Wikibase.
@@ -1274,8 +1274,8 @@ class WikibaseSession:
     async def search_concepts(
         self,
         search_term: str,
-        limit: Optional[int] = None,
-        timestamp: Optional[datetime] = None,
+        limit: int | None = None,
+        timestamp: datetime | None = None,
     ) -> list[Concept]:
         """
         Search for concepts by matching against labels and descriptions in Wikibase.
@@ -1371,10 +1371,10 @@ class WikibaseSession:
     async def create_concept_async(
         self,
         concept: Concept,
-        subconcept_of: Optional[list[WikibaseID]] = None,
-        has_subconcept: Optional[list[WikibaseID]] = None,
-        related_to: Optional[list[WikibaseID]] = None,
-        wikidata_id: Optional[str] = None,
+        subconcept_of: list[WikibaseID] | None = None,
+        has_subconcept: list[WikibaseID] | None = None,
+        related_to: list[WikibaseID] | None = None,
+        wikidata_id: str | None = None,
     ) -> WikibaseID:
         """
         Create a new item in Wikibase from a Concept and return its ID.
@@ -1487,10 +1487,10 @@ class WikibaseSession:
     async def create_concept(
         self,
         concept: Concept,
-        subconcept_of: Optional[list[WikibaseID]] = None,
-        has_subconcept: Optional[list[WikibaseID]] = None,
-        related_to: Optional[list[WikibaseID]] = None,
-        wikidata_id: Optional[str] = None,
+        subconcept_of: list[WikibaseID] | None = None,
+        has_subconcept: list[WikibaseID] | None = None,
+        related_to: list[WikibaseID] | None = None,
+        wikidata_id: str | None = None,
     ) -> WikibaseID:
         """
         Create a new item in Wikibase from a Concept and return its ID.
