@@ -90,6 +90,7 @@ class WikibaseSession:
         "WIKIBASE_NEGATIVE_CONCEPT_PROPERTY_ID", "P11"
     )
     classifier_id_property_id = os.getenv("WIKIBASE_CLASSIFIER_ID_PROPERTY_ID", "P20")
+    wikidata_id_property_id = os.getenv("WIKIBASE_WIKIDATA_ID_PROPERTY_ID", "P13")
 
     def __init__(
         self,
@@ -1356,6 +1357,218 @@ class WikibaseSession:
     ) -> list[tuple[StatementRank, ClassifierID]]:
         """Get the classifier IDs and their ranks for a given Wikibase item"""
         return await self.get_classifier_ids_async(wikibase_id)
+
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
+    )
+    async def create_concept_async(
+        self,
+        concept: Concept,
+        subconcept_of: Optional[list[WikibaseID]] = None,
+        has_subconcept: Optional[list[WikibaseID]] = None,
+        related_to: Optional[list[WikibaseID]] = None,
+        wikidata_id: Optional[str] = None,
+    ) -> WikibaseID:
+        """
+        Create a new item in Wikibase from a Concept and return its ID.
+
+        Args:
+            concept: Provides the preferred label, description, and alternative labels
+            subconcept_of: Parent concept IDs (sets the subconcept_of property)
+            has_subconcept: Child concept IDs (sets the has_subconcept property)
+            related_to: Related concept IDs (sets the related_concept property)
+            wikidata_id: Optional Wikidata QID to record on the item (e.g. "Q889")
+
+        Returns:
+            The WikibaseID of the newly created item
+        """
+        client = await self._get_client()
+
+        data: dict[str, Any] = {
+            "labels": {"en": {"language": "en", "value": concept.preferred_label}},
+        }
+        if concept.description:
+            data["descriptions"] = {
+                "en": {"language": "en", "value": concept.description}
+            }
+        if concept.alternative_labels:
+            data["aliases"] = {
+                "en": [
+                    {"language": "en", "value": alias}
+                    for alias in concept.alternative_labels
+                ]
+            }
+
+        def _item_claim(property_id: str, target_id: WikibaseID) -> dict:
+            return {
+                "mainsnak": {
+                    "snaktype": "value",
+                    "property": property_id,
+                    "datavalue": {
+                        "value": {
+                            "entity-type": "item",
+                            "numeric-id": WikibaseID(str(target_id)).numeric,
+                            "id": str(target_id),
+                        },
+                        "type": "wikibase-entityid",
+                    },
+                },
+                "type": "statement",
+                "rank": "normal",
+            }
+
+        def _string_claim(property_id: str, value: str) -> dict:
+            return {
+                "mainsnak": {
+                    "snaktype": "value",
+                    "property": property_id,
+                    "datavalue": {"value": value, "type": "string"},
+                },
+                "type": "statement",
+                "rank": "normal",
+            }
+
+        claims: dict[str, list] = {}
+        if subconcept_of:
+            claims[self.subconcept_of_property_id] = [
+                _item_claim(self.subconcept_of_property_id, pid)
+                for pid in subconcept_of
+            ]
+        if has_subconcept:
+            claims[self.has_subconcept_property_id] = [
+                _item_claim(self.has_subconcept_property_id, cid)
+                for cid in has_subconcept
+            ]
+        if related_to:
+            claims[self.related_concept_property_id] = [
+                _item_claim(self.related_concept_property_id, rid) for rid in related_to
+            ]
+        if concept.definition:
+            claims[self.definition_property_id] = [
+                _string_claim(self.definition_property_id, concept.definition)
+            ]
+        if wikidata_id:
+            claims[self.wikidata_id_property_id] = [
+                _string_claim(self.wikidata_id_property_id, wikidata_id)
+            ]
+        if claims:
+            data["claims"] = claims
+
+        response = await client.post(
+            url=self.api_url,
+            data={
+                "action": "wbeditentity",
+                "new": "item",
+                "format": "json",
+                "token": self._csrf_token,
+                "data": json.dumps(data, ensure_ascii=False),
+            },
+        )
+        response.raise_for_status()
+        response_data = response.json()
+
+        if "error" in response_data:
+            raise HTTPError(
+                f"Error creating concept '{concept.preferred_label}': {response_data['error']}"
+            )
+
+        new_id = WikibaseID(response_data["entity"]["id"])
+        logger.info("Created concept '%s' with ID %s", concept.preferred_label, new_id)
+        return new_id
+
+    @async_to_sync
+    async def create_concept(
+        self,
+        concept: Concept,
+        subconcept_of: Optional[list[WikibaseID]] = None,
+        has_subconcept: Optional[list[WikibaseID]] = None,
+        related_to: Optional[list[WikibaseID]] = None,
+        wikidata_id: Optional[str] = None,
+    ) -> WikibaseID:
+        """
+        Create a new item in Wikibase from a Concept and return its ID.
+
+        Args:
+            concept: Provides the preferred label, description, and alternative labels
+            subconcept_of: Parent concept IDs (sets the subconcept_of property)
+            has_subconcept: Child concept IDs (sets the has_subconcept property)
+            related_to: Related concept IDs (sets the related_concept property)
+            wikidata_id: Optional Wikidata QID to record on the item (e.g. "Q889")
+
+        Returns:
+            The WikibaseID of the newly created item
+        """
+        return await self.create_concept_async(
+            concept, subconcept_of, has_subconcept, related_to, wikidata_id
+        )
+
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
+    )
+    async def add_claim_async(
+        self,
+        entity_id: WikibaseID,
+        property_id: str,
+        target_id: WikibaseID,
+    ) -> None:
+        """
+        Add an item-valued claim to an existing Wikibase entity.
+
+        Args:
+            entity_id: The entity to update
+            property_id: The property ID of the claim
+            target_id: The target entity ID
+        """
+        client = await self._get_client()
+
+        response = await client.post(
+            url=self.api_url,
+            data={
+                "action": "wbcreateclaim",
+                "format": "json",
+                "entity": str(entity_id),
+                "property": property_id,
+                "snaktype": "value",
+                "value": json.dumps(
+                    {
+                        "entity-type": "item",
+                        "numeric-id": WikibaseID(str(target_id)).numeric,
+                        "id": str(target_id),
+                    }
+                ),
+                "token": self._csrf_token,
+            },
+        )
+        response.raise_for_status()
+        response_data = response.json()
+
+        if "error" in response_data:
+            raise HTTPError(
+                f"Error adding claim {property_id} on {entity_id}: {response_data['error']}"
+            )
+
+        logger.debug("Added claim %s -[%s]-> %s", entity_id, property_id, target_id)
+
+    @async_to_sync
+    async def add_claim(
+        self,
+        entity_id: WikibaseID,
+        property_id: str,
+        target_id: WikibaseID,
+    ) -> None:
+        """
+        Add an item-valued claim to an existing Wikibase entity.
+
+        Args:
+            entity_id: The entity to update
+            property_id: The property ID of the claim
+            target_id: The target entity ID
+        """
+        return await self.add_claim_async(entity_id, property_id, target_id)
 
 
 WikibaseConfig = NamedTuple(
