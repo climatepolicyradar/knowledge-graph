@@ -8,3 +8,11 @@ This directory contains the scripts which were used to populate the concept stor
 4. [A second script](02_upload_geographies_to_wikibase.py) was written to upload the refined data to the concept store, preserving the hierarchy of the root 'geography' concept → region-level concepts → national-level concepts.
 
 This directory is maintained solely for archival purposes - the scripts here aren't maintained, and aren't intended to be re-run. Data in the concept store has likely changed since these scripts were first run, and thus the scripts here are not guaranteed to work.
+
+## A note on unused data
+
+The datasets fetched from Wikidata by [01_copy_geographies_from_wikidata.py](01_copy_geographies_from_wikidata.py) include subnational and historical geography concepts, which were not used in the final dataset. While the national-level concepts produce a list of ~250 concepts to add to the concept store, adding the subnational and historical concepts would have added an extra ~5,000 concepts (tripling the size of the existing concept store), which we deemed unmanageable and unnecessary for this first iteration. However, we could still add them in the future if/when they're needed.
+
+The audited and approved dataset from google sheets contains a column for 'region', which was included in the uploaded taxonomy, but the 'sub-region' column was not. Again, this choice was made because we deemed the sub-region hierarchy to be too granular for the first iteration. We'll wait for more feedback on how the programmes team want to use this dataset before deciding on which new hierarchy levels to add to the geography taxonomy, eg they may instead prefer to add groups for Least Developed Countries, Small Island Developing States, World Bank income groupings etc instead of ISO sub-regions.
+
+See more discussion in the [#proj-geographies](https://climate-policy-radar.slack.com/archives/C0AKU9Y6WF7) channel on slack.
