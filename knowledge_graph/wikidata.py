@@ -55,7 +55,10 @@ class WikidataSession:
         """Get the HTTP client, initializing session on first use"""
         if self._client is None:
             self._client = httpx.AsyncClient(
-                headers={"Accept": "application/json"},
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "climatepolicyradar-knowledge-graph/1.0 (https://climatepolicyradar.org)",
+                },
                 timeout=self.DEFAULT_TIMEOUT,
             )
 
@@ -503,3 +506,51 @@ class WikidataSession:
         return await self.search_concepts_async(
             search_term, limit, language, entity_type
         )
+
+    @retry(
+        stop=stop_after_attempt(MAX_RETRIES),
+        wait=wait_exponential_jitter(initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT),
+        retry=retry_if_exception_type(httpx.HTTPStatusError),
+    )
+    async def run_sparql_query_async(self, query: str) -> list[dict]:
+        """
+        Async version: Run an arbitrary SPARQL query against the Wikidata SPARQL endpoint.
+
+        :param str query: The SPARQL query string to execute
+        :return list[dict]: The list of result bindings from the query
+        """
+        client = await self._get_client()
+
+        assert self._semaphore is not None, "Semaphore should be initialized"
+        async with self._semaphore:
+            try:
+                response = await client.get(
+                    self.sparql_url,
+                    params={"query": query, "format": "json"},
+                )
+                response.raise_for_status()
+
+                bindings = response.json()["results"]["bindings"]
+
+                await asyncio.sleep(self.REQUEST_DELAY_SECONDS)
+
+                return bindings
+
+            except httpx.HTTPError as e:
+                logger.error("HTTP error during SPARQL query: %s", e)
+                raise
+            except KeyError as e:
+                logger.error("Unexpected response format from SPARQL endpoint: %s", e)
+                raise ValueError(
+                    f"Unexpected response format from Wikidata SPARQL endpoint: {e}"
+                ) from e
+
+    @async_to_sync
+    async def run_sparql_query(self, query: str) -> list[dict]:
+        """
+        Run an arbitrary SPARQL query against the Wikidata SPARQL endpoint.
+
+        :param str query: The SPARQL query string to execute
+        :return list[dict]: The list of result bindings from the query
+        """
+        return await self.run_sparql_query_async(query)
