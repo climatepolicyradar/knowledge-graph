@@ -122,6 +122,14 @@ def main(
 
         try:
             dataset = pd.read_feather(dataset_path)
+            if (
+                "corpus_type_name" in dataset.columns
+                and "document_metadata.corpus_type_name" not in dataset.columns
+            ):
+                dataset = dataset.rename(
+                    columns={"corpus_type_name": "document_metadata.corpus_type_name"}
+                )
+
             logger.info(f"Loaded {len(dataset)} passages from {dataset_path}")
         except FileNotFoundError as e:
             raise FileNotFoundError(
