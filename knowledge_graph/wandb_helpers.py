@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import wandb
+from wandb.apis.public.runs import Run as WandbPublicRun
 from wandb.sdk.wandb_run import Run as WandbRun
 
 from knowledge_graph.classifier import Classifier
@@ -206,6 +207,60 @@ def load_artifact_file_from_wandb(
     artifact_dir = artifact.download()
 
     return Path(artifact_dir) / filename
+
+
+def get_artifact_creator_run(wandb_path: str) -> WandbPublicRun:
+    """
+    Get the W&B run that created the artifact at the given path.
+
+    :param wandb_path: W&B artifact path (e.g. 'climatepolicyradar/Q913/rsgz5ygh:v0')
+    :raises ValueError: if the artifact has no recorded creator run
+    :return: The W&B run that created the artifact
+    """
+    api = wandb.Api()
+    artifact = api.artifact(wandb_path)
+    creator_run = artifact.logged_by()
+    if creator_run is None:
+        raise ValueError(
+            f"Could not locate the run that created artifact {wandb_path}."
+        )
+    return creator_run
+
+
+def load_classifier_training_data_from_wandb(
+    classifier_wandb_path: str,
+) -> tuple[list[LabelledPassage], "wandb.Artifact"]:
+    """
+    Load a classifier's training data from its creating run.
+
+    Locates the 'training-data' labelled-passages artifact in the run that produced
+    the classifier, downloads it, and returns the passages alongside the artifact
+    object so callers can register lineage with `run.use_artifact(artifact)`.
+
+    :param classifier_wandb_path: Path to a classifier artifact
+        (e.g. 'climatepolicyradar/Q911/7ppnucwp:v0')
+    :raises WandbArtifactNotFoundError: if no training-data artifact is found in the
+        classifier's creating run (e.g. the model was trained before training-data
+        logging was added)
+    :return: Tuple of (training-data labelled passages, training-data artifact)
+    """
+    creator_run = get_artifact_creator_run(classifier_wandb_path)
+
+    training_data_artifact = None
+    for artifact in creator_run.logged_artifacts():
+        if artifact.type == "labelled_passages" and "training-data" in artifact.name:
+            training_data_artifact = artifact
+            break
+
+    if training_data_artifact is None:
+        raise WandbArtifactNotFoundError(
+            run_name=str(creator_run),
+            artifact_type="labelled_passages (training-data)",
+        )
+
+    artifact_dir = Path(training_data_artifact.download())
+    passages = _load_labelled_passages_from_artifact_dir(artifact_dir)
+    return passages, training_data_artifact
 
 
 def load_classifier_from_wandb(
