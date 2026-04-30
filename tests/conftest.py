@@ -406,9 +406,20 @@ def MockedWikibaseSession(
             # get_statements
             case "wbgetclaims":
                 return httpx.Response(200, json={"claims": {}})
-            # add_statement
+            # add_statement / add_claim
             case "wbcreateclaim":
                 return httpx.Response(200, json={})
+            # create_concept / add_alternative_labels
+            case "wbeditentity":
+                body = parse_qs(request.content.decode())
+                if body.get("new", [""])[0] == "item":
+                    return httpx.Response(
+                        200, json={"entity": {"id": "Q9999"}, "success": 1}
+                    )
+                entity_id = body.get("id", [""])[0]
+                return httpx.Response(
+                    200, json={"entity": {"id": entity_id}, "success": 1}
+                )
 
         raise MockedWikibaseException(f"Unhandled test endpoint: {request.url}")
 
