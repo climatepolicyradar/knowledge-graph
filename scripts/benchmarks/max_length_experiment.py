@@ -6,15 +6,18 @@ import re
 import tempfile
 import time
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
 import numpy as np
 import pandas as pd
 import torch
+import typer
 import wandb
 from datasets import Dataset
 from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
@@ -33,6 +36,7 @@ from knowledge_graph.utils import deserialise_pydantic_list_from_jsonl
 logger = bert_based.logger
 
 console = Console()
+app = typer.Typer()
 
 SAMPLED_PASSAGES_DIR = processed_data_dir / "sampled_passages"
 MODEL_NAME = "answerdotai/ModernBERT-base"
@@ -54,6 +58,32 @@ BUCKET_BOUNDS: list[tuple[str, int, int]] = [
     ("1025-2048", 1025, 2048),
     ("2049-4096", 2049, 4096),
     ("4097-8192", 4097, 8192),
+]
+
+# Minimum number of passages in each bucket as there are too few passages in some buckets.
+MINIMUM_BUCKET_COUNTS: dict[str, int] = {
+    "1025-2048": 50,
+    "2049-4096": 50,
+    "4097-8192": 50,
+}
+
+
+@dataclass
+class BenchmarkConfig:
+    """Configuration for the max length benchmark."""
+
+    name: str
+    max_length: int
+    use_dynamic_padding: bool
+
+
+BENCHMARK_CONFIGS = [
+    BenchmarkConfig("8192_dynamic", max_length=8192, use_dynamic_padding=True),
+    BenchmarkConfig("4096_dynamic", max_length=4096, use_dynamic_padding=True),
+    BenchmarkConfig("2048_dynamic", max_length=2048, use_dynamic_padding=True),
+    BenchmarkConfig("1024_dynamic", max_length=1024, use_dynamic_padding=True),
+    BenchmarkConfig("512_dynamic", max_length=512, use_dynamic_padding=True),
+    BenchmarkConfig("512_static", max_length=512, use_dynamic_padding=False),
 ]
 
 
@@ -97,7 +127,7 @@ def _generate_passage_for_bucket(
 def build_benchmark_dataset(
     n_samples: int = 2000,
     random_seed: int = 42,
-) -> list[LabelledPassage]:
+) -> tuple[list[LabelledPassage], dict[str, int]]:
     """
     Load all sampled passages and resample to match the production token-length distribution.
 
@@ -137,7 +167,10 @@ def build_benchmark_dataset(
 
     result: list[LabelledPassage] = []
     for bucket_name, target_prop in TARGET_DISTRIBUTION.items():
-        target_count = round(n_samples * target_prop)
+        target_count = max(
+            round(n_samples * target_prop), MINIMUM_BUCKET_COUNTS.get(bucket_name, 0)
+        )
+
         available = bucketed.get(bucket_name, [])
 
         if target_count == 0:
@@ -167,7 +200,8 @@ def build_benchmark_dataset(
 
     rng.shuffle(result)
     console.log(f"\nBenchmark dataset: [bold]{len(result)} passages[/]")
-    return result
+    bucket_counts = {name: len(bucketed.get(name, [])) for name, _, _ in BUCKET_BOUNDS}
+    return result, bucket_counts
 
 
 class PassageLengthBenchmarkClassifier(bert_based.BertBasedClassifier):
@@ -457,6 +491,8 @@ def run_training_benchmark(
     max_length: int = 64,
     use_dynamic_padding: bool = True,
     enable_wandb: bool = False,
+    n_samples: int = 2000,
+    bucket_counts: dict[str, int] | None = None,
 ) -> None:
     """Run a benchmark for a given max length."""
 
@@ -470,6 +506,8 @@ def run_training_benchmark(
             config={
                 "max_passage_tokens_before_truncation": max_length,
                 "use_dynamic_padding": use_dynamic_padding,
+                "bucket_counts": bucket_counts,
+                "n_samples": n_samples,
             },
         )
     classifier = PassageLengthBenchmarkClassifier(dummy_concept)
@@ -482,7 +520,11 @@ def run_training_benchmark(
 
 
 def run_inference_benchmark(
-    dataset: list[LabelledPassage], max_length: int = 64, enable_wandb: bool = False
+    dataset: list[LabelledPassage],
+    max_length: int = 64,
+    enable_wandb: bool = False,
+    bucket_counts: dict[str, int] | None = None,
+    n_samples: int = 2000,
 ) -> None:
     """Run a benchmark for a given max length."""
     dummy_concept = Concept(
@@ -500,6 +542,8 @@ def run_inference_benchmark(
             config={
                 "max_passage_tokens_before_truncation": max_length,
                 "step": "inference",
+                "bucket_counts": bucket_counts,
+                "n_samples": n_samples,
             },
         )
     start_time = time.perf_counter()
@@ -516,7 +560,46 @@ def run_inference_benchmark(
         wandb.finish()
 
 
+@app.command()
+def main(
+    n_samples: int = 2000,
+    enable_wandb: bool = False,
+):
+    console.log(f"Building benchmark dataset with {n_samples} samples...")
+    dataset, bucket_counts = build_benchmark_dataset(n_samples=n_samples)
+
+    total = len(BENCHMARK_CONFIGS)
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        task = progress.add_task(
+            "Running benchmarks...", total=total * 2
+        )  # *2 for train + inference
+        for config in BENCHMARK_CONFIGS:
+            progress.update(task, description=f"Training {config.name}...")
+            run_training_benchmark(
+                dataset,
+                config.max_length,
+                config.use_dynamic_padding,
+                enable_wandb=enable_wandb,
+                n_samples=n_samples,
+                bucket_counts=bucket_counts,
+            )
+
+            progress.advance(task)
+
+            progress.update(task, description=f"Inference {config.name}...")
+            run_inference_benchmark(
+                dataset,
+                config.max_length,
+                enable_wandb=enable_wandb,
+                bucket_counts=bucket_counts,
+                n_samples=n_samples,
+            )
+            progress.advance(task)
+
+
 if __name__ == "__main__":
-    dataset = build_benchmark_dataset(n_samples=2000)
-    # run_training_benchmark(max_length=64, use_dynamic_padding=True, enable_wandb=True)
-    run_inference_benchmark(dataset, max_length=64, enable_wandb=True)
+    app()
