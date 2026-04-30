@@ -23,6 +23,7 @@ from knowledge_graph.wandb_helpers import (
     load_classifier_from_wandb,
     load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
+    log_labelled_passages_table_to_wandb_run,
 )
 
 app = typer.Typer()
@@ -302,6 +303,7 @@ async def run_prediction(
                     log_labelled_passages_artifact_to_wandb_run(
                         all_passages, run=run, concept=classifier.concept
                     )
+                    log_labelled_passages_table_to_wandb_run(all_passages, run=run)
                     logger.info(f"✓ Uploaded passages to W&B run {run.name}")
 
         # Re-raise the exception after saving
