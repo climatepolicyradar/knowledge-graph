@@ -1,9 +1,11 @@
 """Some helper functions for IO with Weights & Biases, to ensure consistency."""
 
+import json
 import logging
 import tempfile
 from pathlib import Path
 
+import pandas as pd
 import wandb
 from wandb.sdk.wandb_run import Run as WandbRun
 
@@ -91,6 +93,41 @@ def log_labelled_passages_artifact_to_wandb_run(
         f.write(serialise_pydantic_list_as_jsonl(labelled_passages))
 
     run.log_artifact(labelled_passages_artifact)
+
+
+def log_labelled_passages_table_to_wandb_run(
+    labelled_passages: list[LabelledPassage],
+    run: WandbRun,
+    table_name: str = "passages",
+) -> None:
+    """
+    Log labelled passages as a W&B Table for in-browser inspection and human review.
+
+    The human_label, id, text, and metadata.* columns are compatible with
+    dataframe_to_labelled_passages for round-tripping reviewed labels back in.
+    """
+    if not labelled_passages:
+        return
+
+    df = pd.json_normalize([p.model_dump(mode="json") for p in labelled_passages])
+
+    if "spans" in df.columns:
+        df["spans"] = df["spans"].apply(json.dumps)
+
+    prediction_probabilities = [
+        max((s.prediction_probability or 0.0) for s in p.spans) if p.spans else None
+        for p in labelled_passages
+    ]
+
+    df.insert(
+        1, "prediction", pd.Series([int(bool(p.spans)) for p in labelled_passages])
+    )
+    df.insert(2, "prediction_probability", pd.Series(prediction_probabilities))
+    df.insert(3, "num_spans", pd.Series([len(p.spans) for p in labelled_passages]))
+    df.insert(4, "human_label", "")
+    df.insert(5, "notes", "")
+
+    run.log({table_name: wandb.Table(dataframe=df)})
 
 
 def load_artifact_from_wandb_run(

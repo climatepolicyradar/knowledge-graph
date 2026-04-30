@@ -1,9 +1,11 @@
 import asyncio
+import json
 import os
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated
 
+import snowflake.connector
 import typer
 import wandb
 from dotenv import load_dotenv
@@ -23,6 +25,7 @@ from knowledge_graph.wandb_helpers import (
     load_classifier_from_wandb,
     load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
+    log_labelled_passages_table_to_wandb_run,
 )
 
 app = typer.Typer()
@@ -45,11 +48,86 @@ def deduplicate_labelled_passages(
     return deduplicated_passages
 
 
+def load_passages_from_snowflake(
+    document_ids: list[str], minimum_text_chars: int = 0
+) -> list[LabelledPassage]:
+    """Load English passages from Snowflake for the given document IDs."""
+    logger = get_logger()
+    logger.info(
+        f"Connecting to Snowflake to load passages for {len(document_ids)} document(s)"
+    )
+
+    con = snowflake.connector.connect(connection_name="local_dev")
+    cur = con.cursor()
+
+    placeholders = ", ".join(["%s"] * len(document_ids))
+    query = f"""
+    SELECT
+        p.CONTENT AS text_block_text,
+        p.content_type AS text_block_type,
+        d.DOCUMENT_ID,
+        d.content_type AS document_content_type,
+        d.document_name AS document_name,
+        d.document_slug AS document_slug,
+        d.TRANSLATED AS document_metadata_translated,
+        d.METADATA_CORPUS_TYPE_NAME AS document_metadata_corpus_type_name,
+        d.METADATA_GEOGRAPHIES AS document_metadata_geographies
+    FROM PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS_V1 d
+    JOIN PRODUCTION.PUBLISHED.PIPELINE_PASSAGES_V2 p
+        ON d.DOCUMENT_ID = p.DOCUMENT_ID
+    WHERE p.LANGUAGE = 'en'
+      AND p.CONTENT IS NOT NULL
+      AND LENGTH(p.CONTENT) > {minimum_text_chars}
+      AND d.DOCUMENT_ID IN ({placeholders})
+    """
+
+    cur.execute(query, document_ids)
+    df = cur.fetch_pandas_all()
+    con.close()
+
+    logger.info(f"✓ Loaded {len(df)} passages from Snowflake")
+
+    rename_cols = {
+        "TEXT_BLOCK_TEXT": "text_block.text",
+        "TEXT_BLOCK_TYPE": "text_block.type",
+        "DOCUMENT_ID": "document_id",
+        "DOCUMENT_CONTENT_TYPE": "document_content_type",
+        "DOCUMENT_NAME": "document_name",
+        "DOCUMENT_SLUG": "document_slug",
+        "DOCUMENT_METADATA_TRANSLATED": "document_metadata.translated",
+        "DOCUMENT_METADATA_CORPUS_TYPE_NAME": "document_metadata.corpus_type_name",
+        "DOCUMENT_METADATA_GEOGRAPHIES": "document_metadata.geographies",
+    }
+    df = df.rename(columns=rename_cols)
+
+    df["document_metadata.geographies"] = df["document_metadata.geographies"].apply(
+        lambda x: json.loads(x) if isinstance(x, str) else x
+    )
+
+    labelled_passages = []
+    for _, row in df.iterrows():
+        metadata = row.to_dict()
+        metadata.pop("text_block.text")
+        for key, value in metadata.items():
+            if hasattr(value, "tolist"):
+                metadata[key] = value.tolist()
+        labelled_passages.append(
+            LabelledPassage(
+                text=str(row["text_block.text"]),
+                metadata=metadata,
+                spans=[],
+            )
+        )
+
+    return labelled_passages
+
+
 async def run_prediction(
     wikibase_id: WikibaseID,
     classifier_wandb_path: str,
     labelled_passages_path: Path | None = None,
     labelled_passages_wandb_run_path: str | None = None,
+    input_passages: list[LabelledPassage] | None = None,
     track_and_upload: bool = True,
     batch_size: int = 15,
     limit: int | None = None,
@@ -101,19 +179,19 @@ async def run_prediction(
             raise ValueError(
                 "Both `labelled_passages_path` and `labelled_passages_run_name` cannot be defined."
             )
+        elif input_passages is not None:
+            labelled_passages: list[LabelledPassage] = input_passages
         elif labelled_passages_path:
-            labelled_passages: list[LabelledPassage] = (
-                deserialise_pydantic_list_with_fallback(
-                    content=labelled_passages_path.read_text(),
-                    model_class=LabelledPassage,
-                )
+            labelled_passages = deserialise_pydantic_list_with_fallback(
+                content=labelled_passages_path.read_text(),
+                model_class=LabelledPassage,
             )
         elif labelled_passages_wandb_run_path:
             wandb_run = wandb_api.run(labelled_passages_wandb_run_path)
             labelled_passages = load_labelled_passages_from_wandb(run=wandb_run)
         else:
             raise ValueError(
-                "One of `labelled_passages_path` and `labelled_passages_run_name` must be defined."
+                "One of `labelled_passages_path`, `labelled_passages_wandb_run_path`, or `input_passages` must be provided."
             )
 
         already_predicted_passages: list[LabelledPassage] = []
@@ -302,6 +380,7 @@ async def run_prediction(
                     log_labelled_passages_artifact_to_wandb_run(
                         all_passages, run=run, concept=classifier.concept
                     )
+                    log_labelled_passages_table_to_wandb_run(all_passages, run=run)
                     logger.info(f"✓ Uploaded passages to W&B run {run.name}")
 
         # Re-raise the exception after saving
@@ -397,6 +476,92 @@ def main(
             classifier_wandb_path=classifier_wandb_path,
             labelled_passages_path=labelled_passages_path,
             labelled_passages_wandb_run_path=labelled_passages_wandb_run_path,
+            track_and_upload=track_and_upload,
+            batch_size=batch_size,
+            limit=limit,
+            deduplicate_inputs=deduplicate_inputs,
+            exclude_training_data=exclude_training_data,
+            prediction_threshold=prediction_threshold,
+            stop_after_n_positives=stop_after_n_positives,
+            restart_from_wandb_run=restart_from_wandb_run,
+        )
+    )
+
+
+@app.command()
+def documents(
+    document_ids: Annotated[
+        list[str],
+        typer.Argument(help="One or more document IDs to load passages from Snowflake"),
+    ],
+    wikibase_id: Annotated[
+        WikibaseID,
+        typer.Option(
+            ...,
+            help="The Wikibase ID of the concept classifier to run",
+            parser=WikibaseID,
+        ),
+    ],
+    classifier_wandb_path: Annotated[
+        str,
+        typer.Option(
+            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
+        ),
+    ],
+    track_and_upload: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Whether to track the run with Weights & Biases and upload results.",
+        ),
+    ] = True,
+    batch_size: int = typer.Option(
+        15,
+        help="Number of passages to process in each batch",
+    ),
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            ...,
+            help="Optionally limit the number of passages predicted on",
+        ),
+    ] = None,
+    deduplicate_inputs: bool = typer.Option(
+        True,
+        help="Remove duplicate passages based on text content before prediction",
+    ),
+    exclude_training_data: bool = typer.Option(
+        True,
+        help="Exclude passages that were in the model's training data from prediction",
+    ),
+    prediction_threshold: float | None = typer.Option(
+        None, help="Optional prediction threshold for the classifier."
+    ),
+    stop_after_n_positives: Annotated[
+        int | None,
+        typer.Option(
+            help="Stop prediction after finding this many positive passages",
+        ),
+    ] = None,
+    restart_from_wandb_run: Annotated[
+        str | None,
+        typer.Option(
+            help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
+        ),
+    ] = None,
+):
+    """
+    Load passages for specific document IDs from Snowflake and run a classifier on them.
+
+    Saves predicted passages to a local directory. Tracks the run and uploads results
+    if `track_and_upload` is set.
+    """
+    passages = load_passages_from_snowflake(document_ids)
+    asyncio.run(
+        run_prediction(
+            wikibase_id=wikibase_id,
+            classifier_wandb_path=classifier_wandb_path,
+            input_passages=passages,
             track_and_upload=track_and_upload,
             batch_size=batch_size,
             limit=limit,
