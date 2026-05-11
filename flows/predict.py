@@ -1,6 +1,5 @@
 import os
 
-import boto3
 import wandb
 from prefect import flow
 from pydantic import SecretStr
@@ -31,13 +30,6 @@ async def _set_up_prediction_environment(
         get_aws_ssm_param("/OpenRouter/KGApiKey", aws_env=aws_env)
     )
     os.environ["OPENROUTER_API_KEY"] = openrouter_api_key.get_secret_value()
-
-    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
-    session = boto3.session.Session(
-        profile_name=aws_env.value if use_aws_profiles else None,
-        region_name=config.bucket_region,
-    )
-    session.client("s3")
 
     return config
 
