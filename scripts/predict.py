@@ -288,7 +288,9 @@ async def run_prediction(
         region_name = "eu-west-1"
         # When running in prefect the client is instantiated earlier
         # Set this, so W&B knows where to look for AWS credentials profile
-        os.environ["AWS_PROFILE"] = aws_env
+        # Only set AWS_PROFILE when using named profiles (local dev).
+        if os.environ.get("USE_AWS_PROFILES", "false").lower() == "true":
+            os.environ["AWS_PROFILE"] = aws_env.value
         get_s3_client(aws_env, region_name)
 
         classifier = load_classifier_from_wandb(classifier_wandb_path)
