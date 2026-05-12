@@ -84,7 +84,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 
 CLASSIFIER_CPU_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 CLASSIFIER_GPU_CONCURRENCY_LIMIT: Final[PositiveInt] = 10
-INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 500
+INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 200
 CLASSIFIER_PREDICT_BATCH_SIZE: Final[PositiveInt] = 32
 AWS_ENV: str = os.environ["AWS_ENV"]
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
