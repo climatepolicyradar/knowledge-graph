@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 from collections.abc import Generator, Sequence
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -784,7 +785,8 @@ async def run_classifier_inference_on_document(
     all_spans: list[list[Span]] = classifier.predict(
         all_text, batch_size=CLASSIFIER_PREDICT_BATCH_SIZE
     )
-    logger.info(f"Completed inference on {result.document_stem}")
+    if random.random() < 0.1:
+        logger.info(f"Completed inference on {result.document_stem}")
     for spans in all_spans:
         _validate_spans(spans)
 
