@@ -78,12 +78,12 @@ class BenchmarkConfig:
 
 
 BENCHMARK_CONFIGS = [
-    BenchmarkConfig("8192_dynamic", max_length=8192, use_dynamic_padding=True),
-    BenchmarkConfig("4096_dynamic", max_length=4096, use_dynamic_padding=True),
-    BenchmarkConfig("2048_dynamic", max_length=2048, use_dynamic_padding=True),
-    BenchmarkConfig("1024_dynamic", max_length=1024, use_dynamic_padding=True),
-    BenchmarkConfig("512_dynamic", max_length=512, use_dynamic_padding=True),
     BenchmarkConfig("512_static", max_length=512, use_dynamic_padding=False),
+    BenchmarkConfig("512_dynamic", max_length=512, use_dynamic_padding=True),
+    BenchmarkConfig("1024_dynamic", max_length=1024, use_dynamic_padding=True),
+    BenchmarkConfig("2048_dynamic", max_length=2048, use_dynamic_padding=True),
+    BenchmarkConfig("4096_dynamic", max_length=4096, use_dynamic_padding=True),
+    # BenchmarkConfig("8192_dynamic", max_length=8192, use_dynamic_padding=True),
 ]
 
 
