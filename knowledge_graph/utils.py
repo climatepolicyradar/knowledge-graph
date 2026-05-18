@@ -9,6 +9,7 @@ import prefect
 import prefect.exceptions
 import prefect.logging
 from pydantic import BaseModel, ValidationError
+from rich.logging import RichHandler
 
 LoggingAdapter = logging.LoggerAdapter[logging.Logger]
 
@@ -32,6 +33,8 @@ def get_logger() -> logging.Logger | LoggingAdapter:
         return prefect.logging.get_run_logger()
     except prefect.exceptions.MissingContextError:
         logger = logging.getLogger("knowledge_graph")
+        if not logger.handlers:
+            logger.addHandler(RichHandler())
         if not logger.level:
             logger.setLevel(logging.INFO)
         return logger
