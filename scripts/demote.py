@@ -1,12 +1,10 @@
 """A script for model demotion."""
 
-import logging
 import os
 from typing import Annotated, Optional
 
 import typer
 import wandb
-from rich.logging import RichHandler
 
 from knowledge_graph.cloud import (
     AwsEnv,
@@ -16,18 +14,10 @@ from knowledge_graph.cloud import (
 )
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.utils import get_logger
 from knowledge_graph.version import Version, get_latest_model_version
 
-logging.basicConfig(
-    level="INFO",
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[
-        RichHandler(rich_tracebacks=True),
-    ],
-)
-
-log = logging.getLogger("rich")
+log = get_logger()
 
 WANDB_MODEL_ORG = "climatepolicyradar_UZODYJSN66HCQ"
 WANDB_MODEL_REGISTRY = "wandb-registry-model"

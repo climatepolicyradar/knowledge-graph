@@ -16,7 +16,6 @@ See vibe-checker/README.md for more details!
 
 import io
 import json
-import logging
 import os
 import random
 from datetime import datetime
@@ -32,10 +31,8 @@ from mypy_boto3_s3 import S3Client
 from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
 from prefect.futures import wait
-from prefect.logging import get_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 from pydantic import Field
-from rich.logging import RichHandler
 from sentence_transformers import SentenceTransformer
 
 from flows.config import Config
@@ -44,7 +41,7 @@ from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
-from knowledge_graph.utils import serialise_pydantic_list_as_jsonl
+from knowledge_graph.utils import get_logger, serialise_pydantic_list_as_jsonl
 from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 from scripts.train import run_training
 
@@ -97,13 +94,7 @@ def _get_bucket_name_from_ssm() -> str:
         ) from e
 
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(message)s",
-    handlers=[RichHandler(markup=True, rich_tracebacks=True)],
-)
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 def get_s3_client() -> S3Client:
