@@ -360,6 +360,11 @@ async def run_prediction(
                         f"Processed {passages_processed}/{len(labelled_passages)} passages"
                     )
 
+        except KeyboardInterrupt:
+            logger.info(
+                f"Prediction stopped early by user. "
+                f"Saving {len(output_labelled_passages)} passages predicted thus far..."
+            )
         except Exception as e:
             prediction_exception = e
             logger.error(f"⚠ Prediction failed: {e}")
