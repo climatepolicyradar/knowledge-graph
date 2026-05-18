@@ -9,8 +9,15 @@ import snowflake.connector
 import typer
 import wandb
 from dotenv import load_dotenv
+from prefect.client.schemas.objects import FlowRun
+from prefect.deployments import run_deployment
 
-from knowledge_graph.cloud import AwsEnv, get_s3_client
+from flows.utils import get_flow_run_ui_url
+from knowledge_graph.cloud import (
+    AwsEnv,
+    generate_deployment_name,
+    get_s3_client,
+)
 from knowledge_graph.config import WANDB_ENTITY, predictions_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -465,6 +472,13 @@ def main(
             help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
         ),
     ] = None,
+    use_prefect: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help=("Run on Prefect. Note that the results won't be available locally."),
+        ),
+    ] = False,
 ):
     """
     Load labelled passages from local dir or W&B, and run a classifier on them.
@@ -472,22 +486,51 @@ def main(
     Saves predicted passages to a local directory. Tracks the run and uploads results
     if `track_and_upload` is set.
     """
-    asyncio.run(
-        run_prediction(
-            wikibase_id=wikibase_id,
-            classifier_wandb_path=classifier_wandb_path,
-            labelled_passages_path=labelled_passages_path,
-            labelled_passages_wandb_run_path=labelled_passages_wandb_run_path,
-            track_and_upload=track_and_upload,
-            batch_size=batch_size,
-            limit=limit,
-            deduplicate_inputs=deduplicate_inputs,
-            exclude_training_data=exclude_training_data,
-            prediction_threshold=prediction_threshold,
-            stop_after_n_positives=stop_after_n_positives,
-            restart_from_wandb_run=restart_from_wandb_run,
+    if use_prefect:
+        flow_name = "predict-adhoc"
+        deployment_name = generate_deployment_name(
+            flow_name=flow_name, aws_env=AwsEnv.production
         )
-    )
+        qualified_name = f"{flow_name}/{deployment_name}"
+
+        flow_run: FlowRun = run_deployment(  # type: ignore[misc]
+            name=qualified_name,
+            parameters={
+                "wikibase_id": wikibase_id,
+                "classifier_wandb_path": classifier_wandb_path,
+                "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
+                "track_and_upload": track_and_upload,
+                "batch_size": batch_size,
+                "limit": limit,
+                "deduplicate_inputs": deduplicate_inputs,
+                "exclude_training_data": exclude_training_data,
+                "prediction_threshold": prediction_threshold,
+                "stop_after_n_positives": stop_after_n_positives,
+                "restart_from_wandb_run": restart_from_wandb_run,
+                "aws_env": AwsEnv.production,
+            },
+            timeout=0,  # Don't wait for the flow to finish before continuing
+        )
+        get_logger().info(
+            f"Deployment started. Flow run URL: {get_flow_run_ui_url(flow_run)}"
+        )
+    else:
+        asyncio.run(
+            run_prediction(
+                wikibase_id=wikibase_id,
+                classifier_wandb_path=classifier_wandb_path,
+                labelled_passages_path=labelled_passages_path,
+                labelled_passages_wandb_run_path=labelled_passages_wandb_run_path,
+                track_and_upload=track_and_upload,
+                batch_size=batch_size,
+                limit=limit,
+                deduplicate_inputs=deduplicate_inputs,
+                exclude_training_data=exclude_training_data,
+                prediction_threshold=prediction_threshold,
+                stop_after_n_positives=stop_after_n_positives,
+                restart_from_wandb_run=restart_from_wandb_run,
+            )
+        )
 
 
 @app.command()
