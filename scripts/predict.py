@@ -323,7 +323,7 @@ async def run_prediction(
                 )
 
             logger.info(
-                "You can end prediction early by pressing Ctrl+C. This will save passages predicted thus far."
+                "You can end prediction early by pressing Ctrl+C or cancelling the Prefect flow. This will save passages predicted thus far."
             )
 
             for i in range(0, len(labelled_passages), batch_size):
