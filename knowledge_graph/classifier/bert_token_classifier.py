@@ -1,4 +1,3 @@
-import logging
 import os
 import random
 import re
@@ -12,7 +11,6 @@ import numpy as np
 import pandas as pd
 import torch
 from datasets import Dataset
-from rich.logging import RichHandler
 from seqeval.metrics import (
     accuracy_score as seqeval_accuracy_score,
 )
@@ -49,9 +47,9 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
+from knowledge_graph.utils import get_logger
 
-logging.basicConfig(handlers=[RichHandler()])
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 # BIO label scheme
 O_LABEL = 0

@@ -1,4 +1,3 @@
-import logging
 import os
 import random
 import re
@@ -11,7 +10,6 @@ import numpy as np
 import pandas as pd
 import torch
 from datasets import Dataset
-from rich.logging import RichHandler
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
@@ -38,9 +36,9 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
+from knowledge_graph.utils import get_logger
 
-logging.basicConfig(handlers=[RichHandler()])
-logger = logging.getLogger(__name__)
+logger = get_logger()
 
 
 def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
