@@ -484,6 +484,13 @@ def main(
             help=("Run on Prefect. Note that the results won't be available locally."),
         ),
     ] = False,
+    aws_env: Annotated[
+        AwsEnv,
+        typer.Option(
+            ...,
+            help="AWS environment to use for downloading the model from S3",
+        ),
+    ] = AwsEnv.production,
 ):
     """
     Load labelled passages from local dir or W&B, and run a classifier on them.
@@ -493,9 +500,7 @@ def main(
     """
     if use_prefect:
         flow_name = "predict-adhoc"
-        deployment_name = generate_deployment_name(
-            flow_name=flow_name, aws_env=AwsEnv.production
-        )
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
         qualified_name = f"{flow_name}/{deployment_name}"
 
         flow_run: FlowRun = run_deployment(  # type: ignore[misc]
@@ -512,7 +517,7 @@ def main(
                 "prediction_threshold": prediction_threshold,
                 "stop_after_n_positives": stop_after_n_positives,
                 "restart_from_wandb_run": restart_from_wandb_run,
-                "aws_env": AwsEnv.production,
+                "aws_env": aws_env,
             },
             timeout=0,  # Don't wait for the flow to finish before continuing
         )
