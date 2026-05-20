@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import random
 from abc import ABC, abstractmethod
 from typing import Annotated, Optional, Sequence
@@ -24,8 +23,7 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span, SpanXMLConceptFormattingError
-
-logger = logging.getLogger(__name__)
+from knowledge_graph.utils import get_logger
 
 
 class LLMResponse(BaseModel):
@@ -250,6 +248,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         :param float | None threshold: Optional prediction threshold
         :return list[Span]: A list of spans identified in the text
         """
+        logger = get_logger()
         if threshold is not None:
             logger.warning(
                 f"`threshold` parameter ignored - {self.__class__.__name__} does not output prediction probabilities",
@@ -301,6 +300,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         :param float | None threshold: Optional prediction threshold
         :return list[list[Span]]: A list of span lists identified in each text
         """
+        logger = get_logger()
         self._check_and_nest_event_loop()
 
         async def run_predictions():
