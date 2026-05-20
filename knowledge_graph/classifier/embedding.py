@@ -1,4 +1,3 @@
-import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -15,8 +14,9 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, Identifier
 from knowledge_graph.span import Span
+from knowledge_graph.utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _EmbeddingCache:

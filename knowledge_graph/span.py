@@ -1,4 +1,3 @@
-import logging
 import re
 from collections import OrderedDict
 from datetime import datetime
@@ -9,8 +8,9 @@ from pydantic import BaseModel, Field, computed_field, model_validator
 from typing_extensions import Self
 
 from knowledge_graph.identifiers import Identifier, WikibaseID
+from knowledge_graph.utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SpanXMLConceptFormattingError(Exception):
