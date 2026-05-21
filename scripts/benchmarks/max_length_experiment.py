@@ -250,6 +250,8 @@ class PassageLengthBenchmarkClassifier(bert_based.BertBasedClassifier):
         *,
         max_length: int = 512,
         use_dynamic_padding: bool = True,
+        group_by_length: bool = True,
+        batch_size: int = 32,
         **kwargs,
     ) -> "PassageLengthBenchmarkClassifier":
         """
@@ -373,11 +375,13 @@ class PassageLengthBenchmarkClassifier(bert_based.BertBasedClassifier):
             training_args = TrainingArguments(
                 output_dir=os.path.join(temp_dir, "results"),
                 # high number of train epochs as we enable early stopping below
-                num_train_epochs=10,
+                num_train_epochs=1,
                 # batch size scales with dataset size, to avoid batches or epochs that
                 # have too few batches which leads to unstable training
-                per_device_train_batch_size=min(64, max(16, len(train_dataset) // 10)),
-                per_device_eval_batch_size=64,
+                per_device_train_batch_size=min(
+                    batch_size, max(16, len(train_dataset) // 10)
+                ),
+                per_device_eval_batch_size=batch_size,
                 # gradient clipping for more stable updates
                 max_grad_norm=1.0,
                 learning_rate=2e-4 if self.unfreeze_layers > 0 else 5e-4,
@@ -401,6 +405,7 @@ class PassageLengthBenchmarkClassifier(bert_based.BertBasedClassifier):
                 # W&B-specific settings when enabled
                 run_name=f"{self.concept.id}_{self.name}" if enable_wandb else None,
                 log_level="info" if enable_wandb else "warning",
+                group_by_length=group_by_length,
             )
 
             trainer = bert_based.WeightedTrainer(
@@ -493,6 +498,8 @@ def run_training_benchmark(
     enable_wandb: bool = False,
     n_samples: int = 2000,
     bucket_counts: dict[str, int] | None = None,
+    group_by_length: bool = True,
+    batch_size: int = 32,
 ) -> None:
     """Run a benchmark for a given max length."""
 
@@ -506,8 +513,10 @@ def run_training_benchmark(
             config={
                 "max_passage_tokens_before_truncation": max_length,
                 "use_dynamic_padding": use_dynamic_padding,
+                "group_by_length": group_by_length,
                 "bucket_counts": bucket_counts,
                 "n_samples": n_samples,
+                "batch_size": batch_size,
             },
         )
     classifier = PassageLengthBenchmarkClassifier(dummy_concept)
