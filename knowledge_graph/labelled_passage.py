@@ -1,5 +1,4 @@
 import html
-import logging
 import re
 from collections import defaultdict
 from datetime import datetime
@@ -10,8 +9,9 @@ from pydantic import BaseModel, Field, model_validator
 
 from knowledge_graph.identifiers import Identifier, WikibaseID
 from knowledge_graph.span import Span, merge_overlapping_spans
+from knowledge_graph.utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LabelledPassage(BaseModel):

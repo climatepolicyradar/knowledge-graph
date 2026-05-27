@@ -1,4 +1,3 @@
-import logging
 import re
 from datetime import datetime
 
@@ -6,8 +5,9 @@ from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span, merge_overlapping_spans
+from knowledge_graph.utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class KeywordClassifier(Classifier, ZeroShotClassifier):

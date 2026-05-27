@@ -38,7 +38,7 @@ from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
 from knowledge_graph.utils import get_logger
 
-logger = get_logger()
+logger = get_logger(__name__)
 
 
 def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:

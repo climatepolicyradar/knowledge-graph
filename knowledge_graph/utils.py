@@ -14,7 +14,7 @@ from rich.logging import RichHandler
 LoggingAdapter = logging.LoggerAdapter[logging.Logger]
 
 
-def get_logger() -> logging.Logger | LoggingAdapter:
+def get_logger(name: str = "knowledge_graph") -> logging.Logger | LoggingAdapter:
     """
     Get a logger via Prefect.
 
@@ -32,12 +32,12 @@ def get_logger() -> logging.Logger | LoggingAdapter:
     try:
         return prefect.logging.get_run_logger()
     except prefect.exceptions.MissingContextError:
-        logger = logging.getLogger("knowledge_graph")
-        if not logger.handlers:
-            logger.addHandler(RichHandler())
-        if not logger.level:
-            logger.setLevel(logging.INFO)
-        return logger
+        root = logging.getLogger("knowledge_graph")
+        if not root.handlers:
+            root.addHandler(RichHandler())
+        if not root.level:
+            root.setLevel(logging.INFO)
+        return logging.getLogger(name)
 
 
 T = TypeVar("T")

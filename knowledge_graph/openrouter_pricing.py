@@ -1,12 +1,13 @@
 """Fetch pricing information from OpenRouter API."""
 
-import logging
 from typing import Optional
 
 import httpx
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+from knowledge_graph.utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class ModelPricing(BaseModel):

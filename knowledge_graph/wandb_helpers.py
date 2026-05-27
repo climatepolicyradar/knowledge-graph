@@ -1,7 +1,6 @@
 """Some helper functions for IO with Weights & Biases, to ensure consistency."""
 
 import json
-import logging
 import tempfile
 from pathlib import Path
 
@@ -18,10 +17,11 @@ from knowledge_graph.config import (
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.utils import (
     deserialise_pydantic_list_with_fallback,
+    get_logger,
     serialise_pydantic_list_as_jsonl,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class WandbArtifactNotFoundError(Exception):

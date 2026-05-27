@@ -1,4 +1,3 @@
-import logging
 from typing import Any, Sequence, cast, overload
 
 from rich.console import Console
@@ -18,9 +17,9 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span
-from knowledge_graph.utils import iterate_batch
+from knowledge_graph.utils import get_logger, iterate_batch
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class IncompatibleSubClassifiersError(Exception):

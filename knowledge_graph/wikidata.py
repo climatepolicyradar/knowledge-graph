@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from typing import Optional
 
 import httpx
@@ -15,8 +14,9 @@ from knowledge_graph.async_bridge import async_to_sync
 from knowledge_graph.concept import Concept
 from knowledge_graph.exceptions import ConceptNotFoundError
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 MAX_RETRIES = 5

@@ -248,7 +248,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         :param float | None threshold: Optional prediction threshold
         :return list[Span]: A list of spans identified in the text
         """
-        logger = get_logger()
+        logger = get_logger(__name__)
         if threshold is not None:
             logger.warning(
                 f"`threshold` parameter ignored - {self.__class__.__name__} does not output prediction probabilities",
@@ -300,7 +300,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         :param float | None threshold: Optional prediction threshold
         :return list[list[Span]]: A list of span lists identified in each text
         """
-        logger = get_logger()
+        logger = get_logger(__name__)
         self._check_and_nest_event_loop()
 
         async def run_predictions():

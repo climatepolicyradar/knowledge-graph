@@ -31,7 +31,7 @@ from knowledge_graph.exceptions import (
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.utils import get_logger
 
-logger = get_logger()
+logger = get_logger(__name__)
 dotenv.load_dotenv()
 
 
@@ -134,7 +134,7 @@ class WikibaseSession:
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get the HTTP client, initializing session on first use"""
-        logger = get_logger()
+        logger = get_logger(__name__)
         if self._client is None:
             logger.debug("Initialising Wikibase HTTP client and session")
             self._client = httpx.AsyncClient(timeout=self.DEFAULT_TIMEOUT)
@@ -242,7 +242,7 @@ class WikibaseSession:
                     initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT
                 ),
                 retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
-                before_sleep=before_sleep_log(get_logger(), logging.WARNING),  # type: ignore[arg-type]
+                before_sleep=before_sleep_log(get_logger(__name__), logging.WARNING),  # type: ignore[arg-type]
                 reraise=True,
             ):
                 with attempt:
@@ -553,7 +553,7 @@ class WikibaseSession:
         retry=retry_if_exception_type(
             (HTTPStatusError, RequestError, json.JSONDecodeError)
         ),
-        before_sleep=before_sleep_log(get_logger(), logging.WARNING),  # type: ignore[arg-type]
+        before_sleep=before_sleep_log(get_logger(__name__), logging.WARNING),  # type: ignore[arg-type]
         reraise=True,
     )
     async def get_concepts_async(
