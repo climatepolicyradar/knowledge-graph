@@ -7,12 +7,16 @@ from argilla import Dataset, ResponseStatus
 from hypothesis import given
 from hypothesis import strategies as st
 
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.classifier import Classifier
+from knowledge_graph.classifier.classifier import ProbabilityCapableClassifier
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import (
     ArgillaSession,
     ResourceAlreadyExistsError,
     ResourceDoesNotExistError,
+    label_passages_with_classifier,
 )
 from knowledge_graph.span import Span
 
@@ -986,3 +990,58 @@ def test_whether_format_metadata_replaces_dots_with_hyphens(metadata):
         result = session._format_metadata_keys_for_argilla(metadata)
         for key in result.keys():
             assert "." not in key, f"Key '{key}' contains a dot"
+
+
+class _DummyProbaClassifier(Classifier, ProbabilityCapableClassifier):
+    """A dummy probability-capable classifier; positive if 'yes' is in the text."""
+
+    def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
+        if "yes" in text:
+            return [
+                Span(
+                    text=text,
+                    start_index=0,
+                    end_index=len(text),
+                    concept_id=self.concept.wikibase_id,
+                    prediction_probability=0.9,
+                )
+            ]
+        return []
+
+    def predict_proba_batch(self, texts) -> list[float]:
+        return [0.9 if "yes" in t else 0.1 for t in texts]
+
+    @property
+    def id(self) -> ClassifierID:
+        return ClassifierID("dummyprb")
+
+
+def test_label_passages_attaches_prediction_probabilities_when_requested():
+    """Every output passage (incl. spanless negatives) carries the passage-level prob."""
+    classifier = _DummyProbaClassifier(Concept(wikibase_id="Q1", preferred_label="t"))
+    passages = [
+        LabelledPassage(text="yes positive", spans=[], metadata={"existing": "v"}),
+        LabelledPassage(text="no negative", spans=[]),
+    ]
+
+    result = label_passages_with_classifier(
+        classifier, passages, include_prediction_probabilities=True
+    )
+
+    # span presence still distinguishes positive from negative
+    assert [bool(p.spans) for p in result] == [True, False]
+    # both carry the passage-level probability
+    assert result[0].metadata["prediction_probability"] == 0.9
+    assert result[1].metadata["prediction_probability"] == 0.1
+    # pre-existing metadata is preserved
+    assert result[0].metadata["existing"] == "v"
+
+
+def test_label_passages_omits_prediction_probabilities_by_default():
+    """Without the opt-in flag, metadata is left untouched."""
+    classifier = _DummyProbaClassifier(Concept(wikibase_id="Q1", preferred_label="t"))
+    passages = [LabelledPassage(text="no negative", spans=[])]
+
+    result = label_passages_with_classifier(classifier, passages)
+
+    assert "prediction_probability" not in result[0].metadata
