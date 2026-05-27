@@ -115,7 +115,10 @@ def log_labelled_passages_table_to_wandb_run(
         df["spans"] = df["spans"].apply(json.dumps)
 
     prediction_probabilities = [
-        max((s.prediction_probability or 0.0) for s in p.spans) if p.spans else None
+        max((s.prediction_probability or 0.0) for s in p.spans)
+        if p.spans
+        # negatives have no spans; fall back to the passage-level probability if set
+        else p.metadata.get("prediction_probability")
         for p in labelled_passages
     ]
 

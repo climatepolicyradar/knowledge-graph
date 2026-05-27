@@ -334,6 +334,7 @@ async def run_prediction(
                     labelled_passages=batch,
                     batch_size=batch_size,
                     show_progress=True,
+                    include_prediction_probabilities=True,
                 )
 
                 passages_processed += len(batch)
@@ -497,6 +498,10 @@ def main(
 
     Saves predicted passages to a local directory. Tracks the run and uploads results
     if `track_and_upload` is set.
+
+    For probability-capable classifiers inference is run twice per passage – once to
+    get the prediction, and once to get the prediction probability. This is due to the
+    fact that we only store `Span` objects for *positive* predictions.
     """
     if use_prefect:
         flow_name = "predict-adhoc"
