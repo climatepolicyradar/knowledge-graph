@@ -1,7 +1,10 @@
 """Tests for BertTokenClassifier alignment and span reconstruction utilities."""
 
+from unittest.mock import MagicMock
+
 import numpy as np
 import pytest
+import torch
 from transformers import EvalPrediction
 
 from knowledge_graph.classifier.bert_token_classifier import (
@@ -9,6 +12,7 @@ from knowledge_graph.classifier.bert_token_classifier import (
     I_LABEL,
     IGNORE_LABEL,
     O_LABEL,
+    BertTokenClassifier,
     _align_labels_with_tokens,
     _compute_entity_metrics,
     _reconstruct_spans_from_predictions,
@@ -337,3 +341,53 @@ class TestComputeEntityMetrics:
         assert result["precision"] == pytest.approx(0.0)
         assert result["recall"] == pytest.approx(0.0)
         assert result["f1"] == pytest.approx(0.0)
+
+
+class TestPredictProbaBatch:
+    """Tests for BertTokenClassifier.predict_proba_batch (passage-level probability)."""
+
+    @staticmethod
+    def _make_classifier(logits: torch.Tensor, attention_mask, offset_mapping):
+        """Build a classifier with a mocked tokenizer/model (no model download)."""
+        clf = BertTokenClassifier.__new__(BertTokenClassifier)
+        clf._use_dropout_during_inference = False
+        clf.device = "cpu"
+
+        batch = {
+            "input_ids": torch.zeros_like(logits[..., 0], dtype=torch.long),
+            "attention_mask": torch.tensor(attention_mask),
+            "offset_mapping": torch.tensor(offset_mapping),
+        }
+        clf.tokenizer = MagicMock(return_value=batch)
+        clf.model = MagicMock(return_value=MagicMock(logits=logits))
+        return clf
+
+    def test_max_non_o_probability_over_content_tokens(self):
+        """Returns max P(not-O) over content tokens; specials/padding are excluded."""
+        # Two passages, seq_len 4, labels [O, B, I]. Peaked logits ⇒ ~one-hot softmax.
+        POS = [0.0, 10.0, 0.0]  # P(not-O) ≈ 1
+        NEG = [10.0, 0.0, 0.0]  # P(not-O) ≈ 0
+        logits = torch.tensor(
+            [
+                # passage 0: [CLS]=O, content=POS, content=NEG, [SEP]=POS(masked)
+                [NEG, POS, NEG, POS],
+                # passage 1: [CLS]=POS(masked), content=NEG, [SEP]=POS(masked), PAD=POS(masked)
+                [POS, NEG, POS, POS],
+            ]
+        )
+        attention_mask = [[1, 1, 1, 1], [1, 1, 1, 0]]
+        # special tokens (and padding) have a zero-width (0, 0) offset
+        offset_mapping = [
+            [[0, 0], [0, 3], [3, 6], [0, 0]],
+            [[0, 0], [0, 3], [0, 0], [0, 0]],
+        ]
+        clf = self._make_classifier(logits, attention_mask, offset_mapping)
+
+        probs = clf.predict_proba_batch(["positive passage", "negative passage"])
+
+        assert len(probs) == 2
+        assert all(0.0 <= p <= 1.0 for p in probs)
+        # passage 0 has a strongly-positive content token; passage 1 does not
+        assert probs[0] > 0.9
+        assert probs[1] < 0.1
+        assert probs[0] > probs[1]

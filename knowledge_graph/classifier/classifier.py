@@ -336,6 +336,18 @@ class ProbabilityCapableClassifier(ABC):
     overwrites probabilities – like the VotingClassifier.
     """
 
+    @abstractmethod
+    def predict_proba_batch(self, texts: Sequence[str]) -> list[float]:
+        """
+        Return per-text positive-class probability P(class=1) in [0, 1].
+
+        Unlike `predict`, which only emits a `Span` (and thus a probability) for
+        positive predictions, this returns a probability for *every* text, including
+        negatives, independent of the threshold/argmax decision. This is needed for
+        threshold calibration and for reporting probabilities on negative predictions.
+        """
+        ...
+
 
 @runtime_checkable
 class VariantEnabledClassifier(Protocol):
