@@ -133,6 +133,13 @@ class BaseTargetClassifier(
             results.append(spans)
         return results
 
+    def predict_proba_batch(self, texts: Sequence[str]) -> list[float]:
+        """Return the per-text positive-class probability for the target type."""
+        predictions: list[list[dict]] = self.pipeline(
+            texts, padding=True, truncation=True, top_k=None
+        )
+        return [self._get_score(prediction) for prediction in predictions]
+
     def fit(self, **kwargs) -> "BaseTargetClassifier":
         """Targets classifiers cannot be trained directly."""
         warnings.warn(
