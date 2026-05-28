@@ -200,19 +200,25 @@ def labelled_passages_to_dataframe(
 
     boolean_predictions = [bool(lp.spans) for lp in labelled_passages]
 
-    if all(
-        [
-            span.prediction_probability is None
-            for lp in labelled_passages
-            for span in lp.spans
-        ]
-    ):
+    # Positives carry their probability on spans; negatives (no spans) carry it on
+    # metadata["prediction_probability"], if the classifier produced one.
+    has_span_probability = any(
+        span.prediction_probability is not None
+        for lp in labelled_passages
+        for span in lp.spans
+    )
+    has_metadata_probability = any(
+        lp.metadata.get("prediction_probability") is not None
+        for lp in labelled_passages
+    )
+
+    if not has_span_probability and not has_metadata_probability:
         prediction_probabilities = [None] * len(labelled_passages)
     else:
         prediction_probabilities = [
             max([span.prediction_probability or 0 for span in lp.spans])
             if lp.spans
-            else 0
+            else lp.metadata.get("prediction_probability", 0)
             for lp in labelled_passages
         ]
 

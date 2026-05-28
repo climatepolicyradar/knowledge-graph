@@ -24,6 +24,7 @@ from dotenv import find_dotenv, load_dotenv
 from pydantic import SecretStr
 
 from knowledge_graph.classifier import Classifier
+from knowledge_graph.classifier.classifier import ProbabilityCapableClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import (
@@ -778,11 +779,16 @@ def label_passages_with_classifier(
     labelled_passages: list[LabelledPassage],
     batch_size: int = 16,
     show_progress: bool = False,
+    include_prediction_probabilities: bool = False,
 ) -> list[LabelledPassage]:
     """
     Label passages using the provided classifier.
 
     Overwrites any spans that already exist in the labelled passages.
+
+    If `include_prediction_probabilities` is set and the classifier is a
+    `ProbabilityCapableClassifier`, the passage-level P(class=1) is stored under
+    `metadata["prediction_probability"]` on every output passage, including negatives.
     """
 
     input_texts = [lp.text for lp in labelled_passages]
@@ -792,13 +798,23 @@ def label_passages_with_classifier(
         show_progress=show_progress,
     )
 
-    output_labelled_passages = [
-        labelled_passage.model_copy(
-            update={"spans": model_predicted_spans[idx]},
-            deep=True,
+    prediction_probabilities: list[float] | None = None
+    if include_prediction_probabilities and isinstance(
+        classifier, ProbabilityCapableClassifier
+    ):
+        prediction_probabilities = classifier.predict_proba_batch(input_texts)
+
+    output_labelled_passages = []
+    for idx, labelled_passage in enumerate(labelled_passages):
+        update: dict = {"spans": model_predicted_spans[idx]}
+        if prediction_probabilities is not None:
+            update["metadata"] = {
+                **labelled_passage.metadata,
+                "prediction_probability": prediction_probabilities[idx],
+            }
+        output_labelled_passages.append(
+            labelled_passage.model_copy(update=update, deep=True)
         )
-        for idx, labelled_passage in enumerate(labelled_passages)
-    ]
 
     return output_labelled_passages
 
