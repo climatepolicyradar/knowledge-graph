@@ -24,6 +24,7 @@ from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
+from flows.generate_vibe_checker_embeddings import generate_vibe_checker_embeddings
 from flows.index import index, index_batch_of_documents
 from flows.inference import (
     inference,
@@ -424,6 +425,22 @@ async def main() -> None:
         },
         env_schedules={
             AwsEnv.labs: "0 8 * * MON-THU",  # Every working day at 8am
+        },
+    )
+
+    await create_deployment(
+        flow=generate_vibe_checker_embeddings,  # pyright: ignore[reportArgumentType]
+        description="Generate vibe-checker passage embeddings from the combined dataset in s3://cpr-kg-feather-files",
+        gpu=True,
+        # Coiled GPU job variables (cores + memory string), matching the other
+        # gpu=True deployments
+        flow_variables={
+            "cpu": 8,
+            "memory": "32 GiB",
+        },
+        env_schedules={
+            # 03:00 on the 1st of each month, before any 8am vibe-check run
+            AwsEnv.labs: "0 3 1 * *",
         },
     )
 
