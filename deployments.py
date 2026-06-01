@@ -21,6 +21,7 @@ from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
 
 from flows.aggregate import aggregate, aggregate_batch_of_documents
+from flows.build_dataset_flow import build_dataset_flow
 from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
@@ -409,6 +410,24 @@ async def main() -> None:
         description="Deploy all Argilla datasets to Huggingface",
         env_schedules={
             AwsEnv.labs: "0 0 * * *",  # Every day at midnight
+        },
+    )
+
+    # Build Dataset
+
+    await create_deployment(
+        flow=build_dataset_flow,
+        description=(
+            "Build the combined and balanced sampled passage "
+            "datasets from Snowflake and upload as feather files to S3."
+        ),
+        flow_variables={
+            **DEFAULT_FLOW_VARIABLES,
+            "cpu": MEGABYTES_PER_GIGABYTE * 8,
+            "memory": MEGABYTES_PER_GIGABYTE * 32,
+        },
+        env_schedules={
+            AwsEnv.production: "0 8 1 * *",  # 8am on the 1st of each month
         },
     )
 
