@@ -1,14 +1,17 @@
 import math
 from contextlib import nullcontext
+from io import BytesIO
 from typing import Annotated, Optional, cast
 
-import click
 import pandas as pd
-import typer
 import wandb
+from prefect import flow
+from pydantic import Field, SecretStr
 
+from flows.config import Config
 from knowledge_graph.classifier import EmbeddingClassifier, KeywordClassifier
 from knowledge_graph.classifier.classifier import Classifier
+from knowledge_graph.cloud import AwsEnv, get_async_session, get_aws_ssm_param
 from knowledge_graph.config import WANDB_ENTITY, equity_columns, processed_data_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -17,8 +20,6 @@ from knowledge_graph.utils import get_logger, serialise_pydantic_list_as_jsonl
 from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb_run
 from knowledge_graph.wikibase import WikibaseSession
 from scripts.train import parse_kwargs_from_strings
-
-app = typer.Typer()
 
 CORPUS_TYPES = [
     "Litigation",
@@ -32,62 +33,61 @@ CORPUS_TYPES = [
 ]
 
 
-@app.command()
-def main(
+@flow
+async def sample(
     wikibase_id: Annotated[
         WikibaseID,
-        typer.Option(
-            ...,
-            help="The Wikibase ID of the concept to sample passages for",
-            parser=WikibaseID,
-        ),
+        Field(description="The Wikibase ID of the concept to sample passages for"),
     ],
-    sample_size: int = typer.Option(130, help="The number of passages to sample"),
-    min_negative_proportion: float = typer.Option(
-        0.1, help="The minimum proportion of negative samples to take"
-    ),
-    dataset_name: str = typer.Option(
-        "balanced",
-        help="Dataset to use",
-        click_type=click.Choice(["balanced", "combined"]),
-    ),
+    dataset_name: Annotated[
+        str,
+        Field(description="Dataset to use", json_schema_extra={"enum": ["balanced", "combined"]}),
+    ] = "balanced",
+    sample_size: Annotated[
+        int,
+        Field(description="The number of passages to sample"),
+    ] = 130,
+    min_negative_proportion: Annotated[
+        float,
+        Field(description="The minimum proportion of negative samples to take"),
+    ] = 0.1,
     corpus_types_include: Annotated[
         Optional[list[str]],
-        typer.Option(
-            help="Corpus types to include. Can be specified multiple times. If not set, all types are included.",
-            click_type=click.Choice(CORPUS_TYPES),
+        Field(
+            description="Corpus types to include. Can be specified multiple times. If not set, all types are included.",
         ),
     ] = None,
     corpus_types_exclude: Annotated[
         Optional[list[str]],
-        typer.Option(
-            help="Corpus types to exclude. Can be specified multiple times.",
-            click_type=click.Choice(CORPUS_TYPES),
+        Field(
+            description="Corpus types to exclude. Can be specified multiple times.",
         ),
     ] = None,
-    max_size_to_sample_from: int = typer.Option(
-        500_000,
-        help="Maximum number of passages to load from the dataset before sampling",
-    ),
-    max_negative_proportion: Optional[float] = typer.Option(
-        None,
-        help="Maximum proportion of the sample that can be negative. If not set, fills remaining sample_size after positives.",
-    ),
-    track_and_upload: bool = typer.Option(
-        True,
-        help="Whether to track the run and upload the labelled passages to W&B",
-    ),
+    max_size_to_sample_from: Annotated[
+        int,
+        Field(description="Maximum number of passages to load from the dataset before sampling"),
+    ] = 500_000,
+    max_negative_proportion: Annotated[
+        Optional[float],
+        Field(description="Maximum proportion of the sample that can be negative. If not set, fills remaining sample_size after positives."),
+    ] = None,
+    track_and_upload: Annotated[
+        bool,
+        Field(description="Whether to track the run and upload the labelled passages to W&B"),
+    ] = True,
     concept_override: Annotated[
         Optional[list[str]],
-        typer.Option(
-            help="Concept property overrides in key=value format. Can be specified multiple times.",
+        Field(
+            description="Concept property overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
-):
+    aws_env: AwsEnv = AwsEnv.production,
+    config: Optional[Config] = None,
+) -> None:
     """
     Evenly sample passages for concepts from the balanced dataset.
 
-    This script is used to equitably passages from our dataset(s) for instances of a
+    This flow is used to equitably passages from our dataset(s) for instances of a
     given concept. It loads concept metadata for the supplied concept and all
     subconcept IDs, and uses their metadata to create a classifier. It then samples
     passages from the passages which are likely to be instances of the concept.
@@ -99,12 +99,19 @@ def main(
     - translated or untranslated
     - type of document, eg CCLW, MCF, corporate disclosure
 
-    The sampled passages are saved to a local file.
+    The sampled passages are saved to a local file and uploaded to W&B.
 
     :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
     :type concept_override: Optional[list[str]]
     """
     logger = get_logger()
+
+    if not config:
+        config = await Config.create()
+
+    if track_and_upload:
+        wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY", aws_env=aws_env))
+        wandb.login(key=wandb_api_key.get_secret_value())
 
     # Calculate the optimal number of positive and negative samples to take
     negative_sample_size = math.floor(sample_size * min_negative_proportion)
@@ -117,17 +124,19 @@ def main(
     else:
         raise ValueError(f"Unknown dataset_name: {dataset_name}")
 
-    with nullcontext():
-        dataset_path = processed_data_dir / dataset_filename
+    # Load dataset from S3
+    session = get_async_session(aws_env=aws_env, region_name=config.bucket_region)
+    async with session.client("s3") as s3_client:
+        response = await s3_client.get_object(
+            Bucket=config.dataset_s3_bucket, Key=dataset_filename
+        )
+        body = await response["Body"].read()
 
-        try:
-            dataset = pd.read_feather(dataset_path)
-            logger.info(f"Loaded {len(dataset)} passages from {dataset_path}")
-        except FileNotFoundError as e:
-            raise FileNotFoundError(
-                f"{dataset_path} not found. If you haven't already, you should run:\n"
-                f"  just build-dataset"
-            ) from e
+    dataset = pd.read_feather(BytesIO(body))
+    logger.info(
+        f"Loaded {len(dataset)} passages from "
+        f"s3://{config.dataset_s3_bucket}/{dataset_filename}"
+    )
 
     corpus_type_col = "document_metadata.corpus_type_name"
 
@@ -157,7 +166,13 @@ def main(
         dataset = cast(pd.DataFrame, dataset.iloc[:max_size_to_sample_from])
 
     # Get the concept metadata from wikibase
-    wikibase = WikibaseSession()
+    wikibase = WikibaseSession(
+        username=config.wikibase_username,
+        password=config.wikibase_password.get_secret_value()
+        if config.wikibase_password
+        else None,
+        url=config.wikibase_url,
+    )
     concept = wikibase.get_concept(wikibase_id, include_labels_from_subconcepts=True)
 
     if concept_overrides := parse_kwargs_from_strings(concept_override):
@@ -325,7 +340,3 @@ def main(
                 concept=concept,
             )
             logger.info("✅ Labelled passages uploaded successfully")
-
-
-if __name__ == "__main__":
-    app()
