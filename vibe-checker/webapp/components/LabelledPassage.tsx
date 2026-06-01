@@ -14,23 +14,15 @@ export default function LabelledPassage({
   marked_up_text,
   metadata,
 }: LabelledPassageProps) {
-  // Build CPR document URL
-  const familySlug = metadata["document_metadata.family_slug"] || "";
-  const documentSlug = metadata["document_metadata.slug"] || "";
-  const pageNumber = Number(metadata["text_block.page_number"]) + 1;
-  const documentUrl = buildDocumentUrl(documentSlug, familySlug, pageNumber);
+  // The combined-dataset schema only exposes `document_slug` (no family slug or
+  // page number), so the document URL links to the document without a page anchor.
+  const documentUrl = buildDocumentUrl(metadata.document_slug);
+  const pubDate = new Date(metadata.publication_ts);
 
-  // Parse publication date
-  const pubDate = new Date(metadata["document_metadata.publication_ts"]);
-
-  // Function to render text with highlights
   const renderPassageText = () => {
-    // Use marked_up_text directly - pipeline includes proper CSS classes
     if (marked_up_text) {
       return <span dangerouslySetInnerHTML={{ __html: marked_up_text }} />;
     }
-
-    // Fallback to plain text if no marked_up_text available
     return <span>{text}</span>;
   };
 
@@ -60,7 +52,7 @@ export default function LabelledPassage({
       </div>
 
       <div className="text-secondary mb-2 text-sm">
-        {metadata.document_id} | Page {pageNumber}
+        {metadata.document_name} ({metadata.document_id})
       </div>
 
       <div className="passage-text text-primary leading-relaxed">

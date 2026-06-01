@@ -1,12 +1,10 @@
 export interface PredictionMetadata {
-  "text_block.text_block_id": string;
-  "text_block.page_number": string;
   document_id: string;
+  document_name: string;
+  document_slug: string;
   translated: string;
-  "document_metadata.publication_ts": string;
+  publication_ts: string;
   "document_metadata.corpus_type_name": string;
-  "document_metadata.slug"?: string;
-  "document_metadata.family_slug"?: string;
   world_bank_region: string;
   similarity: string;
 }

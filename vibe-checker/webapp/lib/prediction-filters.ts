@@ -33,9 +33,7 @@ export function filterPredictions(
     }
 
     if (filters.publication_year_start || filters.publication_year_end) {
-      const year = new Date(
-        metadata["document_metadata.publication_ts"],
-      ).getFullYear();
+      const year = new Date(metadata.publication_ts).getFullYear();
       if (
         (filters.publication_year_start &&
           year < filters.publication_year_start) ||
