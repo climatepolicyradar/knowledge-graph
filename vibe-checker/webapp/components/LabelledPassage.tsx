@@ -14,9 +14,12 @@ export default function LabelledPassage({
   marked_up_text,
   metadata,
 }: LabelledPassageProps) {
-  // The combined-dataset schema only exposes `document_slug` (no family slug or
-  // page number), so the document URL links to the document without a page anchor.
-  const documentUrl = buildDocumentUrl(metadata.document_slug);
+  // The combined-dataset schema has no page number, so the document URL links to
+  // the document (by slug + family id) without a page anchor.
+  const documentUrl = buildDocumentUrl(
+    metadata.document_slug,
+    metadata.family_slug,
+  );
   const pubDate = new Date(metadata.publication_ts);
 
   const renderPassageText = () => {

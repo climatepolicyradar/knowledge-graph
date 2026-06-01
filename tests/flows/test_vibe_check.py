@@ -22,6 +22,7 @@ def _make_passages_df(n: int) -> pd.DataFrame:
             "document_id": ["doc_1"] * n,
             "document_name": ["Test Document"] * n,
             "document_slug": ["test-document"] * n,
+            "family_slug": ["test-family"] * n,
             "translated": [False] * n,
             "publication_ts": ["2024-01-01"] * n,
             "document_metadata.corpus_type_name": ["corpus"] * n,

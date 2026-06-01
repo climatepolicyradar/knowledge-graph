@@ -140,6 +140,7 @@ def load_passages_dataset(
             "document_id",
             "document_name",
             "document_slug",
+            "family_slug",
             "translated",
             "publication_ts",
             "document_metadata.corpus_type_name",

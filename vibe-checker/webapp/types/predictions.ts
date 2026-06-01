@@ -2,6 +2,7 @@ export interface PredictionMetadata {
   document_id: string;
   document_name: string;
   document_slug: string;
+  family_slug: string;
   translated: string;
   publication_ts: string;
   "document_metadata.corpus_type_name": string;
