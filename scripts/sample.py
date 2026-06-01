@@ -32,62 +32,26 @@ CORPUS_TYPES = [
 ]
 
 
-@app.command()
-def main(
-    wikibase_id: Annotated[
-        WikibaseID,
-        typer.Option(
-            ...,
-            help="The Wikibase ID of the concept to sample passages for",
-            parser=WikibaseID,
-        ),
-    ],
-    sample_size: int = typer.Option(130, help="The number of passages to sample"),
-    min_negative_proportion: float = typer.Option(
-        0.1, help="The minimum proportion of negative samples to take"
-    ),
-    dataset_name: str = typer.Option(
-        "balanced",
-        help="Dataset to use",
-        click_type=click.Choice(["balanced", "combined"]),
-    ),
-    corpus_types_include: Annotated[
-        Optional[list[str]],
-        typer.Option(
-            help="Corpus types to include. Can be specified multiple times. If not set, all types are included.",
-            click_type=click.Choice(CORPUS_TYPES),
-        ),
-    ] = None,
-    corpus_types_exclude: Annotated[
-        Optional[list[str]],
-        typer.Option(
-            help="Corpus types to exclude. Can be specified multiple times.",
-            click_type=click.Choice(CORPUS_TYPES),
-        ),
-    ] = None,
-    max_size_to_sample_from: int = typer.Option(
-        500_000,
-        help="Maximum number of passages to load from the dataset before sampling",
-    ),
-    max_negative_proportion: Optional[float] = typer.Option(
-        None,
-        help="Maximum proportion of the sample that can be negative. If not set, fills remaining sample_size after positives.",
-    ),
-    track_and_upload: bool = typer.Option(
-        True,
-        help="Whether to track the run and upload the labelled passages to W&B",
-    ),
-    concept_override: Annotated[
-        Optional[list[str]],
-        typer.Option(
-            help="Concept property overrides in key=value format. Can be specified multiple times.",
-        ),
-    ] = None,
-):
+def run_sampling(
+    wikibase_id: WikibaseID,
+    dataset: pd.DataFrame,
+    dataset_name: str = "balanced",
+    sample_size: int = 130,
+    min_negative_proportion: float = 0.1,
+    corpus_types_include: Optional[list[str]] = None,
+    corpus_types_exclude: Optional[list[str]] = None,
+    max_size_to_sample_from: int = 500_000,
+    max_negative_proportion: Optional[float] = None,
+    track_and_upload: bool = True,
+    concept_override: Optional[list[str]] = None,
+    wikibase_username: Optional[str] = None,
+    wikibase_password: Optional[str] = None,
+    wikibase_url: Optional[str] = None,
+) -> None:
     """
     Evenly sample passages for concepts from the balanced dataset.
 
-    This script is used to equitably passages from our dataset(s) for instances of a
+    This function is used to equitably passages from our dataset(s) for instances of a
     given concept. It loads concept metadata for the supplied concept and all
     subconcept IDs, and uses their metadata to create a classifier. It then samples
     passages from the passages which are likely to be instances of the concept.
@@ -99,7 +63,7 @@ def main(
     - translated or untranslated
     - type of document, eg CCLW, MCF, corporate disclosure
 
-    The sampled passages are saved to a local file.
+    The sampled passages are saved to a local file and uploaded to W&B.
 
     :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
     :type concept_override: Optional[list[str]]
@@ -109,25 +73,6 @@ def main(
     # Calculate the optimal number of positive and negative samples to take
     negative_sample_size = math.floor(sample_size * min_negative_proportion)
     positive_sample_size = sample_size - negative_sample_size
-
-    if dataset_name == "balanced":
-        dataset_filename = "sampled_dataset.feather"
-    elif dataset_name == "combined":
-        dataset_filename = "combined_dataset.feather"
-    else:
-        raise ValueError(f"Unknown dataset_name: {dataset_name}")
-
-    with nullcontext():
-        dataset_path = processed_data_dir / dataset_filename
-
-        try:
-            dataset = pd.read_feather(dataset_path)
-            logger.info(f"Loaded {len(dataset)} passages from {dataset_path}")
-        except FileNotFoundError as e:
-            raise FileNotFoundError(
-                f"{dataset_path} not found. If you haven't already, you should run:\n"
-                f"  just build-dataset"
-            ) from e
 
     corpus_type_col = "document_metadata.corpus_type_name"
 
@@ -157,7 +102,11 @@ def main(
         dataset = cast(pd.DataFrame, dataset.iloc[:max_size_to_sample_from])
 
     # Get the concept metadata from wikibase
-    wikibase = WikibaseSession()
+    wikibase = WikibaseSession(
+        username=wikibase_username,
+        password=wikibase_password,
+        url=wikibase_url,
+    )
     concept = wikibase.get_concept(wikibase_id, include_labels_from_subconcepts=True)
 
     if concept_overrides := parse_kwargs_from_strings(concept_override):
@@ -325,6 +274,93 @@ def main(
                 concept=concept,
             )
             logger.info("✅ Labelled passages uploaded successfully")
+
+
+@app.command()
+def main(
+    wikibase_id: Annotated[
+        WikibaseID,
+        typer.Option(
+            ...,
+            help="The Wikibase ID of the concept to sample passages for",
+            parser=WikibaseID,
+        ),
+    ],
+    sample_size: int = typer.Option(130, help="The number of passages to sample"),
+    min_negative_proportion: float = typer.Option(
+        0.1, help="The minimum proportion of negative samples to take"
+    ),
+    dataset_name: str = typer.Option(
+        "balanced",
+        help="Dataset to use",
+        click_type=click.Choice(["balanced", "combined"]),
+    ),
+    corpus_types_include: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            help="Corpus types to include. Can be specified multiple times. If not set, all types are included.",
+            click_type=click.Choice(CORPUS_TYPES),
+        ),
+    ] = None,
+    corpus_types_exclude: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            help="Corpus types to exclude. Can be specified multiple times.",
+            click_type=click.Choice(CORPUS_TYPES),
+        ),
+    ] = None,
+    max_size_to_sample_from: int = typer.Option(
+        500_000,
+        help="Maximum number of passages to load from the dataset before sampling",
+    ),
+    max_negative_proportion: Optional[float] = typer.Option(
+        None,
+        help="Maximum proportion of the sample that can be negative. If not set, fills remaining sample_size after positives.",
+    ),
+    track_and_upload: bool = typer.Option(
+        True,
+        help="Whether to track the run and upload the labelled passages to W&B",
+    ),
+    concept_override: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            help="Concept property overrides in key=value format. Can be specified multiple times.",
+        ),
+    ] = None,
+):
+    logger = get_logger()
+
+    if dataset_name == "balanced":
+        dataset_filename = "sampled_dataset.feather"
+    elif dataset_name == "combined":
+        dataset_filename = "combined_dataset.feather"
+    else:
+        raise ValueError(f"Unknown dataset_name: {dataset_name}")
+
+    dataset_path = processed_data_dir / dataset_filename
+
+    try:
+        dataset = pd.read_feather(dataset_path)
+        logger.info(f"Loaded {len(dataset)} passages from {dataset_path}")
+    except FileNotFoundError as e:
+        raise FileNotFoundError(
+            f"{dataset_path} not found. If you haven't already, you should run:\n"
+            f"  just build-dataset"
+        ) from e
+
+    run_sampling(
+        wikibase_id=wikibase_id,
+        dataset=dataset,
+        dataset_name=dataset_name,
+        sample_size=sample_size,
+        min_negative_proportion=min_negative_proportion,
+        corpus_types_include=corpus_types_include,
+        corpus_types_exclude=corpus_types_exclude,
+        max_size_to_sample_from=max_size_to_sample_from,
+        max_negative_proportion=max_negative_proportion,
+        track_and_upload=track_and_upload,
+        concept_override=concept_override,
+    )
 
 
 if __name__ == "__main__":
