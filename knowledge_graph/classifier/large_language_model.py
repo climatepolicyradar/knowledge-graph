@@ -213,12 +213,18 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 
     def get_variant(self) -> Self:
         """Get a variant of the classifier, using a different random seed."""
+
+        if self.temperature < 0.7:
+            get_logger().warning(
+                "LLMClassifier temperature has been set to below 0.7. This will be overridden to 0.7 when creating an ensemble, to ensure variance in the ensemble's predictions."
+            )
+
         return type(self)(
             concept=self.concept,
             model_name=self.model_name,
             system_prompt_template=self.system_prompt_template,
             random_seed=random.randint(0, 1000000),
-            temperature=self.temperature,
+            temperature=max(self.temperature, 0.7),
             structured_output=self.structured_output,
         )
 
