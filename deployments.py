@@ -24,7 +24,6 @@ from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
-from flows.generate_vibe_checker_embeddings import generate_vibe_checker_embeddings
 from flows.index import index, index_batch_of_documents
 from flows.inference import (
     inference,
@@ -38,6 +37,7 @@ from flows.train import train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import Compute, JsonDict, get_prefect_job_variables
 from flows.vibe_check import vibe_check_inference
+from flows.vibe_check_generate_datasets import generate_vibe_checker_datasets
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import (
     PROJECT_NAME,
@@ -429,7 +429,7 @@ async def main() -> None:
     )
 
     await create_deployment(
-        flow=generate_vibe_checker_embeddings,  # pyright: ignore[reportArgumentType]
+        flow=generate_vibe_checker_datasets,  # pyright: ignore[reportArgumentType]
         description="Generate vibe-checker passage embeddings from the combined dataset in s3://cpr-kg-feather-files",
         gpu=True,
         # Coiled GPU job variables (cores + memory string), matching the other

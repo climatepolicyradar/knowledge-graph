@@ -1,13 +1,9 @@
 """
-Flow to generate passage embeddings for the vibe checker.
+Flow to generate datasets for the vibe checker.
 
-Reads the combined dataset from s3://cpr-kg-feather-files (produced by the
-build_dataset Prefect flow), generates embeddings using a sentence transformer
-model, and uploads the three input files required by the vibe_check_inference
-flow to the vibe-checker S3 bucket.
-
-This flow should run on a schedule (e.g. weekly) to keep the vibe-checker
-embeddings up to date with the latest combined dataset.
+Reads the combined dataset feather file produced by the build_dataset flow), generates
+embeddings using a sentence transformer model, and uploads the three input files
+required by the vibe_check_inference flow to the vibe-checker S3 bucket.
 """
 
 import io
@@ -119,7 +115,7 @@ def upload_vibe_checker_files(
 
 
 @flow(timeout_seconds=None)
-def generate_vibe_checker_embeddings(
+def generate_vibe_checker_datasets(
     embedding_model_name: str = EMBEDDING_MODEL,
     batch_size: int = BATCH_SIZE,
 ) -> None:
@@ -141,4 +137,4 @@ def generate_vibe_checker_embeddings(
 
 
 if __name__ == "__main__":
-    generate_vibe_checker_embeddings()
+    generate_vibe_checker_datasets()
