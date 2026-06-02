@@ -51,6 +51,10 @@ class Config(BaseModel):
     """Shared Configuration used across flow runs."""
 
     cache_bucket: str | None = Field(default=None, description="S3 bucket for caching")
+    dataset_s3_bucket: str = Field(
+        default="cpr-kg-feather-files",
+        description="S3 bucket containing feather datasets produced by build_dataset",
+    )
     aggregate_document_source_prefix: S3Prefix = Field(
         default=AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT,
         description="S3 prefix for source documents are read from",
