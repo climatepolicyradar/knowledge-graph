@@ -10,6 +10,7 @@ locally with: just build-dataset-download
 """
 
 import asyncio
+import base64
 import io
 from typing import cast
 
@@ -45,7 +46,9 @@ async def _set_up_build_dataset_environment(
     snowflake_account = get_aws_ssm_param(SNOWFLAKE_ACCOUNT_SSM, aws_env=aws_env)
     snowflake_user = get_aws_ssm_param(SNOWFLAKE_USER_SSM, aws_env=aws_env)
     snowflake_private_key = SecretStr(
-        get_aws_ssm_param(SNOWFLAKE_PRIVATE_KEY_SSM, aws_env=aws_env)
+        base64.b64decode(
+            get_aws_ssm_param(SNOWFLAKE_PRIVATE_KEY_SSM, aws_env=aws_env)
+        ).decode("utf-8")
     )
 
     return config, snowflake_account, snowflake_user, snowflake_private_key
