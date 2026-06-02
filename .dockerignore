@@ -51,6 +51,7 @@ htmlcov/
 
 # Local development
 data/
+!data/raw/geography-iso-3166.csv
 *.log
 .env
 .env.local
