@@ -125,9 +125,11 @@ def run_build_dataset(
         d.content_type AS document_content_type,
         d.document_name AS document_name,
         d.document_slug AS document_slug,
+        d.METADATA_FAMILY_SLUG AS family_slug,
         d.TRANSLATED AS document_metadata_translated,
         d.METADATA_CORPUS_TYPE_NAME AS document_metadata_corpus_type_name,
-        d.METADATA_GEOGRAPHIES AS document_metadata_geographies
+        d.METADATA_GEOGRAPHIES AS document_metadata_geographies,
+        d.PUBLISHED_DATE AS document_metadata_publication_ts
     FROM PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS_V1 d
     JOIN PRODUCTION.PUBLISHED.PIPELINE_PASSAGES_V2 p
         ON d.DOCUMENT_ID = p.DOCUMENT_ID
@@ -149,9 +151,11 @@ def run_build_dataset(
             d.content_type AS document_content_type,
             d.document_name AS document_name,
             d.document_slug AS document_slug,
+            d.METADATA_FAMILY_SLUG AS family_slug,
             d.TRANSLATED AS document_metadata_translated,
             d.METADATA_CORPUS_TYPE_NAME AS document_metadata_corpus_type_name,
             d.METADATA_GEOGRAPHIES AS document_metadata_geographies,
+            d.PUBLISHED_DATE AS document_metadata_publication_ts,
             ROW_NUMBER() OVER (
                 PARTITION BY
                     d.METADATA_CORPUS_TYPE_NAME,
@@ -181,9 +185,11 @@ def run_build_dataset(
         document_content_type,
         document_name,
         document_slug,
+        family_slug,
         document_metadata_translated,
         document_metadata_corpus_type_name,
-        document_metadata_geographies
+        document_metadata_geographies,
+        document_metadata_publication_ts
     FROM stratified_sample
     ORDER BY RANDOM()
     LIMIT {presample_size}
@@ -203,9 +209,11 @@ def run_build_dataset(
         "DOCUMENT_CONTENT_TYPE": "document_content_type",
         "DOCUMENT_NAME": "document_name",
         "DOCUMENT_SLUG": "document_slug",
+        "FAMILY_SLUG": "family_slug",
         "DOCUMENT_METADATA_TRANSLATED": "document_metadata.translated",
         "DOCUMENT_METADATA_CORPUS_TYPE_NAME": "document_metadata.corpus_type_name",
         "DOCUMENT_METADATA_GEOGRAPHIES": "document_metadata.geographies",
+        "DOCUMENT_METADATA_PUBLICATION_TS": "document_metadata.publication_ts",
     }
     df_full = df_full.rename(columns=rename_cols)
     df = df.rename(columns=rename_cols)
