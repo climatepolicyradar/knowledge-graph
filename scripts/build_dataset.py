@@ -16,6 +16,7 @@ from rich.console import Console
 from knowledge_graph.config import processed_data_dir
 from knowledge_graph.geography import iso_to_world_bank_region
 from knowledge_graph.sampling import create_balanced_sample
+from knowledge_graph.utils import get_logger
 
 app = typer.Typer()
 console = Console(highlight=False)
@@ -192,6 +193,9 @@ def run_build_dataset(
     df = cur.fetch_pandas_all()
     con.close()
 
+    logger = get_logger()
+    logger.info(f"✅ Full dataset: {len(df_full):,} rows, presample: {len(df):,} rows")
+
     rename_cols = {
         "TEXT_BLOCK_TEXT": "text_block.text",
         "TEXT_BLOCK_TYPE": "text_block.type",
@@ -216,12 +220,14 @@ def run_build_dataset(
         parse_geographies
     )
 
+    logger.info("🌍 Adding world bank region metadata")
     df_full["world_bank_region"] = df_full["document_metadata.geographies"].map(
         get_world_bank_region
     )
     df["world_bank_region"] = df["document_metadata.geographies"].map(
         get_world_bank_region
     )
+    logger.info("✅ Added world bank region metadata")
 
     df_combined = df_full.rename(
         columns={

@@ -5,7 +5,7 @@ Queries Snowflake for climate document passages, builds a combined (full corpus)
 and a balanced sampled dataset, and uploads both as feather files to S3 for use
 by the vibe checker and sampling flows.
 
-Runs on a monthly schedule (see deployments.py). DSs can pull the latest files
+Runs on a monthly schedule (see deployments.py). Data Scientists can pull the latest files
 locally with: just build-dataset-download
 """
 
@@ -14,12 +14,11 @@ import io
 from typing import cast
 
 from mypy_boto3_s3.client import S3Client
-from prefect import flow
+from prefect import flow, task
 from prefect.logging import get_run_logger
 from pydantic import SecretStr
 
 from flows.config import Config
-from flows.utils import SlackNotify
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param, get_s3_client
 from scripts.build_dataset import run_build_dataset
 
@@ -52,23 +51,34 @@ async def _set_up_build_dataset_environment(
     return config, snowflake_account, snowflake_user, snowflake_private_key
 
 
+@task
+async def run_build_dataset_task(
+    sampled_dataset_target_num_rows: int,
+    snowflake_user: str,
+    snowflake_private_key: str,
+    snowflake_account: str,
+):
+    return await asyncio.to_thread(
+        run_build_dataset,
+        n=sampled_dataset_target_num_rows,
+        snowflake_user=snowflake_user,
+        snowflake_private_key=snowflake_private_key,
+        snowflake_account=snowflake_account,
+    )
+
+
 @flow(
     name="kg-build-dataset",
-    on_failure=[SlackNotify.message],  # pyright: ignore[reportUnknownMemberType]
-    on_crashed=[SlackNotify.message],  # pyright: ignore[reportUnknownMemberType]
 )
 async def build_dataset_flow(
-    n: int = 10000,
-    corpus_type: str | None = None,
+    sampled_dataset_target_num_rows: int = 10_000,
     aws_env: AwsEnv = AwsEnv.production,
     config: Config | None = None,
 ) -> None:
     """
     Build combined and sampled passage datasets from Snowflake and upload to S3.
 
-    :param n: Target number of rows in the sampled dataset. Defaults to 10,000.
-    :param corpus_type: Optional corpus type filter (e.g. 'Laws and Policies').
-        If None, all corpus types are included.
+    :param sampled_dataset_target_num_rows: Target number of rows in the sampled dataset. Defaults to 10,000.
     :param aws_env: AWS environment for SSM and S3 access.
     :param config: Optional pre-built Config. Created from SSM if not provided.
     """
@@ -81,12 +91,10 @@ async def build_dataset_flow(
         snowflake_private_key,
     ) = await _set_up_build_dataset_environment(config=config, aws_env=aws_env)
 
-    logger.info(f"Building dataset (n={n}, corpus_type={corpus_type})")
+    logger.info(f"Building dataset (n={sampled_dataset_target_num_rows})")
 
-    combined_df, sampled_df = await asyncio.to_thread(
-        run_build_dataset,
-        n=n,
-        corpus_type=corpus_type,
+    combined_df, sampled_df = await run_build_dataset_task(
+        sampled_dataset_target_num_rows=sampled_dataset_target_num_rows,
         snowflake_user=snowflake_user,
         snowflake_private_key=snowflake_private_key.get_secret_value(),
         snowflake_account=snowflake_account,
@@ -96,6 +104,16 @@ async def build_dataset_flow(
         f"Built datasets: combined={len(combined_df):,} rows, "
         f"sampled={len(sampled_df):,} rows"
     )
+
+    for column in [
+        "world_bank_region",
+        "document_metadata.corpus_type_name",
+        "translated",
+    ]:
+        if column in sampled_df.columns:
+            vc = sampled_df[column].value_counts()
+            counts = ", ".join(f"{val}: {cnt:,}" for val, cnt in vc.items())
+            logger.info(f"Sampled dataset — {column}: {counts}")
 
     s3_client = cast(S3Client, get_s3_client(aws_env, config.bucket_region))
 

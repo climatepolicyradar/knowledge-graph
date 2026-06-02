@@ -60,14 +60,26 @@ def test_run_build_dataset_returns_two_dataframes(mock_snowflake_connection):
 def test_run_build_dataset_combined_has_expected_columns(mock_snowflake_connection):
     combined_df, _ = run_build_dataset(n=5)
 
-    for col in ["text_block.text", "document_id", "world_bank_region"]:
+    for col in [
+        "text_block.text",
+        "document_id",
+        "world_bank_region",
+        "document_metadata.corpus_type_name",
+        "translated",
+    ]:
         assert col in combined_df.columns
 
 
 def test_run_build_dataset_sampled_has_expected_columns(mock_snowflake_connection):
     _, sampled_df = run_build_dataset(n=5)
 
-    for col in ["text_block.text", "document_id", "world_bank_region"]:
+    for col in [
+        "text_block.text",
+        "document_id",
+        "world_bank_region",
+        "document_metadata.corpus_type_name",
+        "translated",
+    ]:
         assert col in sampled_df.columns
 
 
