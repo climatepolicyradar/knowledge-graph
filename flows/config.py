@@ -142,6 +142,11 @@ class Config(BaseModel):
         description="API key for Argilla. Used to authenticate with an ArgillaSession",
     )
 
+    dataset_s3_bucket: str = Field(
+        default="cpr-kg-feather-files",
+        description="S3 bucket containing feather datasets produced by build_dataset",
+    )
+
     skip_existing_inference_results: bool = Field(
         default=True,
         description="Skip documents that already have inference results in S3. Set to False to force re-processing.",
