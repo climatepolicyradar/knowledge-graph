@@ -279,7 +279,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             response: AgentRunResult[LLMResponse | str] = self.agent.run_sync(  # type: ignore[assignment]
                 text,
                 model_settings=ModelSettings(
-                    seed=self.random_seed or 42, temperature=self.temperature
+                    seed=self.random_seed if self.random_seed is not None else 42,
+                    temperature=self.temperature,
                 ),  # type: ignore[arg-type]
             )
             if isinstance(response.output, str):
@@ -327,7 +328,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 self.agent.run(
                     text,
                     model_settings=ModelSettings(
-                        seed=self.random_seed or 42, temperature=self.temperature
+                        seed=self.random_seed if self.random_seed is not None else 42,
+                        temperature=self.temperature,
                     ),  # type: ignore[arg-type]
                 )
                 for text in texts
