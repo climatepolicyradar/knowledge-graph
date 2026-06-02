@@ -59,7 +59,7 @@ def load_combined_dataset() -> pd.DataFrame:
 
 @task
 def generate_embeddings(
-    df: pd.DataFrame, embedding_model_name: str = EMBEDDING_MODEL
+    df: pd.DataFrame, embedding_model_name: str, batch_size: int
 ) -> np.ndarray:
     """Generate normalised embeddings for all passages in the dataset."""
     from sentence_transformers import SentenceTransformer
@@ -70,7 +70,7 @@ def generate_embeddings(
     logger.info(f"Computing embeddings for {len(texts)} passages...")
     embeddings = model.encode(
         texts,
-        batch_size=BATCH_SIZE,
+        batch_size=batch_size,
         show_progress_bar=True,
         normalize_embeddings=True,
     )
@@ -83,7 +83,8 @@ def generate_embeddings(
 def upload_vibe_checker_files(
     df: pd.DataFrame,
     embeddings: np.ndarray,
-    embedding_model_name: str = EMBEDDING_MODEL,
+    embedding_model_name: str,
+    batch_size: int,
 ) -> None:
     """Upload passages dataset, embeddings, and metadata to the vibe-checker S3 bucket."""
     s3_client = get_s3_client()
@@ -106,7 +107,7 @@ def upload_vibe_checker_files(
 
     metadata = {
         "embedding_model_name": embedding_model_name,
-        "batch_size": BATCH_SIZE,
+        "batch_size": batch_size,
         "passages_count": len(df),
     }
     push_object_bytes_to_s3(
@@ -120,6 +121,7 @@ def upload_vibe_checker_files(
 @flow(timeout_seconds=None)
 def generate_vibe_checker_embeddings(
     embedding_model_name: str = EMBEDDING_MODEL,
+    batch_size: int = BATCH_SIZE,
 ) -> None:
     """
     Generate passage embeddings for the vibe checker.
@@ -129,8 +131,12 @@ def generate_vibe_checker_embeddings(
     vibe-checker S3 bucket for use by the vibe_check_inference flow.
     """
     df = load_combined_dataset()
-    embeddings = generate_embeddings(df, embedding_model_name=embedding_model_name)
-    upload_vibe_checker_files(df, embeddings, embedding_model_name=embedding_model_name)
+    embeddings = generate_embeddings(
+        df, embedding_model_name=embedding_model_name, batch_size=batch_size
+    )
+    upload_vibe_checker_files(
+        df, embeddings, embedding_model_name=embedding_model_name, batch_size=batch_size
+    )
     logger.info("Vibe checker embeddings generation complete")
 
 
