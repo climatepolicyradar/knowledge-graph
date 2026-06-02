@@ -146,6 +146,16 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 )
             ),
         ] = 42,
+        temperature: Annotated[
+            float | None,
+            Field(
+                description=(
+                    "Sampling temperature for the LLM. If None, defaults to 0.0 — "
+                    "preserves the prior deterministic behaviour. Used by ensemble "
+                    "strategies that want to induce variability across variants."
+                )
+            ),
+        ] = None,
         structured_output: Annotated[
             bool,
             Field(
@@ -162,6 +172,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         self.model_name = model_name
         self.system_prompt_template = system_prompt_template
         self.random_seed = random_seed
+        self.temperature = temperature if temperature is not None else 0.0
         self.structured_output = structured_output
 
         self.system_prompt = system_prompt_template.format(concept)
@@ -182,6 +193,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             self.model_name,
             self.system_prompt,
             self.random_seed,
+            self.temperature,
         )
 
     def __hash__(self) -> int:
@@ -206,6 +218,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             model_name=self.model_name,
             system_prompt_template=self.system_prompt_template,
             random_seed=random.randint(0, 1000000),
+            temperature=self.temperature,
             structured_output=self.structured_output,
         )
 
@@ -260,7 +273,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             response: AgentRunResult[LLMResponse | str] = self.agent.run_sync(  # type: ignore[assignment]
                 text,
                 model_settings=ModelSettings(
-                    seed=self.random_seed or 42, temperature=0
+                    seed=self.random_seed or 42, temperature=self.temperature
                 ),  # type: ignore[arg-type]
             )
             if isinstance(response.output, str):
@@ -308,7 +321,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 self.agent.run(
                     text,
                     model_settings=ModelSettings(
-                        seed=self.random_seed or 42, temperature=0
+                        seed=self.random_seed or 42, temperature=self.temperature
                     ),  # type: ignore[arg-type]
                 )
                 for text in texts
@@ -417,6 +430,14 @@ class LLMClassifier(BaseLLMClassifier):
                 )
             ),
         ] = 42,
+        temperature: Annotated[
+            float | None,
+            Field(
+                description=(
+                    "Sampling temperature for the LLM. If None, defaults to 0.0."
+                )
+            ),
+        ] = None,
         structured_output: Annotated[
             bool,
             Field(
@@ -433,6 +454,7 @@ class LLMClassifier(BaseLLMClassifier):
             model_name=model_name,
             system_prompt_template=system_prompt_template,
             random_seed=random_seed,
+            temperature=temperature,
             structured_output=structured_output,
         )
 
@@ -483,6 +505,14 @@ class LocalLLMClassifier(BaseLLMClassifier):
                 )
             ),
         ] = 42,
+        temperature: Annotated[
+            float | None,
+            Field(
+                description=(
+                    "Sampling temperature for the LLM. If None, defaults to 0.0."
+                )
+            ),
+        ] = None,
         structured_output: Annotated[
             bool,
             Field(
@@ -507,6 +537,7 @@ class LocalLLMClassifier(BaseLLMClassifier):
             model_name=model_name,
             system_prompt_template=system_prompt_template,
             random_seed=random_seed,
+            temperature=temperature,
             structured_output=structured_output,
         )
 
