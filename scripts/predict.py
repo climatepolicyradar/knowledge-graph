@@ -197,6 +197,9 @@ async def run_prediction(
             labelled_passages = load_labelled_passages_from_wandb(
                 wandb_path=labelled_passages_wandb_path
             )
+            # Record the artifact as an input to this run so it shows up in W&B lineage
+            if run:
+                run.use_artifact(labelled_passages_wandb_path)
         else:
             raise ValueError(
                 "One of `labelled_passages_path`, `labelled_passages_wandb_path`, or `input_passages` must be provided."
