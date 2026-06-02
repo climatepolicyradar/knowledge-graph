@@ -167,6 +167,7 @@ artifacts/*
 
 !data/raw/litigation-non-us.csv
 !data/raw/litigation-us.csv
+!data/raw/geography-iso-3166.csv
 
 tmp/
 scratch/
