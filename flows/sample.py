@@ -6,6 +6,7 @@ import wandb
 from prefect import flow
 from pydantic import Field, SecretStr
 
+from flows.build_dataset_flow import COMBINED_S3_KEY, SAMPLED_S3_KEY
 from flows.config import Config
 from knowledge_graph.cloud import AwsEnv, get_async_session, get_aws_ssm_param
 from knowledge_graph.identifiers import WikibaseID
@@ -86,9 +87,9 @@ async def sample(
         wandb.login(key=wandb_api_key.get_secret_value())
 
     if dataset_name == "balanced":
-        dataset_filename = "sampled_dataset.feather"
+        dataset_filename = SAMPLED_S3_KEY
     elif dataset_name == "combined":
-        dataset_filename = "combined_dataset.feather"
+        dataset_filename = COMBINED_S3_KEY
     else:
         raise ValueError(f"Unknown dataset_name: {dataset_name}")
 
