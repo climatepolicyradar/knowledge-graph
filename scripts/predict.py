@@ -133,7 +133,7 @@ async def run_prediction(
     wikibase_id: WikibaseID,
     classifier_wandb_path: str,
     labelled_passages_path: Path | None = None,
-    labelled_passages_wandb_run_path: str | None = None,
+    labelled_passages_wandb_path: str | None = None,
     input_passages: list[LabelledPassage] | None = None,
     track_and_upload: bool = True,
     batch_size: int = 15,
@@ -159,7 +159,7 @@ async def run_prediction(
         "limit": limit,
         "classifier_path": classifier_wandb_path,
         "labelled_passages_path": labelled_passages_path,
-        "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
+        "labelled_passages_wandb_path": labelled_passages_wandb_path,
         "prediction_threshold": prediction_threshold,
         "stop_after_n_positives": stop_after_n_positives,
         "exclude_training_data": exclude_training_data,
@@ -182,9 +182,9 @@ async def run_prediction(
         wandb_api = wandb.Api()
 
         # 1. load labelled passages
-        if labelled_passages_path and labelled_passages_wandb_run_path:
+        if labelled_passages_path and labelled_passages_wandb_path:
             raise ValueError(
-                "Both `labelled_passages_path` and `labelled_passages_run_name` cannot be defined."
+                "Both `labelled_passages_path` and `labelled_passages_wandb_path` cannot be defined."
             )
         elif input_passages is not None:
             labelled_passages: list[LabelledPassage] = input_passages
@@ -193,12 +193,13 @@ async def run_prediction(
                 content=labelled_passages_path.read_text(),
                 model_class=LabelledPassage,
             )
-        elif labelled_passages_wandb_run_path:
-            wandb_run = wandb_api.run(labelled_passages_wandb_run_path)
-            labelled_passages = load_labelled_passages_from_wandb(run=wandb_run)
+        elif labelled_passages_wandb_path:
+            labelled_passages = load_labelled_passages_from_wandb(
+                wandb_path=labelled_passages_wandb_path
+            )
         else:
             raise ValueError(
-                "One of `labelled_passages_path`, `labelled_passages_wandb_run_path`, or `input_passages` must be provided."
+                "One of `labelled_passages_path`, `labelled_passages_wandb_path`, or `input_passages` must be provided."
             )
 
         already_predicted_passages: list[LabelledPassage] = []
@@ -427,13 +428,12 @@ def main(
             exists=True,
         ),
     ] = None,
-    labelled_passages_wandb_run_path: Annotated[
+    labelled_passages_wandb_path: Annotated[
         str | None,
         typer.Option(
-            help="""Optional W&B run name to look for a labelled passages artifact in.
+            help="""Optional W&B artifact path to load labelled passages from.
 
-            Will look for an artifact of type `labelled-passages` in the project
-            <wikibase_id>.
+            E.g. 'climatepolicyradar/Q913/rsgz5ygh-labelled-passages:v0'.
             """
         ),
     ] = None,
@@ -513,7 +513,7 @@ def main(
             parameters={
                 "wikibase_id": wikibase_id,
                 "classifier_wandb_path": classifier_wandb_path,
-                "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
+                "labelled_passages_wandb_path": labelled_passages_wandb_path,
                 "track_and_upload": track_and_upload,
                 "batch_size": batch_size,
                 "limit": limit,
@@ -535,7 +535,7 @@ def main(
                 wikibase_id=wikibase_id,
                 classifier_wandb_path=classifier_wandb_path,
                 labelled_passages_path=labelled_passages_path,
-                labelled_passages_wandb_run_path=labelled_passages_wandb_run_path,
+                labelled_passages_wandb_path=labelled_passages_wandb_path,
                 track_and_upload=track_and_upload,
                 batch_size=batch_size,
                 limit=limit,
