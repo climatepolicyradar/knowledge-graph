@@ -31,6 +31,7 @@ from flows.inference import (
     inference_batch_of_documents_gpu,
 )
 from flows.predict import predict_adhoc
+from flows.sample import sample
 from flows.sync_concepts import sync_concepts
 from flows.topic_pipeline import topic_pipeline
 from flows.train import train_on_gpu
@@ -203,7 +204,15 @@ def _version() -> str:
 
 
 async def main() -> None:
+    # Sample
+
+    await create_deployment(
+        flow=sample,
+        description="Sample passages for a concept from the dataset for labelling",
+    )
+
     # Train
+
     await create_deployment(
         flow=train_on_gpu,
         description="Train concept classifiers with GPU compute",

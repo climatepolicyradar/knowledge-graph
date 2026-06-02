@@ -1,6 +1,6 @@
 import math
 from contextlib import nullcontext
-from typing import Annotated, Optional, cast
+from typing import Annotated, cast
 
 import click
 import pandas as pd
@@ -38,15 +38,15 @@ def run_sampling(
     dataset_name: str = "balanced",
     sample_size: int = 130,
     min_negative_proportion: float = 0.1,
-    corpus_types_include: Optional[list[str]] = None,
-    corpus_types_exclude: Optional[list[str]] = None,
+    corpus_types_include: list[str] | None = None,
+    corpus_types_exclude: list[str] | None = None,
     max_size_to_sample_from: int = 500_000,
-    max_negative_proportion: Optional[float] = None,
+    max_negative_proportion: float | None = None,
     track_and_upload: bool = True,
-    concept_override: Optional[list[str]] = None,
-    wikibase_username: Optional[str] = None,
-    wikibase_password: Optional[str] = None,
-    wikibase_url: Optional[str] = None,
+    concept_override: list[str] | None = None,
+    wikibase_username: str | None = None,
+    wikibase_password: str | None = None,
+    wikibase_url: str | None = None,
 ) -> None:
     """
     Evenly sample passages for concepts from the balanced dataset.
@@ -66,7 +66,7 @@ def run_sampling(
     The sampled passages are saved to a local file and uploaded to W&B.
 
     :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
-    :type concept_override: Optional[list[str]]
+    :type concept_override: list[str] | None
     """
     logger = get_logger()
 
@@ -296,14 +296,14 @@ def main(
         click_type=click.Choice(["balanced", "combined"]),
     ),
     corpus_types_include: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option(
             help="Corpus types to include. Can be specified multiple times. If not set, all types are included.",
             click_type=click.Choice(CORPUS_TYPES),
         ),
     ] = None,
     corpus_types_exclude: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option(
             help="Corpus types to exclude. Can be specified multiple times.",
             click_type=click.Choice(CORPUS_TYPES),
@@ -313,7 +313,7 @@ def main(
         500_000,
         help="Maximum number of passages to load from the dataset before sampling",
     ),
-    max_negative_proportion: Optional[float] = typer.Option(
+    max_negative_proportion: float | None = typer.Option(
         None,
         help="Maximum proportion of the sample that can be negative. If not set, fills remaining sample_size after positives.",
     ),
@@ -322,7 +322,7 @@ def main(
         help="Whether to track the run and upload the labelled passages to W&B",
     ),
     concept_override: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         typer.Option(
             help="Concept property overrides in key=value format. Can be specified multiple times.",
         ),
