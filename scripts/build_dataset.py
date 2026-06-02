@@ -18,6 +18,10 @@ from knowledge_graph.geography import iso_to_world_bank_region
 from knowledge_graph.sampling import create_balanced_sample
 from knowledge_graph.utils import get_logger
 
+SNOWFLAKE_WAREHOUSE = "PRODUCTION_DBT_WH"
+SNOWFLAKE_DATABASE = "PRODUCTION"
+SNOWFLAKE_SCHEMA = "PUBLISHED"
+
 app = typer.Typer()
 console = Console(highlight=False)
 
@@ -73,6 +77,9 @@ def _connect_to_snowflake(
             account=snowflake_account,
             user=snowflake_user,
             private_key=private_key_bytes,
+            warehouse=SNOWFLAKE_WAREHOUSE,
+            database=SNOWFLAKE_DATABASE,
+            schema=SNOWFLAKE_SCHEMA,
         )
 
     # Local development fallback reads from ~/.snowflake/config.toml
