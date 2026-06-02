@@ -451,8 +451,6 @@ async def main() -> None:
         flow=generate_vibe_checker_datasets,  # pyright: ignore[reportArgumentType]
         description="Generate vibe-checker passage embeddings from the combined dataset in s3://cpr-kg-feather-files",
         gpu=True,
-        # Coiled GPU job variables (cores + memory string), matching the other
-        # gpu=True deployments
         flow_variables={
             "cpu": 8,
             "memory": "32 GiB",
