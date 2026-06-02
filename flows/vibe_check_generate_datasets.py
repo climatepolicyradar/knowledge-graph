@@ -13,39 +13,52 @@ import os
 import boto3
 import numpy as np
 import pandas as pd
+from mypy_boto3_s3 import S3Client
 from prefect import flow, task
 
+from flows.build_dataset_flow import COMBINED_S3_KEY
+from flows.config import Config
 from flows.vibe_check import (
     get_bucket_name_from_ssm,
-    get_s3_client,
     push_object_bytes_to_s3,
 )
 from knowledge_graph.utils import get_logger
 
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 BATCH_SIZE = 1000
-FEATHER_FILES_BUCKET = "cpr-kg-feather-files"
-COMBINED_DATASET_KEY = "combined_dataset.feather"
 
-aws_region = os.getenv("AWS_REGION", "eu-west-1")
-aws_profile = (
-    os.getenv("AWS_PROFILE")
-    if os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
-    else None
-)
 
 logger = get_logger()
 
 
-@task(retries=3, retry_delay_seconds=5)
-def load_combined_dataset() -> pd.DataFrame:
-    """Load the combined dataset from the feather files S3 bucket."""
-    session = boto3.Session(region_name=aws_region, profile_name=aws_profile)
-    s3 = session.client("s3")
-    logger.info(
-        f"Loading combined dataset from s3://{FEATHER_FILES_BUCKET}/{COMBINED_DATASET_KEY}"
+async def _set_up_environment(
+    config: Config | None,
+) -> tuple[Config, S3Client]:
+    """
+    Set up the shared config and S3 client for the flow.
+
+    :param config: Optional pre-configured Config object. If not provided, will be created.
+    """
+    if not config:
+        config = await Config.create()
+
+    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
+    session = boto3.session.Session(
+        profile_name=config.aws_env.value if use_aws_profiles else None,
+        region_name=config.bucket_region,
     )
-    response = s3.get_object(Bucket=FEATHER_FILES_BUCKET, Key=COMBINED_DATASET_KEY)
+    s3_client = session.client("s3")
+
+    return config, s3_client
+
+
+@task(retries=3, retry_delay_seconds=5)
+def load_combined_dataset(s3_client: S3Client, dataset_s3_bucket: str) -> pd.DataFrame:
+    """Load the combined dataset from the feather files S3 bucket."""
+    logger.info(
+        f"Loading combined dataset from s3://{dataset_s3_bucket}/{COMBINED_S3_KEY}"
+    )
+    response = s3_client.get_object(Bucket=dataset_s3_bucket, Key=COMBINED_S3_KEY)
     df = pd.read_feather(io.BytesIO(response["Body"].read()))
     if df.empty:
         raise ValueError("Combined dataset is empty")
@@ -77,13 +90,13 @@ def generate_embeddings(
 
 @task(retries=3, retry_delay_seconds=5)
 def upload_vibe_checker_files(
+    s3_client: S3Client,
     df: pd.DataFrame,
     embeddings: np.ndarray,
     embedding_model_name: str,
     batch_size: int,
 ) -> None:
     """Upload passages dataset, embeddings, and metadata to the vibe-checker S3 bucket."""
-    s3_client = get_s3_client()
     bucket_name = get_bucket_name_from_ssm()
     logger.info(f"Uploading vibe-checker files to s3://{bucket_name}/")
 
@@ -115,26 +128,35 @@ def upload_vibe_checker_files(
 
 
 @flow(timeout_seconds=None)
-def generate_vibe_checker_datasets(
+async def generate_vibe_checker_datasets(
     embedding_model_name: str = EMBEDDING_MODEL,
     batch_size: int = BATCH_SIZE,
+    config: Config | None = None,
 ) -> None:
     """
     Generate passage embeddings for the vibe checker.
 
-    Reads the combined dataset from s3://cpr-kg-feather-files, computes
-    embeddings for all passages, and uploads the resulting files to the
-    vibe-checker S3 bucket for use by the vibe_check_inference flow.
+    Reads the combined dataset from s3, computes embeddings for all passages, and
+    uploads the resulting files to the vibe-checker S3 bucket for use by the
+    vibe_check_inference flow.
+
+    :param embedding_model_name: Sentence transformer model used to embed passages
+    :param batch_size: Batch size used when encoding passages
+    :param config: Optional pre-configured Config object. If not provided, will be created.
     """
-    df = load_combined_dataset()
+    config, s3_client = await _set_up_environment(config=config)
+
+    combined_dataset_df = load_combined_dataset(s3_client, config.dataset_s3_bucket)
     embeddings = generate_embeddings(
-        df, embedding_model_name=embedding_model_name, batch_size=batch_size
+        combined_dataset_df,
+        embedding_model_name=embedding_model_name,
+        batch_size=batch_size,
     )
     upload_vibe_checker_files(
-        df, embeddings, embedding_model_name=embedding_model_name, batch_size=batch_size
+        s3_client,
+        combined_dataset_df,
+        embeddings,
+        embedding_model_name=embedding_model_name,
+        batch_size=batch_size,
     )
     logger.info("Vibe checker embeddings generation complete")
-
-
-if __name__ == "__main__":
-    generate_vibe_checker_datasets()
