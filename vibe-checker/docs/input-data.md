@@ -4,7 +4,7 @@ The vibe checker's inference flow depends on three pre-built files stored in the
 
 ```text
 s3://{BUCKET_NAME}/
-├── passages_dataset.feather          # Passages from the document corpus
+├── passages_dataset.feather          # Balanced sample of passages from the document corpus
 ├── passages_embeddings.npy           # Pre-computed embedding for each passage
 └── passages_embeddings_metadata.json # Embedding model name and other metadata
 ```
@@ -16,13 +16,12 @@ The `vibe_check_inference` flow loads them automatically at the start of each ru
 These files are produced by the **`generate_vibe_checker_embeddings`** Prefect flow
 (`flows/generate_vibe_checker_embeddings.py`), which runs on a schedule (monthly) and:
 
-1. Reads `combined_dataset.feather` from `s3://cpr-kg-feather-files` — the full
-   filtered corpus produced by the `build_dataset` flow (sourced from Snowflake).
+1. Reads a balanced evenly-sampled subset of the corpus (stratified across geographies, corpus types, and translation status) produced in S3 by the `build_dataset` flow (sourced from Snowflake).
 2. Computes passage embeddings using the `EMBEDDING_MODEL` constant in the flow
    (`BAAI/bge-small-en-v1.5` by default).
 3. Uploads the three files above to the vibe-checker S3 bucket.
 
-Because the flow is scheduled, you don't normally need to do anything to keep the inputs fresh, and you shouldn't need to regenerate them when adding new concepts to the `config.yml` file.
+The sample is broad and evenly-sampled enough to give a representative view of our corpus. Because the flow is scheduled, you don't normally need to do anything to keep the inputs fresh, and you shouldn't need to regenerate them when adding new concepts to the `config.yml` file.
 
 ## Regenerating on demand
 

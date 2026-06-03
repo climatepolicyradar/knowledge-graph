@@ -1,9 +1,9 @@
 """
 Flow to generate datasets for the vibe checker.
 
-Reads the combined dataset feather file produced by the build_dataset flow), generates
-embeddings using a sentence transformer model, and uploads the three input files
-required by the vibe_check_inference flow to the vibe-checker S3 bucket.
+Reads the balanced sampled dataset feather file produced by the build_dataset flow,
+generates embeddings using a sentence transformer model, and uploads the three input
+files required by the vibe_check_inference flow to the vibe-checker S3 bucket.
 """
 
 import asyncio
@@ -135,8 +135,8 @@ async def generate_vibe_checker_datasets(
     """
     Generate passage embeddings for the vibe checker.
 
-    Reads the combined dataset from s3, computes embeddings for all passages, and
-    uploads the resulting files to the vibe-checker S3 bucket for use by the
+    Reads the balanced sampled dataset from s3, computes embeddings for all passages,
+    and uploads the resulting files to the vibe-checker S3 bucket for use by the
     vibe_check_inference flow.
 
     :param embedding_model_name: Sentence transformer model used to embed passages
@@ -146,19 +146,19 @@ async def generate_vibe_checker_datasets(
     logger = get_logger()
     config, s3_client = await _set_up_environment(config=config)
 
-    combined_dataset_df = await load_dataset_from_s3(
-        dataset_name="combined",
+    dataset_df = await load_dataset_from_s3(
+        dataset_name="balanced",
         config=config,
         aws_env=config.aws_env,
     )
     embeddings = generate_embeddings(
-        combined_dataset_df,
+        dataset_df,
         embedding_model_name=embedding_model_name,
         batch_size=batch_size,
     )
     upload_vibe_checker_files(
         s3_client,
-        combined_dataset_df,
+        dataset_df,
         embeddings,
         embedding_model_name=embedding_model_name,
         batch_size=batch_size,
