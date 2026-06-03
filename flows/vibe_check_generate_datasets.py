@@ -22,7 +22,7 @@ from flows.vibe_check import (
     get_bucket_name_from_ssm,
     push_object_bytes_to_s3,
 )
-from knowledge_graph.utils import get_logger
+from knowledge_graph.utils import get_logger, iterate_batch
 
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 BATCH_SIZE = 1000
@@ -77,13 +77,24 @@ def generate_embeddings(
     model = SentenceTransformer(embedding_model_name)
     texts = df["text_block.text"].tolist()
     logger.info(f"Computing embeddings for {len(texts)} passages...")
-    embeddings = model.encode(
-        texts,
-        batch_size=batch_size,
-        show_progress_bar=True,
-        normalize_embeddings=True,
-    )
-    assert isinstance(embeddings, np.ndarray)
+
+    chunks = list(iterate_batch(texts, batch_size))
+    parts: list[np.ndarray] = []
+    for i, chunk in enumerate(chunks):
+        embedded = model.encode(
+            list(chunk),
+            batch_size=batch_size,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+        )
+        assert isinstance(embedded, np.ndarray)
+        parts.append(embedded)
+        logger.info(
+            f"Encoded {min((i + 1) * batch_size, len(texts))}/{len(texts)} passages "
+            f"({i + 1}/{len(chunks)} batches)"
+        )
+
+    embeddings = np.concatenate(parts, axis=0)
     logger.info(f"Generated embeddings with shape {embeddings.shape}")
     return embeddings
 
