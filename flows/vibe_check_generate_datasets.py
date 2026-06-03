@@ -61,6 +61,7 @@ def generate_embeddings(
 
     logger.info(f"Loading embedding model: {embedding_model_name}")
     model = SentenceTransformer(embedding_model_name)
+    logger.info(f"Embedding model loaded on device: {model.device}")
     texts = df["text_block.text"].tolist()
     logger.info(f"Computing embeddings for {len(texts)} passages...")
 
