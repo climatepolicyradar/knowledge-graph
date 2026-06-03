@@ -147,7 +147,7 @@ def run_build_dataset(
     """
 
     cur.execute(full_query)
-    df_full = cur.fetch_pandas_all()
+    df_full = cur.fetch_pandas_all(force_microsecond_precision=True)
 
     presample_query = f"""
     WITH filtered_data AS (
@@ -203,7 +203,7 @@ def run_build_dataset(
     """
 
     cur.execute(presample_query)
-    df = cur.fetch_pandas_all()
+    df = cur.fetch_pandas_all(force_microsecond_precision=True)
     con.close()
 
     logger = get_logger()
