@@ -38,7 +38,7 @@ async def _set_up_prediction_environment(
 async def predict_adhoc(
     wikibase_id: WikibaseID,
     classifier_wandb_path: str,
-    labelled_passages_wandb_run_path: str,
+    labelled_passages_wandb_path: str,
     track_and_upload: bool = True,
     batch_size: int = 15,
     limit: int | None = None,
@@ -56,7 +56,7 @@ async def predict_adhoc(
     return await run_prediction(
         wikibase_id=wikibase_id,
         classifier_wandb_path=classifier_wandb_path,
-        labelled_passages_wandb_run_path=labelled_passages_wandb_run_path,
+        labelled_passages_wandb_path=labelled_passages_wandb_path,
         track_and_upload=track_and_upload,
         batch_size=batch_size,
         limit=limit,
