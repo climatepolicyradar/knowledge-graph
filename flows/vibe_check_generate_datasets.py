@@ -17,8 +17,8 @@ import pandas as pd
 from mypy_boto3_s3 import S3Client
 from prefect import flow, task
 
-from flows.build_dataset_flow import COMBINED_S3_KEY
 from flows.config import Config
+from flows.sample import load_dataset_from_s3
 from flows.vibe_check import (
     get_bucket_name_from_ssm,
     push_object_bytes_to_s3,
@@ -48,21 +48,6 @@ async def _set_up_environment(
     s3_client = session.client("s3")
 
     return config, s3_client
-
-
-@task(retries=3, retry_delay_seconds=5)
-def load_combined_dataset(s3_client: S3Client, dataset_s3_bucket: str) -> pd.DataFrame:
-    """Load the combined dataset from the feather files S3 bucket."""
-    logger = get_logger()
-    logger.info(
-        f"Loading combined dataset from s3://{dataset_s3_bucket}/{COMBINED_S3_KEY}"
-    )
-    response = s3_client.get_object(Bucket=dataset_s3_bucket, Key=COMBINED_S3_KEY)
-    df = pd.read_feather(io.BytesIO(response["Body"].read()))
-    if df.empty:
-        raise ValueError("Combined dataset is empty")
-    logger.info(f"Loaded {len(df)} passages")
-    return df
 
 
 @task
@@ -160,7 +145,11 @@ async def generate_vibe_checker_datasets(
     logger = get_logger()
     config, s3_client = await _set_up_environment(config=config)
 
-    combined_dataset_df = load_combined_dataset(s3_client, config.dataset_s3_bucket)
+    combined_dataset_df = await load_dataset_from_s3(
+        dataset_name="combined",
+        config=config,
+        aws_env=config.aws_env,
+    )
     embeddings = generate_embeddings(
         combined_dataset_df,
         embedding_model_name=embedding_model_name,
