@@ -29,9 +29,6 @@ EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 BATCH_SIZE = 1000
 
 
-logger = get_logger()
-
-
 async def _set_up_environment(
     config: Config | None,
 ) -> tuple[Config, S3Client]:
@@ -56,6 +53,7 @@ async def _set_up_environment(
 @task(retries=3, retry_delay_seconds=5)
 def load_combined_dataset(s3_client: S3Client, dataset_s3_bucket: str) -> pd.DataFrame:
     """Load the combined dataset from the feather files S3 bucket."""
+    logger = get_logger()
     logger.info(
         f"Loading combined dataset from s3://{dataset_s3_bucket}/{COMBINED_S3_KEY}"
     )
@@ -72,6 +70,8 @@ def generate_embeddings(
     df: pd.DataFrame, embedding_model_name: str, batch_size: int
 ) -> np.ndarray:
     """Generate normalised embeddings for all passages in the dataset."""
+    logger = get_logger()
+    logger.info("Importing sentence_transformers")
     from sentence_transformers import SentenceTransformer
 
     logger.info(f"Loading embedding model: {embedding_model_name}")
@@ -109,6 +109,7 @@ def upload_vibe_checker_files(
     batch_size: int,
 ) -> None:
     """Upload passages dataset, embeddings, and metadata to the vibe-checker S3 bucket."""
+    logger = get_logger()
     bucket_name = get_bucket_name_from_ssm()
     logger.info(f"Uploading vibe-checker files to s3://{bucket_name}/")
 
@@ -156,6 +157,7 @@ async def generate_vibe_checker_datasets(
     :param batch_size: Batch size used when encoding passages
     :param config: Optional pre-configured Config object. If not provided, will be created.
     """
+    logger = get_logger()
     config, s3_client = await _set_up_environment(config=config)
 
     combined_dataset_df = load_combined_dataset(s3_client, config.dataset_s3_bucket)
