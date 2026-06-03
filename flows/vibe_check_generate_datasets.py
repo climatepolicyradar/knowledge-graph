@@ -6,6 +6,7 @@ embeddings using a sentence transformer model, and uploads the three input files
 required by the vibe_check_inference flow to the vibe-checker S3 bucket.
 """
 
+import asyncio
 import io
 import json
 import os
@@ -171,3 +172,7 @@ async def generate_vibe_checker_datasets(
         batch_size=batch_size,
     )
     logger.info("Vibe checker embeddings generation complete")
+
+
+if __name__ == "__main__":
+    _ = asyncio.run(generate_vibe_checker_datasets())
