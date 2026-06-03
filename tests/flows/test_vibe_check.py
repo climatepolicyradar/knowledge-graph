@@ -19,13 +19,12 @@ def _make_passages_df(n: int) -> pd.DataFrame:
     return pd.DataFrame(
         {
             "text_block.text": [f"passage {i}" for i in range(n)],
-            "text_block.text_block_id": [str(i) for i in range(n)],
-            "text_block.page_number": [1] * n,
             "document_id": ["doc_1"] * n,
+            "document_name": ["Test Document"] * n,
+            "document_slug": ["test-document"] * n,
+            "family_slug": ["test-family"] * n,
             "translated": [False] * n,
-            "document_metadata.slug": ["slug"] * n,
-            "document_metadata.family_slug": ["family"] * n,
-            "document_metadata.publication_ts": ["2024-01-01"] * n,
+            "publication_ts": ["2024-01-01"] * n,
             "document_metadata.corpus_type_name": ["corpus"] * n,
             "world_bank_region": ["ECA"] * n,
         }
@@ -101,7 +100,7 @@ def vibe_check_externals(test_config):
         ),
         patch("flows.vibe_check.push_object_bytes_to_s3") as push_mock,
         patch(
-            "flows.vibe_check._get_bucket_name_from_ssm",
+            "flows.vibe_check.get_bucket_name_from_ssm",
             return_value="test-bucket",
         ),
     ):

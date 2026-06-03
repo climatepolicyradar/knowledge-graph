@@ -39,6 +39,7 @@ from flows.train import train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import Compute, JsonDict, get_prefect_job_variables
 from flows.vibe_check import vibe_check_inference
+from flows.vibe_check_generate_datasets import generate_vibe_checker_datasets
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import (
     PROJECT_NAME,
@@ -452,6 +453,20 @@ async def main() -> None:
         },
         env_schedules={
             AwsEnv.labs: "0 8 * * MON-THU",  # Every working day at 8am
+        },
+    )
+
+    await create_deployment(
+        flow=generate_vibe_checker_datasets,  # pyright: ignore[reportArgumentType]
+        description="Generate vibe-checker passage embeddings from the combined dataset in s3://cpr-kg-feather-files",
+        gpu=True,
+        flow_variables={
+            "cpu": 8,
+            "memory": "32 GiB",
+        },
+        env_schedules={
+            # 03:00 on the 1st of each month, before any 8am vibe-check run
+            AwsEnv.labs: "0 3 1 * *",
         },
     )
 
