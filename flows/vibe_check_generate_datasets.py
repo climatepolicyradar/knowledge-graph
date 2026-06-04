@@ -6,6 +6,7 @@ embeddings using a sentence transformer model, and uploads the three input files
 required by the vibe_check_inference flow to the vibe-checker S3 bucket.
 """
 
+import asyncio
 import io
 import json
 import os
@@ -16,19 +17,16 @@ import pandas as pd
 from mypy_boto3_s3 import S3Client
 from prefect import flow, task
 
-from flows.build_dataset_flow import COMBINED_S3_KEY
 from flows.config import Config
+from flows.sample import load_dataset_from_s3
 from flows.vibe_check import (
     get_bucket_name_from_ssm,
     push_object_bytes_to_s3,
 )
-from knowledge_graph.utils import get_logger
+from knowledge_graph.utils import get_logger, iterate_batch
 
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 BATCH_SIZE = 1000
-
-
-logger = get_logger()
 
 
 async def _set_up_environment(
@@ -52,38 +50,38 @@ async def _set_up_environment(
     return config, s3_client
 
 
-@task(retries=3, retry_delay_seconds=5)
-def load_combined_dataset(s3_client: S3Client, dataset_s3_bucket: str) -> pd.DataFrame:
-    """Load the combined dataset from the feather files S3 bucket."""
-    logger.info(
-        f"Loading combined dataset from s3://{dataset_s3_bucket}/{COMBINED_S3_KEY}"
-    )
-    response = s3_client.get_object(Bucket=dataset_s3_bucket, Key=COMBINED_S3_KEY)
-    df = pd.read_feather(io.BytesIO(response["Body"].read()))
-    if df.empty:
-        raise ValueError("Combined dataset is empty")
-    logger.info(f"Loaded {len(df)} passages")
-    return df
-
-
 @task
 def generate_embeddings(
     df: pd.DataFrame, embedding_model_name: str, batch_size: int
 ) -> np.ndarray:
     """Generate normalised embeddings for all passages in the dataset."""
+    logger = get_logger()
+    logger.info("Importing sentence_transformers")
     from sentence_transformers import SentenceTransformer
 
     logger.info(f"Loading embedding model: {embedding_model_name}")
     model = SentenceTransformer(embedding_model_name)
+    logger.info(f"Embedding model loaded on device: {model.device}")
     texts = df["text_block.text"].tolist()
     logger.info(f"Computing embeddings for {len(texts)} passages...")
-    embeddings = model.encode(
-        texts,
-        batch_size=batch_size,
-        show_progress_bar=True,
-        normalize_embeddings=True,
-    )
-    assert isinstance(embeddings, np.ndarray)
+
+    chunks = list(iterate_batch(texts, batch_size))
+    parts: list[np.ndarray] = []
+    for i, chunk in enumerate(chunks):
+        embedded = model.encode(
+            list(chunk),
+            batch_size=batch_size,
+            show_progress_bar=False,
+            normalize_embeddings=True,
+        )
+        assert isinstance(embedded, np.ndarray)
+        parts.append(embedded)
+        logger.info(
+            f"Encoded {min((i + 1) * batch_size, len(texts))}/{len(texts)} passages "
+            f"({i + 1}/{len(chunks)} batches)"
+        )
+
+    embeddings = np.concatenate(parts, axis=0)
     logger.info(f"Generated embeddings with shape {embeddings.shape}")
     return embeddings
 
@@ -97,6 +95,7 @@ def upload_vibe_checker_files(
     batch_size: int,
 ) -> None:
     """Upload passages dataset, embeddings, and metadata to the vibe-checker S3 bucket."""
+    logger = get_logger()
     bucket_name = get_bucket_name_from_ssm()
     logger.info(f"Uploading vibe-checker files to s3://{bucket_name}/")
 
@@ -144,9 +143,14 @@ async def generate_vibe_checker_datasets(
     :param batch_size: Batch size used when encoding passages
     :param config: Optional pre-configured Config object. If not provided, will be created.
     """
+    logger = get_logger()
     config, s3_client = await _set_up_environment(config=config)
 
-    combined_dataset_df = load_combined_dataset(s3_client, config.dataset_s3_bucket)
+    combined_dataset_df = await load_dataset_from_s3(
+        dataset_name="combined",
+        config=config,
+        aws_env=config.aws_env,
+    )
     embeddings = generate_embeddings(
         combined_dataset_df,
         embedding_model_name=embedding_model_name,
@@ -160,3 +164,7 @@ async def generate_vibe_checker_datasets(
         batch_size=batch_size,
     )
     logger.info("Vibe checker embeddings generation complete")
+
+
+if __name__ == "__main__":
+    _ = asyncio.run(generate_vibe_checker_datasets())
