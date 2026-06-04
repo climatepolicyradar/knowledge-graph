@@ -94,10 +94,6 @@ sample-corpus id corpus:
 extend-dataset id workspace:
     uv run python scripts/argilla/extend_existing_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
 
-# push a sampled set of passages to argilla for a specific wikibase ID
-push-to-argilla id workspace:
-    uv run python scripts/argilla/push_new_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
-
 # generate an HTML report of classifier performance
 generate-report wikibase-ids:
     uv run python scripts/generate_report.py --wikibase-ids {{wikibase-ids}}
