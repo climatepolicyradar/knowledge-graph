@@ -458,7 +458,7 @@ async def main() -> None:
 
     await create_deployment(
         flow=generate_vibe_checker_datasets,  # pyright: ignore[reportArgumentType]
-        description="Generate vibe-checker passage embeddings from the combined dataset in s3://cpr-kg-feather-files",
+        description="Generate vibe-checker passage embeddings from the balanced sampled dataset in s3://cpr-kg-feather-files",
         gpu=True,
         flow_variables={
             "cpu": 8,
