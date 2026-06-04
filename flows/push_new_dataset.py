@@ -2,10 +2,9 @@ from typing import Annotated, Optional
 
 import wandb
 from prefect import flow
-from pydantic import Field, SecretStr
+from pydantic import Field
 
 from flows.config import Config
-from knowledge_graph.cloud import get_aws_ssm_param
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaSession
 from knowledge_graph.utils import get_logger
@@ -45,13 +44,8 @@ async def push_new_dataset(
     if not config:
         config = await Config.create()
 
-    try:
-        wandb_api_key = SecretStr(
-            get_aws_ssm_param("WANDB_API_KEY", aws_env=config.aws_env)
-        )
-        wandb.login(key=wandb_api_key.get_secret_value())
-    except Exception:
-        logger.warning("WANDB_API_KEY not found in SSM, falling back to env var")
+    if config.wandb_api_key:
+        wandb.login(key=config.wandb_api_key.get_secret_value())
 
     labelled_passages = load_labelled_passages_from_wandb(
         wandb_path=wandb_artifact_path

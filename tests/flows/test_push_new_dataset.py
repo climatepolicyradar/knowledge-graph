@@ -24,13 +24,11 @@ def patched_push_dependencies(labelled_passages, mock_concept, test_config):
     with (
         patch("flows.push_new_dataset.load_labelled_passages_from_wandb") as mock_load,
         patch("flows.push_new_dataset.wandb.login") as mock_wandb_login,
-        patch("flows.push_new_dataset.get_aws_ssm_param") as mock_ssm,
         patch("flows.push_new_dataset.Config") as mock_config_cls,
         patch("flows.push_new_dataset.ArgillaSession") as mock_argilla_cls,
         patch("flows.push_new_dataset.WikibaseSession") as mock_wikibase_cls,
     ):
         mock_load.return_value = labelled_passages
-        mock_ssm.return_value = "test-wandb-api-key"
         mock_config_cls.create = AsyncMock(return_value=test_config)
 
         mock_argilla = MagicMock()
@@ -43,7 +41,6 @@ def patched_push_dependencies(labelled_passages, mock_concept, test_config):
         yield {
             "load": mock_load,
             "wandb_login": mock_wandb_login,
-            "ssm": mock_ssm,
             "argilla": mock_argilla,
             "argilla_cls": mock_argilla_cls,
             "wikibase_cls": mock_wikibase_cls,
@@ -67,10 +64,10 @@ async def test_push_new_dataset_loads_passages_from_wandb_artifact(
 
 
 @pytest.mark.asyncio
-async def test_push_new_dataset_logs_into_wandb_using_ssm_key(
+async def test_push_new_dataset_logs_into_wandb_when_api_key_present(
     patched_push_dependencies, test_config
 ):
-    """The flow should fetch the W&B API key from SSM and call wandb.login."""
+    """The flow should call wandb.login when the config has a W&B API key."""
     await push_new_dataset(
         wikibase_id=WikibaseID("Q787"),
         wandb_artifact_path="climatepolicyradar/Q787/labelled-passages:v0",
@@ -78,21 +75,21 @@ async def test_push_new_dataset_logs_into_wandb_using_ssm_key(
     )
 
     patched_push_dependencies["wandb_login"].assert_called_once_with(
-        key="test-wandb-api-key"
+        key=test_config.wandb_api_key.get_secret_value()
     )
 
 
 @pytest.mark.asyncio
-async def test_push_new_dataset_skips_wandb_login_when_ssm_fetch_fails(
+async def test_push_new_dataset_skips_wandb_login_without_api_key(
     patched_push_dependencies, test_config
 ):
-    """The flow should not call wandb.login when the SSM fetch fails."""
-    patched_push_dependencies["ssm"].side_effect = Exception("SSM unavailable")
+    """The flow should not call wandb.login when the config has no W&B API key."""
+    config_no_key = test_config.model_copy(update={"wandb_api_key": None})
 
     await push_new_dataset(
         wikibase_id=WikibaseID("Q787"),
         wandb_artifact_path="climatepolicyradar/Q787/labelled-passages:v0",
-        config=test_config,
+        config=config_no_key,
     )
 
     patched_push_dependencies["wandb_login"].assert_not_called()
