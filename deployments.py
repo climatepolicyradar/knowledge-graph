@@ -207,7 +207,7 @@ def _version() -> str:
 
 
 async def main() -> None:
-    # Sample / Argilla
+    # Sample
 
     await create_deployment(
         flow=sample,
