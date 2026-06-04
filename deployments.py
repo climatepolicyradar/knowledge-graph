@@ -32,6 +32,7 @@ from flows.inference import (
     inference_batch_of_documents_gpu,
 )
 from flows.predict import predict_adhoc
+from flows.push_new_dataset import push_new_dataset
 from flows.sample import sample
 from flows.sync_concepts import sync_concepts
 from flows.topic_pipeline import topic_pipeline
@@ -206,11 +207,16 @@ def _version() -> str:
 
 
 async def main() -> None:
-    # Sample
+    # Sample / Argilla
 
     await create_deployment(
         flow=sample,
         description="Sample passages for a concept from the dataset for labelling",
+    )
+
+    await create_deployment(
+        flow=push_new_dataset,
+        description="Push labelled passages from a W&B artifact to Argilla as a new dataset",
     )
 
     # Train
