@@ -5,10 +5,11 @@ from prefect import flow
 from pydantic import Field
 
 from flows.config import Config
-from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelling import ArgillaSession
+from knowledge_graph.utils import get_logger
 from knowledge_graph.wandb_helpers import load_labelled_passages_from_wandb
-from scripts.argilla.push_new_dataset import push_passages_to_argilla
+from knowledge_graph.wikibase import WikibaseSession
 
 
 @flow
@@ -31,10 +32,15 @@ async def push_new_dataset(
         Optional[int],
         Field(description="Limit the number of passages loaded to Argilla"),
     ] = 130,
-    aws_env: AwsEnv = AwsEnv.production,
     config: Optional[Config] = None,
 ) -> None:
-    """Push labelled passages from a W&B artifact to Argilla as a new dataset."""
+    """
+    Push labelled passages from a W&B artifact to Argilla as a new dataset.
+
+    Reads the output of a prior sample flow run from W&B.
+    """
+    logger = get_logger()
+
     if not config:
         config = await Config.create()
 
@@ -45,18 +51,34 @@ async def push_new_dataset(
         wandb_path=wandb_artifact_path
     )
 
-    push_passages_to_argilla(
-        labelled_passages=labelled_passages,
-        wikibase_id=wikibase_id,
-        workspace_name=workspace_name,
-        limit=limit,
-        argilla_api_url=config.argilla_api_url,
-        argilla_api_key=config.argilla_api_key.get_secret_value()
+    if limit is not None:
+        logger.info(f"Limiting number of labelled passages to {limit}")
+        labelled_passages = labelled_passages[:limit]
+
+    argilla = ArgillaSession(
+        api_url=config.argilla_api_url,
+        api_key=config.argilla_api_key.get_secret_value()
         if config.argilla_api_key
         else None,
-        wikibase_username=config.wikibase_username,
-        wikibase_password=config.wikibase_password.get_secret_value()
+    )
+    logger.info("✅ Connected to Argilla")
+
+    wikibase = WikibaseSession(
+        username=config.wikibase_username,
+        password=config.wikibase_password.get_secret_value()
         if config.wikibase_password
         else None,
-        wikibase_url=config.wikibase_url,
+        url=config.wikibase_url,
     )
+    concept = wikibase.get_concept(wikibase_id)
+    logger.info(f"✅ Loaded metadata for {concept}")
+
+    dataset = argilla.create_dataset(concept, workspace=workspace_name)
+    logger.info(f'✅ Created dataset "{dataset.name}" for {concept}')
+
+    argilla.add_labelled_passages(
+        labelled_passages=labelled_passages,
+        wikibase_id=wikibase_id,
+        workspace=workspace_name,
+    )
+    logger.info(f"✅ Pushed {len(labelled_passages)} passages to dataset")
