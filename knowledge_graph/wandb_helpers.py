@@ -93,6 +93,7 @@ def log_labelled_passages_artifact_to_wandb_run(
         f.write(serialise_pydantic_list_as_jsonl(labelled_passages))
 
     run.log_artifact(labelled_passages_artifact)
+    return labelled_passages_artifact
 
 
 def log_labelled_passages_table_to_wandb_run(

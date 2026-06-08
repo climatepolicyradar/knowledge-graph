@@ -11,7 +11,7 @@ from knowledge_graph.identifiers import WikibaseID
 
 
 @flow
-async def sample_and_push(
+async def create_evaluation_dataset_in_argilla(
     wikibase_id: Annotated[
         WikibaseID,
         Field(
@@ -81,7 +81,7 @@ async def sample_and_push(
     if not config:
         config = await Config.create()
 
-    await sample(
+    wandb_artifact_path = await sample(
         wikibase_id=wikibase_id,
         dataset_name=dataset_name,
         sample_size=sample_size,
@@ -96,7 +96,8 @@ async def sample_and_push(
         config=config,
     )
 
-    wandb_artifact_path = f"climatepolicyradar/{wikibase_id}/labelled-passages:latest"
+    if wandb_artifact_path is None:
+        raise RuntimeError("sample flow did not return an artifact path")
 
     await push_new_dataset(
         wikibase_id=wikibase_id,

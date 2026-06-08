@@ -71,7 +71,7 @@ async def run_sampling_task(
     wikibase_username: str | None,
     wikibase_password: str | None,
     wikibase_url: str | None,
-) -> None:
+) -> str | None:
     import asyncio
 
     logger = get_run_logger()
@@ -80,7 +80,7 @@ async def run_sampling_task(
         f"(dataset={dataset_name}, track_and_upload={track_and_upload})"
     )
     try:
-        await asyncio.to_thread(
+        return await asyncio.to_thread(
             run_sampling,
             wikibase_id=wikibase_id,
             dataset=dataset,
@@ -174,12 +174,15 @@ async def sample(
     ] = None,
     aws_env: AwsEnv = AwsEnv.production,
     config: Optional[Config] = None,
-) -> None:
+) -> str | None:
     """
     Evenly sample passages for concepts from a dataset stored in S3.
 
     Wraps scripts.sample.run_sampling, handling S3 dataset loading and
     credential setup from AWS SSM.
+
+    Returns the W&B artifact path (e.g. 'climatepolicyradar/Q123/labelled-passages:v3')
+    if track_and_upload is True, otherwise None.
     """
     if not config:
         config = await Config.create()
@@ -193,7 +196,7 @@ async def sample(
         aws_env=aws_env,
     )
 
-    await run_sampling_task(
+    return await run_sampling_task(
         wikibase_id=wikibase_id,
         dataset=dataset,
         dataset_name=dataset_name,
