@@ -70,7 +70,7 @@ async def push_new_dataset(
         else None,
         url=config.wikibase_url,
     )
-    concept = wikibase.get_concept(wikibase_id)
+    concept = await wikibase.get_concept_async(wikibase_id)
     logger.info(f"✅ Loaded metadata for {concept}")
 
     dataset = argilla.create_dataset(concept, workspace=workspace_name)

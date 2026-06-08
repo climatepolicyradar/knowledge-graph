@@ -36,7 +36,7 @@ def patched_push_dependencies(labelled_passages, mock_concept, test_config):
 
         mock_wikibase = MagicMock()
         mock_wikibase_cls.return_value = mock_wikibase
-        mock_wikibase.get_concept.return_value = mock_concept
+        mock_wikibase.get_concept_async = AsyncMock(return_value=mock_concept)
 
         yield {
             "load": mock_load,
