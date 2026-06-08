@@ -23,8 +23,8 @@ async def _set_up_prediction_environment(
     if not config:
         config = await Config.create()
 
-    wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY", aws_env=aws_env))
-    wandb.login(key=wandb_api_key.get_secret_value())
+    if config.wandb_api_key:
+        wandb.login(key=config.wandb_api_key.get_secret_value())
 
     openrouter_api_key = SecretStr(
         get_aws_ssm_param("/OpenRouter/KGApiKey", aws_env=aws_env)

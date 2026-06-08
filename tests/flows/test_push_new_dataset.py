@@ -67,7 +67,7 @@ async def test_push_new_dataset_loads_passages_from_wandb_artifact(
 async def test_push_new_dataset_logs_into_wandb_when_api_key_present(
     patched_push_dependencies, test_config
 ):
-    """The flow should call wandb.login when a W&B API key is in Config."""
+    """The flow should call wandb.login when the config has a W&B API key."""
     await push_new_dataset(
         wikibase_id=WikibaseID("Q787"),
         wandb_artifact_path="climatepolicyradar/Q787/labelled-passages:v0",
@@ -83,7 +83,7 @@ async def test_push_new_dataset_logs_into_wandb_when_api_key_present(
 async def test_push_new_dataset_skips_wandb_login_without_api_key(
     patched_push_dependencies, test_config
 ):
-    """The flow should not call wandb.login when no W&B API key is configured."""
+    """The flow should not call wandb.login when the config has no W&B API key."""
     config_no_key = test_config.model_copy(update={"wandb_api_key": None})
 
     await push_new_dataset(
