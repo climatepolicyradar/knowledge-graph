@@ -47,7 +47,7 @@ def run_sampling(
     wikibase_username: str | None = None,
     wikibase_password: str | None = None,
     wikibase_url: str | None = None,
-) -> None:
+) -> str | None:
     """
     Evenly sample passages for concepts from the balanced dataset.
 
@@ -128,6 +128,7 @@ def run_sampling(
         "concept_overrides": concept_overrides,
     }
 
+    logged_artifact = None
     with (
         wandb.init(
             entity=WANDB_ENTITY,
@@ -268,12 +269,22 @@ def run_sampling(
 
         if track_and_upload and run:
             logger.info("📄 Creating labelled passages artifact")
-            log_labelled_passages_artifact_to_wandb_run(
+            logged_artifact = log_labelled_passages_artifact_to_wandb_run(
                 labelled_passages=labelled_passages,
                 run=run,
                 concept=concept,
             )
             logger.info("✅ Labelled passages uploaded successfully")
+
+    if track_and_upload and logged_artifact is not None:
+        if logged_artifact.version is None:
+            raise RuntimeError(
+                f"W&B did not assign a version to the artifact for {wikibase_id}"
+            )
+        return (
+            f"{WANDB_ENTITY}/{wikibase_id}/labelled-passages:{logged_artifact.version}"
+        )
+    return None
 
 
 @app.command()
