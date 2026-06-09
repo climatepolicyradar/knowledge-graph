@@ -277,6 +277,7 @@ def run_sampling(
             logger.info("✅ Labelled passages uploaded successfully")
 
     if track_and_upload and logged_artifact is not None:
+        logged_artifact.wait()
         if logged_artifact.version is None:
             raise RuntimeError(
                 f"W&B did not assign a version to the artifact for {wikibase_id}"
