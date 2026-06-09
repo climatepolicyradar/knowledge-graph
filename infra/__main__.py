@@ -2,7 +2,7 @@ import pulumi
 import pulumi_aws as aws
 
 config = pulumi.Config()
-labs_aws_account_id = config.get("labs_aws_account_id")
+labs_aws_account_id = config.require_secret("labs_aws_account_id")
 
 production_knowledge_graph_feather_files_bucket = aws.s3.Bucket(
     "production-knowledge-graph-feather-files-bucket",
