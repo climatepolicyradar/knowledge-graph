@@ -23,6 +23,9 @@ from prefect.schedules import Cron, Schedule
 from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.build_dataset_flow import build_dataset_flow
 from flows.classifiers_profiles import sync_classifiers_profiles
+from flows.create_evaluation_dataset_in_argilla import (
+    create_evaluation_dataset_in_argilla,
+)
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.index import index, index_batch_of_documents
@@ -217,6 +220,11 @@ async def main() -> None:
     await create_deployment(
         flow=push_new_dataset,
         description="Push labelled passages from a W&B artifact to Argilla as a new dataset",
+    )
+
+    await create_deployment(
+        flow=create_evaluation_dataset_in_argilla,
+        description="Sample passages for a concept and push them directly to Argilla as a new dataset",
     )
 
     # Train
