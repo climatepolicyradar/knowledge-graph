@@ -1,6 +1,8 @@
+import asyncio
 import os
 from typing import Annotated
 
+import typer
 import wandb
 from prefect import flow, task
 from prefect.logging import get_run_logger
@@ -178,3 +180,39 @@ async def modify_threshold(
         source_wandb_path=wandb_path,
         aws_env=aws_env,
     )
+
+
+app = typer.Typer()
+
+
+@app.command()
+def main(
+    wandb_path: Annotated[
+        str,
+        typer.Argument(
+            help="W&B artifact path (e.g., 'climatepolicyradar/Q913/rsgz5ygh:v0')"
+        ),
+    ],
+    threshold: Annotated[
+        float,
+        typer.Argument(help="Prediction threshold to set for the classifier"),
+    ],
+    aws_env: Annotated[
+        AwsEnv,
+        typer.Option("--aws-env", help="AWS environment to upload to"),
+    ] = AwsEnv.production,
+) -> None:
+    """Load a classifier from W&B, set a new prediction threshold, and upload to S3/W&B."""
+
+    os.environ["AWS_ENV"] = aws_env.value
+    asyncio.run(
+        modify_threshold(
+            wandb_path=wandb_path,
+            threshold=threshold,
+            aws_env=aws_env,
+        )
+    )
+
+
+if __name__ == "__main__":
+    app()
