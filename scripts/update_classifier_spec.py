@@ -1,5 +1,6 @@
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 import typer
 import wandb
@@ -82,7 +83,7 @@ def refresh_all_available_classifiers(aws_envs: list[AwsEnv] | None = None) -> N
         classifier_id, wandb_project_version = art.source_name.split(":")  # noqa: F841
         WikibaseID(wikibase_id)
 
-        spec_data = {
+        spec_data: dict[str, Any] = {
             "wikibase_id": wikibase_id,
             "classifier_id": classifier_id,
             "wandb_registry_version": wandb_registry_version,
