@@ -1,0 +1,4 @@
+config:
+  aws:region: eu-west-1
+  knowledge-graph:labs_aws_account_id:
+    secure: AAABAE9YGvlG4Zl7PdMdBy7e/6/IN/5rES+duMJ/Bj89Jpgk1P1YpyTEDL4=
