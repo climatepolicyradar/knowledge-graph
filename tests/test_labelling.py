@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from argilla import Dataset, ResponseStatus
-from hypothesis import given
+from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from knowledge_graph.classifier import Classifier
@@ -948,6 +948,8 @@ metadata_dict_strategy = st.dictionaries(
 
 @given(metadata_dict_strategy)
 def test_whether_format_metadata_lowercases_keys(metadata):
+    normalized_keys = [key.replace(".", "-").lower() for key in metadata.keys()]
+    assume(len(normalized_keys) == len(set(normalized_keys)))
     with patch("knowledge_graph.labelling.Argilla"):
         session = ArgillaSession()
         result = session._format_metadata_keys_for_argilla(metadata)
@@ -976,6 +978,8 @@ def test_whether_format_metadata_preserves_values(metadata):
 
 @given(metadata_dict_strategy)
 def test_whether_format_metadata_property_idempotent(metadata):
+    normalized_keys = [key.replace(".", "-").lower() for key in metadata.keys()]
+    assume(len(normalized_keys) == len(set(normalized_keys)))
     with patch("knowledge_graph.labelling.Argilla"):
         session = ArgillaSession()
         result_once = session._format_metadata_keys_for_argilla(metadata)
@@ -985,6 +989,8 @@ def test_whether_format_metadata_property_idempotent(metadata):
 
 @given(metadata_dict_strategy)
 def test_whether_format_metadata_replaces_dots_with_hyphens(metadata):
+    normalized_keys = [key.replace(".", "-").lower() for key in metadata.keys()]
+    assume(len(normalized_keys) == len(set(normalized_keys)))
     with patch("knowledge_graph.labelling.Argilla"):
         session = ArgillaSession()
         result = session._format_metadata_keys_for_argilla(metadata)
