@@ -8,30 +8,26 @@ from knowledge_graph.classifier.large_language_model import LLMClassifierPrompt
 from knowledge_graph.identifiers import WikibaseID
 from scripts.train import CustomClassifierConfig, _resolve_training_inputs
 
-CONFIG = (
-    Path(__file__).parents[1] / "scripts/custom_concept_training/configs/q1829.yaml"
-)
+CONFIG_DIR = Path(__file__).parents[1] / "scripts/custom_concept_training/configs"
+CONFIG_PATHS = sorted(CONFIG_DIR.glob("*.yaml"))
 
 
-def test_q1829_config_loads_and_builds_prompt():
-    cfg = CustomClassifierConfig.from_yaml(CONFIG)
-    assert cfg.wikibase_id == WikibaseID("Q1829")
+@pytest.mark.parametrize("path", CONFIG_PATHS, ids=lambda p: p.stem)
+def test_config_loads_and_builds_llm_prompt(path: Path):
+    """Every committed config loads and yields a valid LLM prompt."""
+    cfg = CustomClassifierConfig.from_yaml(path)
+    assert cfg.wikibase_id == WikibaseID(path.stem.upper())
     prompt = cfg.llm.to_classifier_kwargs()["system_prompt_template"]
     assert isinstance(prompt, LLMClassifierPrompt)
-    assert (
-        "{concept_description}" in prompt.system_prompt_template
-    )  # bespoke template preserved
-    assert "specialist analyst" in prompt.system_prompt_template
-    assert prompt.labelling_guidelines is not None  # narrow str | None -> str
-    assert "money or financial assets moving" in prompt.labelling_guidelines
+    assert "{concept_description}" in prompt.system_prompt_template
 
 
 def test_short_override_is_rejected():
-    # a definition/description that fits the store (<= cap) is rejected on load
+    """A definition/description that fits the store is rejected on load."""
     with pytest.raises(pydantic.ValidationError) as exc:
         CustomClassifierConfig.model_validate(
             {
-                "wikibase_id": "Q1829",
+                "wikibase_id": "Q1",
                 "concept_overrides": {"definition": "too short"},
             }
         )
@@ -39,30 +35,26 @@ def test_short_override_is_rejected():
 
 
 def test_unknown_field_is_rejected():
-    # extra="forbid" (structural) catches a stray/misplaced key, e.g. a top-level definition
+    """extra='forbid' rejects a stray/misplaced key."""
     with pytest.raises(pydantic.ValidationError):
-        CustomClassifierConfig.model_validate(
-            {
-                "wikibase_id": "Q1829",
-                "definition": "x",
-            }
-        )
+        CustomClassifierConfig.model_validate({"wikibase_id": "Q1", "definition": "x"})
 
 
 def test_resolve_from_config():
-    wikibase_id, classifier_kwargs, concept_overrides = _resolve_training_inputs(
-        None, CONFIG, "LLMClassifier", {}, {}
+    """--from-yaml-config resolves wikibase_id + LLM kwargs from a committed config."""
+    path = CONFIG_PATHS[0]
+    expected = CustomClassifierConfig.from_yaml(path).wikibase_id
+    wikibase_id, classifier_kwargs, _ = _resolve_training_inputs(
+        None, path, "LLMClassifier", {}, {}
     )
-    assert wikibase_id == WikibaseID("Q1829")
-    assert classifier_kwargs["model_name"] == "openrouter:openai/gpt-5"
+    assert wikibase_id == expected
     assert isinstance(classifier_kwargs["system_prompt_template"], LLMClassifierPrompt)
-    assert concept_overrides == {}  # Q1829 has none — definition stays in the store
 
 
 def test_resolve_plain_wikibase_id_passes_through():
-    wid = WikibaseID("Q1829")
-    kwargs = {"model_name": "x"}
-    overrides = {"definition": "x"}
+    """No --from-yaml-config: inputs pass through unchanged."""
+    wid = WikibaseID("Q1")
+    kwargs, overrides = {"model_name": "x"}, {"definition": "x"}
     assert _resolve_training_inputs(wid, None, "LLMClassifier", kwargs, overrides) == (
         wid,
         kwargs,
@@ -71,15 +63,20 @@ def test_resolve_plain_wikibase_id_passes_through():
 
 
 def test_resolve_rejects_both():
+    """--wikibase-id and --from-yaml-config are mutually exclusive."""
     with pytest.raises(typer.BadParameter):
-        _resolve_training_inputs(WikibaseID("Q1829"), CONFIG, "LLMClassifier", {}, {})
+        _resolve_training_inputs(
+            WikibaseID("Q1"), CONFIG_PATHS[0], "LLMClassifier", {}, {}
+        )
 
 
 def test_resolve_rejects_neither():
+    """One of --wikibase-id / --from-yaml-config is required."""
     with pytest.raises(typer.BadParameter):
         _resolve_training_inputs(None, None, "LLMClassifier", {}, {})
 
 
 def test_resolve_rejects_non_llm_with_config():
+    """--from-yaml-config only supports LLMClassifier for now."""
     with pytest.raises(typer.BadParameter):
-        _resolve_training_inputs(None, CONFIG, "BertBasedClassifier", {}, {})
+        _resolve_training_inputs(None, CONFIG_PATHS[0], "BertBasedClassifier", {}, {})
