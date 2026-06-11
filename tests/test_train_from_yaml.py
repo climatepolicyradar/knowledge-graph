@@ -40,6 +40,13 @@ def test_unknown_field_is_rejected():
         CustomClassifierConfig.model_validate({"wikibase_id": "Q1", "definition": "x"})
 
 
+def test_model_name_required():
+    """A missing llm.model_name raises a clear, actionable error."""
+    with pytest.raises(pydantic.ValidationError) as exc:
+        CustomClassifierConfig.LLMConfig()
+    assert "model_name is required" in str(exc.value)
+
+
 def test_resolve_from_config():
     """--from-yaml-config resolves wikibase_id + LLM kwargs from a committed config."""
     path = CONFIG_PATHS[0]

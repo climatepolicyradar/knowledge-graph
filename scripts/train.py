@@ -12,7 +12,7 @@ import wandb
 import yaml
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
@@ -54,8 +54,8 @@ from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
 
-DESCRIPTION_WIKIBASE_LIMIT = int(os.getenv("WIKIBASE_DESCRIPTION_LIMIT", "2500"))
-DEFINITION_WIKIBASE_LIMIT = int(os.getenv("WIKIBASE_DEFINITION_LIMIT", "2500"))
+DESCRIPTION_WIKIBASE_LENGTH_LIMIT = 2500
+DEFINITION_WIKIBASE_LENGTH_LIMIT = 2500
 
 
 class CustomClassifierConfig(BaseModel):
@@ -80,9 +80,9 @@ class CustomClassifierConfig(BaseModel):
             if v is None:
                 return v
             cap = (
-                DEFINITION_WIKIBASE_LIMIT
+                DEFINITION_WIKIBASE_LENGTH_LIMIT
                 if info.field_name == "definition"
-                else DESCRIPTION_WIKIBASE_LIMIT
+                else DESCRIPTION_WIKIBASE_LENGTH_LIMIT
             )
             if len(v) <= cap:
                 raise ValueError(
@@ -99,11 +99,19 @@ class CustomClassifierConfig(BaseModel):
         """Model + prompt for the LLM-labelling stage."""
 
         model_config = ConfigDict(extra="forbid")
-        model_name: str | None = (
-            None  # set in the YAML; if omitted then LLMClassifier's own default
-        )
+        model_name: str
         labelling_guidelines: str | None = None
         system_prompt_template: str = DEFAULT_SYSTEM_PROMPT
+
+        @model_validator(mode="before")
+        @classmethod
+        def _require_model_name(cls, data: Any) -> Any:
+            """Clear error when model_name is missing/empty (it determines the stored classifier id)."""
+            if isinstance(data, dict) and not data.get("model_name"):
+                raise ValueError(
+                    "model_name is required — set llm.model_name in the config YAML"
+                )
+            return data
 
         def to_classifier_kwargs(self) -> dict[str, Any]:
             """Build the LLMClassifier kwargs (prompt, plus model_name when set)."""
@@ -117,7 +125,7 @@ class CustomClassifierConfig(BaseModel):
 
     wikibase_id: WikibaseID
     concept_overrides: ConceptOverrides = Field(default_factory=ConceptOverrides)
-    llm: LLMConfig = Field(default_factory=LLMConfig)
+    llm: LLMConfig
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> "CustomClassifierConfig":
