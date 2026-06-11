@@ -106,7 +106,7 @@ class CustomClassifierConfig(BaseModel):
         @model_validator(mode="before")
         @classmethod
         def _require_model_name(cls, data: Any) -> Any:
-            """Clear error when model_name is missing/empty (it determines the stored classifier id)."""
+            """Error when model_name is missing/empty."""
             if isinstance(data, dict) and not data.get("model_name"):
                 raise ValueError(
                     "model_name is required — set llm.model_name in the config YAML"
