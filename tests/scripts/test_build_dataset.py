@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from scripts.build_dataset import run_build_dataset
+from scripts.build_dataset import get_world_bank_region, run_build_dataset
 
 
 def _make_fake_snowflake_df(n_rows: int = 20) -> pd.DataFrame:
@@ -123,3 +123,60 @@ def test_run_build_dataset_falls_back_to_local_without_credentials(
 
     connect_call = mock_connect.call_args
     assert connect_call.kwargs.get("connection_name") == "local_dev"
+
+
+def test_get_world_bank_region_returns_none_for_none_input():
+    assert get_world_bank_region(None) is None
+
+
+def test_get_world_bank_region_returns_none_for_empty_list():
+    assert get_world_bank_region([]) is None
+
+
+def test_get_world_bank_region_returns_none_for_unknown_iso_code():
+    assert get_world_bank_region(["UNKNOWN_XYZ"]) is None
+
+
+def test_get_world_bank_region_returns_string_for_valid_iso_code():
+    result = get_world_bank_region(["GBR"])
+    assert result is not None
+    assert isinstance(result, str)
+
+
+def test_get_world_bank_region_uses_first_iso_code_only():
+    result_first = get_world_bank_region(["GBR"])
+    result_second = get_world_bank_region(["GBR", "UNKNOWN_XYZ"])
+    assert result_first == result_second
+
+
+def test_get_world_bank_region_handles_non_list_input():
+    assert get_world_bank_region("not-a-list") is None
+
+
+def test_run_build_dataset_includes_corpus_type_in_sql_when_provided(
+    mock_snowflake_connection,
+):
+    _, _, mock_cursor = mock_snowflake_connection
+
+    run_build_dataset(n=5, corpus_type="Litigation")
+
+    execute_calls = mock_cursor.execute.call_args_list
+    assert len(execute_calls) == 2
+    for single_call in execute_calls:
+        sql = single_call[0][0]
+        assert "Litigation" in sql, (
+            f"Expected corpus type filter in SQL but got: {sql[:200]}"
+        )
+
+
+def test_run_build_dataset_omits_corpus_type_filter_when_not_provided(
+    mock_snowflake_connection,
+):
+    _, _, mock_cursor = mock_snowflake_connection
+
+    run_build_dataset(n=5)
+
+    execute_calls = mock_cursor.execute.call_args_list
+    for single_call in execute_calls:
+        sql = single_call[0][0]
+        assert "METADATA_CORPUS_TYPE_NAME =" not in sql

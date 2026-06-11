@@ -1,10 +1,4 @@
 # serializer version: 1
-# name: test_build_metrics_path[Q123]
-  Path('processed/classifiers_performance/Q123.json')
-# ---
-# name: test_build_metrics_path[Q330]
-  Path('processed/classifiers_performance/Q330.json')
-# ---
 # name: test_calculate_performance_metrics
   list([
     dict({
@@ -637,28 +631,4 @@
     LabelledPassage(id='venk4fad', text='3. Greenhouse gas emissions/removals from land use, land-use change and forestry related activities'),
     LabelledPassage(id='2rzmysqz', text='Seventy-five per cent and 75% of these revenues and amounts allocated to local communities must be reinvested in community work of forestry interest.'),
   ])
-# ---
-# name: test_validate_args[False-None-None-None]
-  None
-# ---
-# name: test_validate_args[False-None-version4-expected_exception4]
-  'classifier and version should not be specified for local source'
-# ---
-# name: test_validate_args[False-TestClassifier-None-expected_exception5]
-  'classifier and version should not be specified for local source'
-# ---
-# name: test_validate_args[False-TestClassifier-version7-expected_exception7]
-  'A remote version (v1) was specified, but the script was told not to track. Tracking must be enabled to use a remote version.'
-# ---
-# name: test_validate_args[True-None-None-None]
-  None
-# ---
-# name: test_validate_args[True-None-version1-expected_exception1]
-  'classifier and version should not be specified for local source'
-# ---
-# name: test_validate_args[True-TestClassifier-None-expected_exception2]
-  'classifier and version should not be specified for local source'
-# ---
-# name: test_validate_args[True-TestClassifier-version3-None]
-  None
 # ---
