@@ -3,12 +3,6 @@
 <services version="1.0" xmlns:deploy="vespa" xmlns:preprocess="properties">
 
     <container id="default" version="1.0">
-        <component id="msmarco-distilbert-dot-v5" type="hugging-face-embedder">
-            <transformer-model url="https://huggingface.co/onnx-models/msmarco-distilbert-dot-v5-onnx/resolve/main/model.onnx"/>
-            <tokenizer-model url="https://huggingface.co/onnx-models/msmarco-distilbert-dot-v5-onnx/resolve/main/tokenizer.json"/>
-            <transformer-token-type-ids/>
-            <transformer-output>token_embeddings</transformer-output>
-        </component>
         <document-api/>
         <search/>
         <nodes deploy:environment="dev" count="1">

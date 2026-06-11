@@ -50,20 +50,6 @@ schema family_document {
             index: enable-bm25
         }
 
-        field family_description_embedding type tensor<float>(x[768]) {
-            indexing: index | attribute
-            alias: search_text_embedding
-                attribute {
-                distance-metric: innerproduct
-            }
-            index {
-                hnsw {
-                    max-links-per-node: 16
-                    neighbors-to-explore-at-insert: 500
-                }
-            }
-        }
-
         field family_import_id type string {
             indexing: attribute | summary
         }
@@ -226,24 +212,6 @@ schema family_document {
         }
         summary-features: name_score() description_score() query(name_weight) query(description_weight)
     }
-
-    rank-profile hybrid inherits default_family {
-        inputs {
-            query(query_embedding) tensor<float>(x[768])
-            query(description_bm25_weight) double: 1.0
-            query(description_closeness_weight) double: 1.0
-        }
-        function name_score() {
-            expression: bm25(family_name_index)
-        }
-        function description_score() {
-            expression: query(description_bm25_weight) * bm25(family_description_index) + query(description_closeness_weight) * closeness(family_description_embedding)
-        }
-        first-phase {
-            expression: (query(name_weight) * name_score()) + (query(description_weight) * description_score())
-        }
-        summary-features: name_score() description_score() bm25(family_name_index) bm25(family_description_index) closeness(family_description_embedding)
-    }
     
     rank-profile bm25_document_title inherits default_family {
         function name_score() {
@@ -254,31 +222,7 @@ schema family_document {
         }
         summary-features: name_score() bm25(document_title_index)
     }
-    
-    rank-profile hybrid_nativerank inherits default_family {
-        inputs {
-            query(query_embedding) tensor<float>(x[768])
-            query(description_nativerank_weight) double: 1.0
-            query(description_closeness_weight) double: 1.0
-        }
-        function name_score() {
-            expression: nativeRank(family_name_index)
-        }
-        function description_score() {
-            expression: query(description_nativerank_weight) * nativeRank(family_description_index) + query(description_closeness_weight) * closeness(family_description_embedding)
-        }
-        first-phase {
-            expression: (query(name_weight) * name_score()) + (query(description_weight) * description_score())
-        }
-        summary-features: name_score() description_score() nativeRank(family_name_index) nativeRank(family_description_index) closeness(family_description_embedding)
-    }
 
-    rank-profile hybrid_no_closeness inherits hybrid {
-        inputs {
-            query(description_closeness_weight) double: 0.0
-        }
-    }
-    
     document-summary search_summary {
         summary family_name {}
         summary family_description {}
