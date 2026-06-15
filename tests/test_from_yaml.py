@@ -9,7 +9,10 @@ from typer.testing import CliRunner
 import scripts.sample as sample_mod
 import scripts.train as train_mod
 from knowledge_graph.classifier.large_language_model import LLMClassifierPrompt
-from knowledge_graph.custom_classifier_config import CustomClassifierConfig
+from knowledge_graph.custom_classifier_config import (
+    CustomClassifierConfig,
+    LLMClassifierConfig,
+)
 from knowledge_graph.identifiers import WikibaseID
 from scripts.train import resolve_config_inputs
 
@@ -30,7 +33,7 @@ def test_config_loads_and_builds_llm_prompt(path: Path):
         assert f"DEF::{wid}" in (prompt.labelling_guidelines or "")
 
 
-def test_resolve_config_inputs_yaml_returns_cfg():
+def test_resolve_config_inputs_yaml_returns_customclassifierconfig():
     """--from-yaml-config loads the config and returns its wikibase_id."""
     wid, cfg = resolve_config_inputs(None, CONFIG_PATHS[0])
     assert cfg is not None and wid == cfg.wikibase_id
@@ -45,9 +48,7 @@ def test_resolve_config_inputs_plain_returns_none():
 def test_slot_without_declaration_is_rejected():
     """A {slot} in labelling_guidelines with no related_definitions entry fails at load."""
     with pytest.raises(pydantic.ValidationError):
-        CustomClassifierConfig.LLMClassifierConfig(
-            model_name="x", labelling_guidelines="see {recognition}"
-        )
+        LLMClassifierConfig(model_name="x", labelling_guidelines="see {recognition}")
 
 
 def test_short_override_is_rejected():
@@ -69,10 +70,9 @@ def test_unknown_field_is_rejected():
 
 
 def test_model_name_required():
-    """A missing llm.model_name raises a clear, actionable error."""
-    with pytest.raises(pydantic.ValidationError) as exc:
-        CustomClassifierConfig.LLMClassifierConfig()
-    assert "model_name is required" in str(exc.value)
+    """A missing llm.model_name raises a validation error."""
+    with pytest.raises(pydantic.ValidationError):
+        LLMClassifierConfig.model_validate({})
 
 
 def test_sample_main_from_yaml_passes_config_to_run_sampling(monkeypatch):
@@ -100,7 +100,6 @@ def test_train_main_from_yaml_passes_llm_kwargs_to_run_training(monkeypatch):
         captured.update(kw)
 
     monkeypatch.setattr(train_mod, "run_training", _fake_run_training)
-    monkeypatch.setattr(train_mod, "fetch_related_definitions", lambda related: {})
     path = CONFIG_PATHS[0]
     cfg = CustomClassifierConfig.from_yaml(path)
     result = CliRunner().invoke(

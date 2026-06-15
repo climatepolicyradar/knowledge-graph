@@ -66,17 +66,6 @@ def resolve_config_inputs(
     return wikibase_id, None
 
 
-def fetch_related_definitions(related: dict[str, WikibaseID]) -> dict[WikibaseID, str]:
-    """Fetch each related concept's definition from the store for {slot} interpolation."""
-    if not related:
-        return {}
-    session = WikibaseSession()
-    return {
-        wid: (session.get_concept(wid).definition or "")
-        for wid in set(related.values())
-    }
-
-
 def parse_kwargs_from_strings(key_value_strings: Optional[list[str]]) -> dict[str, Any]:
     """Parse key=value strings into dicts that can be used as kwargs."""
     if not key_value_strings:
@@ -505,7 +494,16 @@ def main(
     if cfg is not None:
         concept_overrides = cfg.concept_overrides.as_overrides()
         if classifier_type == "LLMClassifier":
-            defs = fetch_related_definitions(cfg.llm.related_definitions)
+            related = cfg.llm.related_definitions
+            session = WikibaseSession() if related else None
+            defs = (
+                {
+                    wid: (session.get_concept(wid).definition or "")
+                    for wid in set(related.values())
+                }
+                if session
+                else {}
+            )
             classifier_kwargs = cfg.llm.to_classifier_kwargs(definitions=defs)
         elif classifier_type == "BertBasedClassifier":
             classifier_kwargs = cfg.bert.to_classifier_kwargs()
