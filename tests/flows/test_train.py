@@ -2,13 +2,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from flows.train import train_on_gpu
+from flows.train import train_on_cpu, train_on_gpu
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 
 
 @pytest.mark.asyncio
-async def test_train_on_gpu(mock_s3_client, mock_wandb, test_config):
+@pytest.mark.parametrize("train_flow", [train_on_gpu, train_on_cpu])
+async def test_train_flow(train_flow, mock_s3_client, mock_wandb, test_config):
     # Create a mock session that returns our mock_s3_client
     mock_session = MagicMock()
     mock_session.client.return_value = mock_s3_client
@@ -24,7 +25,7 @@ async def test_train_on_gpu(mock_s3_client, mock_wandb, test_config):
             "track_and_upload": False,
         }
 
-        _ = await train_on_gpu(
+        _ = await train_flow(
             wikibase_id=pass_through_kwargs["wikibase_id"],
             track_and_upload=pass_through_kwargs["track_and_upload"],
             aws_env=AwsEnv.labs,
