@@ -9,9 +9,10 @@ from typing import Annotated, Any, Optional
 import torch
 import typer
 import wandb
+import yaml
 from prefect.client.schemas.objects import FlowRun
 from prefect.deployments import run_deployment
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
@@ -25,6 +26,10 @@ from knowledge_graph.classifier import (
     get_local_classifier_path,
 )
 from knowledge_graph.classifier.bert_based import BertBasedClassifier
+from knowledge_graph.classifier.large_language_model import (
+    DEFAULT_SYSTEM_PROMPT,
+    LLMClassifierPrompt,
+)
 from knowledge_graph.cloud import (
     AwsEnv,
     Namespace,
@@ -49,6 +54,116 @@ from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
+
+DESCRIPTION_WIKIBASE_LENGTH_LIMIT = 2500
+DEFINITION_WIKIBASE_LENGTH_LIMIT = 2500
+
+
+class CustomClassifierConfig(BaseModel):
+    """
+    Here temporarily to test from yaml pattern.
+
+    Will move to knowledge_graph/custom_classifier_config.py later.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    class ConceptOverrides(BaseModel):
+        """A definition/description here must EXCEED the store cap (otherwise it belongs in the store) — enforced by the too_short validator below."""
+
+        model_config = ConfigDict(extra="forbid")
+        definition: str | None = None
+        description: str | None = None
+
+        @field_validator("definition", "description")
+        @classmethod
+        def _must_exceed_store(cls, v: str | None, info) -> str | None:
+            if v is None:
+                return v
+            cap = (
+                DEFINITION_WIKIBASE_LENGTH_LIMIT
+                if info.field_name == "definition"
+                else DESCRIPTION_WIKIBASE_LENGTH_LIMIT
+            )
+            if len(v) <= cap:
+                raise ValueError(
+                    f"{info.field_name} is {len(v)} chars (<= {cap}); it fits the concept store — "
+                    "put it in Wikibase instead of overriding here."
+                )
+            return v
+
+        def as_overrides(self) -> dict[str, Any]:
+            """Return the set override fields as a dict (drops unset/None)."""
+            return self.model_dump(exclude_none=True)
+
+    class LLMConfig(BaseModel):
+        """Model + prompt for the LLM-labelling stage."""
+
+        model_config = ConfigDict(extra="forbid")
+        model_name: str
+        labelling_guidelines: str | None = None
+        system_prompt_template: str = DEFAULT_SYSTEM_PROMPT
+
+        @model_validator(mode="before")
+        @classmethod
+        def _require_model_name(cls, data: Any) -> Any:
+            """Error when model_name is missing/empty."""
+            if isinstance(data, dict) and not data.get("model_name"):
+                raise ValueError(
+                    "model_name is required — set llm.model_name in the config YAML"
+                )
+            return data
+
+        def to_classifier_kwargs(self) -> dict[str, Any]:
+            """Build the LLMClassifier kwargs (prompt, plus model_name when set)."""
+            return {
+                "model_name": self.model_name,
+                "system_prompt_template": LLMClassifierPrompt(
+                    system_prompt_template=self.system_prompt_template,
+                    labelling_guidelines=self.labelling_guidelines,
+                ),
+            }
+
+    wikibase_id: WikibaseID
+    concept_overrides: ConceptOverrides = Field(default_factory=ConceptOverrides)
+    llm: LLMConfig
+
+    @classmethod
+    def from_yaml(cls, path: Path | str) -> "CustomClassifierConfig":
+        """Load and validate a config from a YAML file."""
+        with open(path) as f:
+            return cls.model_validate(yaml.safe_load(f))
+
+
+def _resolve_training_inputs(
+    wikibase_id: WikibaseID | None,
+    from_yaml_config: Path | None,
+    classifier_type: str | None,
+    classifier_kwargs: dict[str, Any],
+    concept_overrides: dict[str, Any],
+) -> tuple[WikibaseID, dict[str, Any], dict[str, Any]]:
+    """
+    Resolve (wikibase_id, classifier_kwargs)
+
+    Made --wikibase-id optional to add --from-yaml-config, but they should be mutually exclusive.
+    --from-yaml-config will currently only support --classifier-type LLMClassifier
+    """
+    if from_yaml_config is not None and wikibase_id is not None:
+        raise typer.BadParameter("Pass --wikibase-id OR --from-yaml-config, not both.")
+    if from_yaml_config is not None:
+        if classifier_type != "LLMClassifier":
+            raise typer.BadParameter(
+                "--from-yaml-config currently supports --classifier-type LLMClassifier"
+            )
+        cfg = CustomClassifierConfig.from_yaml(from_yaml_config)
+        return (
+            cfg.wikibase_id,
+            cfg.llm.to_classifier_kwargs(),
+            cfg.concept_overrides.as_overrides(),
+        )
+    if wikibase_id is None:
+        raise typer.BadParameter("Provide --wikibase-id or --from-yaml-config.")
+    return wikibase_id, classifier_kwargs, concept_overrides
 
 
 def resolve_config_inputs(
