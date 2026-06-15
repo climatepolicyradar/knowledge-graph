@@ -34,6 +34,7 @@ from flows.inference import (
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.modify_threshold import modify_threshold
 from flows.predict import predict_adhoc
 from flows.push_new_dataset import push_new_dataset
 from flows.sample import sample
@@ -215,6 +216,11 @@ async def main() -> None:
     await create_deployment(
         flow=sample,
         description="Sample passages for a concept from the dataset for labelling",
+    )
+
+    await create_deployment(
+        flow=modify_threshold,
+        description="Load a classifier from W&B, set a new prediction threshold, and upload the classifier with the new threshold to S3 and W&B",
     )
 
     await create_deployment(
