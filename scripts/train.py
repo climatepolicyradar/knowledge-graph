@@ -3,6 +3,7 @@ import os
 import random
 import re
 from contextlib import nullcontext
+from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Optional
 
@@ -53,6 +54,21 @@ from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
+
+
+class ComputeTarget(str, Enum):
+    """Where to run training."""
+
+    local = "local"
+    remote_cpu = "remote-cpu"
+    remote_gpu = "remote-gpu"
+
+
+# Maps remote compute targets to the Prefect flow that runs on that compute.
+_REMOTE_FLOW_NAMES: dict["ComputeTarget", str] = {
+    ComputeTarget.remote_cpu: "train-on-cpu",
+    ComputeTarget.remote_gpu: "train-on-gpu",
+}
 
 DESCRIPTION_WIKIBASE_LENGTH_LIMIT = 2500
 DEFINITION_WIKIBASE_LENGTH_LIMIT = 2500
@@ -512,16 +528,18 @@ def main(
             help="AWS environment to use for S3 uploads",
         ),
     ] = AwsEnv.production,
-    use_coiled_gpu: Annotated[
-        bool,
+    compute: Annotated[
+        ComputeTarget,
         typer.Option(
-            ...,
             help=(
-                "Run on Coiled with a GPU. This uses prefect to start a Coiled cluster. "
-                "Note, that the classifier won't be available locally after training."
+                "Where to run training. 'local' runs in-process. 'remote-cpu' and "
+                "'remote-gpu' dispatch the corresponding Prefect deployment (the "
+                "classifier won't be available locally after training). Use "
+                "'remote-gpu' for BERT classifiers and 'remote-cpu' for non-BERT "
+                "classifiers."
             ),
         ),
-    ] = False,
+    ] = ComputeTarget.local,
     evaluate: Annotated[
         bool,
         typer.Option(
@@ -571,8 +589,9 @@ def main(
     :type track_and_upload: bool
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
-    :param use_coiled_gpu: Whether to run training remotely using a coiled gpu
-    :type use_coiled_gpu: bool
+    :param compute: Where to run training: locally, or by dispatching the remote
+        CPU or GPU Prefect deployment
+    :type compute: ComputeTarget
     :param evaluate: Whether to evaluate the model after training
     :type evaluate: bool
     :param classifier_type: The classifier type to use, optional. Defaults to the
@@ -596,8 +615,8 @@ def main(
         concept_overrides,
     )
 
-    if use_coiled_gpu:
-        flow_name = "train-on-gpu"
+    if compute is not ComputeTarget.local:
+        flow_name = _REMOTE_FLOW_NAMES[compute]
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
         qualified_name = f"{flow_name}/{deployment_name}"
 
