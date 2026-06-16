@@ -76,7 +76,47 @@ async def train_on_gpu(
     limit_training_samples: Optional[int] = None,
     config: Config | None = None,
 ):
-    """Trigger the training script in prefect using coiled."""
+    """Trigger the training script in prefect on a GPU using coiled."""
+    _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
+        config=config, aws_env=aws_env
+    )
+
+    return await run_training(
+        wikibase_id=wikibase_id,
+        track_and_upload=track_and_upload,
+        aws_env=aws_env,
+        wikibase_config=wikibase_config,
+        argilla_config=argilla_config,
+        s3_client=s3_client,
+        evaluate=evaluate,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs,
+        concept_overrides=concept_overrides,
+        training_data_wandb_path=training_data_wandb_path,
+        limit_training_samples=limit_training_samples,
+    )
+
+
+@flow()
+async def train_on_cpu(
+    wikibase_id: WikibaseID,
+    track_and_upload: bool = True,
+    aws_env: AwsEnv = AwsEnv.production,
+    evaluate: bool = True,
+    classifier_type: Optional[str] = None,
+    classifier_kwargs: Optional[dict[str, Any]] = None,
+    concept_overrides: Optional[dict[str, Any]] = None,
+    training_data_wandb_path: Optional[str] = None,
+    limit_training_samples: Optional[int] = None,
+    config: Config | None = None,
+):
+    """
+    Trigger the training script in prefect on CPU compute (ECS).
+
+    Intended for non-BERT classifiers (e.g. keyword, LLM, embedding) that don't
+    require a GPU, avoiding the cost of spinning up a Coiled GPU cluster. BERT
+    classifiers should be trained with ``train_on_gpu``.
+    """
     _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
         config=config, aws_env=aws_env
     )
