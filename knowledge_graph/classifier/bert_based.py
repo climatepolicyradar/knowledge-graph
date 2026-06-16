@@ -21,6 +21,7 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizer,
     pipeline,
+    set_seed,
 )
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
@@ -427,6 +428,7 @@ class BertBasedClassifier(
         labelled_passages: list[LabelledPassage],
         validation_size: float = 0.2,
         enable_wandb: bool = False,
+        seed: int | None = None,
         **kwargs,
     ) -> "BertBasedClassifier":
         """
@@ -462,6 +464,11 @@ class BertBasedClassifier(
             labelled_passages: The labelled passages to train the classifier on.
             validation_size: The proportion of labelled passages to use for validation.
             enable_wandb: Whether to enable W&B logging for training metrics and model checkpoints.
+            seed: Optional random seed making the run reproducible. When set, it seeds
+                all random number generators- the train/validation split, classification-head
+                initialisation, data shuffling and dropout. When ``None``
+                (the default), the previous behaviour is preserved: a fixed split
+                (``random_state=42``) with otherwise nondeterministic training.
             **kwargs: Additional keyword arguments passed to the base class
         Returns:
             BertBasedClassifier: The trained classifier
@@ -471,6 +478,22 @@ class BertBasedClassifier(
                 f"Not enough labelled passages to train a {self.name} for "
                 f"{self.concept.wikibase_id}. At least 10 are required."
             )
+
+        # The classification head is randomly initialised when the model is first loaded
+        # (in `__init__`, before any seed is known), so simply seeding here is not enough
+        # to make a run reproducible. When a seed is given we seed every random number generator
+        # and re-initialise the head under that seed, leaving the (possibly fine-tuned/checkpointed)
+        # encoder backbone untouched.
+        # The train/validation split and Trainer also use this seed below.
+        if seed is not None:
+            logger.info("Seeding training run with seed %d", seed)
+            set_seed(seed)
+            if torch.backends.mps.is_available():
+                torch.mps.manual_seed(seed)
+            for name, module in self.model.named_modules():
+                if name and ("classifier" in name or "head" in name):
+                    self.model._init_weights(module)  # noqa: SLF001
+        data_seed = seed if seed is not None else 42
 
         labels = [
             1
@@ -489,7 +512,7 @@ class BertBasedClassifier(
             labelled_passages,
             labels,
             test_size=validation_size,
-            random_state=42,
+            random_state=data_seed,
             stratify=labels,
         )
 
@@ -584,6 +607,8 @@ class BertBasedClassifier(
         with tempfile.TemporaryDirectory() as temp_dir:
             training_args = TrainingArguments(
                 output_dir=os.path.join(temp_dir, "results"),
+                seed=data_seed,
+                data_seed=data_seed,
                 # high number of train epochs as we enable early stopping below
                 num_train_epochs=10,
                 # batch size scales with dataset size, to avoid batches or epochs that
