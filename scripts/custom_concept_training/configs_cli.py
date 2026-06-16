@@ -51,23 +51,23 @@ def validate(
     ),
     check_all_configs: bool = typer.Option(
         False,
+        help="Validate every config in the dir (includes the duplicate-concept check).",
+    ),
+    check_wikibase: bool = typer.Option(
+        False,
         help="Also confirm every wikibase_id/related definition resolves (needs creds).",
     ),
     config_dir: Path = CONFIG_DIR,
 ):
-    """
-    Validate a single config file, or every config in the dir.
+    """Validate a single config file, or every config in the dir."""
+    if config_path is not None:
+        results = {config_path: validate_file(config_path)}
+    elif check_all_configs:
+        results = validate_dir(config_dir)
+    else:
+        raise typer.BadParameter("Pass a config file path or --check-all-configs.")
 
-    The cross-file duplicate-concept check only runs when validating the whole dir (a single-file
-    run can't see siblings). Per-file authoring feedback is also handled by `create`.
-    """
-    results = (
-        {config_path: validate_file(config_path)}
-        if config_path is not None
-        else validate_dir(config_dir)
-    )
-
-    if check_all_configs:
+    if check_wikibase:
         session = WikibaseSession()
         for path, errors in results.items():
             if errors:

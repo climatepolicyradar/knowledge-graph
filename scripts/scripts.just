@@ -182,7 +182,7 @@ audit-prefect-artifacts +OPTS="":
 
 # Validate all custom-classifier config YAMLs (offline schema + structural checks)
 validate-configs:
-    uv run classifier-configs validate
+    uv run classifier-configs validate --check-all-configs
 
 # Validate a single config file
 validate-config path:
@@ -190,7 +190,7 @@ validate-config path:
 
 # Same, plus live Wikibase existence checks (needs WIKIBASE_* env vars)
 validate-configs-live:
-    uv run classifier-configs validate --check-wikibase
+    uv run classifier-configs validate --check-all-configs --check-wikibase
 
 # Interactively create a new custom-classifier config YAML
 new-classifier-config:

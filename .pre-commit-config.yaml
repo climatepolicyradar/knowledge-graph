@@ -44,7 +44,7 @@ repos:
     hooks:
       - id: validate-classifier-configs
         name: validate classifier configs
-        entry: uv run classifier-configs validate
+        entry: uv run classifier-configs validate --check-all-configs
         language: system
         pass_filenames: false
         files: ^(scripts/custom_concept_training/configs/.*\.yaml|knowledge_graph/custom_classifier_config\.py)$
