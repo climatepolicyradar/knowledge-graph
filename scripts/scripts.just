@@ -184,6 +184,10 @@ audit-prefect-artifacts +OPTS="":
 validate-configs:
     uv run classifier-configs validate
 
+# Validate a single config file
+validate-config path:
+    uv run classifier-configs validate {{path}}
+
 # Same, plus live Wikibase existence checks (needs WIKIBASE_* env vars)
 validate-configs-live:
     uv run classifier-configs validate --check-wikibase

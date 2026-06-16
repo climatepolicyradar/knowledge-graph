@@ -46,6 +46,9 @@ _LiteralDumper.add_representer(str, _str_representer)
 
 @app.command()
 def validate(
+    config_path: Path | None = typer.Argument(
+        None, help="Validate a single config file. Defaults to all configs in the dir."
+    ),
     check_all_configs: bool = typer.Option(
         False,
         help="Also confirm every wikibase_id/related definition resolves (needs creds).",
@@ -53,12 +56,16 @@ def validate(
     config_dir: Path = CONFIG_DIR,
 ):
     """
-    Validate every config in the configs dir. Exit non-zero on failure.
+    Validate a single config file, or every config in the dir.
 
-    Per-file feedback while authoring is handled separately by `create`, which validates only the
-    file it just wrote.
+    The cross-file duplicate-concept check only runs when validating the whole dir (a single-file
+    run can't see siblings). Per-file authoring feedback is also handled by `create`.
     """
-    results = validate_dir(config_dir)
+    results = (
+        {config_path: validate_file(config_path)}
+        if config_path is not None
+        else validate_dir(config_dir)
+    )
 
     if check_all_configs:
         session = WikibaseSession()
