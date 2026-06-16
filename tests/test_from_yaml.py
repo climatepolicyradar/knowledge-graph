@@ -14,6 +14,11 @@ from knowledge_graph.custom_classifier_config import (
     LLMClassifierConfig,
 )
 from knowledge_graph.identifiers import WikibaseID
+from scripts.custom_concept_training.validate import (
+    check_wikibase_ids,
+    validate_dir,
+    validate_file,
+)
 from scripts.train import resolve_config_inputs
 
 CONFIG_DIR = Path(__file__).parents[1] / "scripts/custom_concept_training/configs"
@@ -130,3 +135,55 @@ def test_resolve_config_inputs_rejects_neither():
     """One of --wikibase-id / --from-yaml-config is required."""
     with pytest.raises(typer.BadParameter):
         resolve_config_inputs(None, None)
+
+
+@pytest.mark.parametrize("path", CONFIG_PATHS, ids=lambda p: p.stem)
+def test_committed_config_passes_offline_validation(path: Path):
+    """Every committed config passes the offline validator with no errors."""
+    assert validate_file(path) == []
+
+
+def test_committed_configs_have_no_duplicates():
+    """The whole-dir validation (incl. duplicate-concept check) is clean for committed configs."""
+    assert all(not errs for errs in validate_dir().values())
+
+
+def test_filename_mismatch_is_flagged(tmp_path: Path):
+    (tmp_path / "q999.yaml").write_text(
+        "wikibase_id: Q1\nllm:\n  model_name: openrouter:openai/gpt-5\n"
+    )
+    assert any(
+        "does not match filename" in e for e in validate_file(tmp_path / "q999.yaml")
+    )
+
+
+def test_duplicate_concept_is_flagged(tmp_path: Path):
+    body = "wikibase_id: Q1\nllm:\n  model_name: openrouter:openai/gpt-5\n"
+    (tmp_path / "q1.yaml").write_text(body)
+    (tmp_path / "q01.yaml").write_text(body)
+    results = validate_dir(tmp_path)
+    assert any("duplicate concept" in e for errs in results.values() for e in errs)
+
+
+def test_unsupported_model_is_flagged(tmp_path: Path):
+    (tmp_path / "q1.yaml").write_text(
+        "wikibase_id: Q1\nllm:\n  model_name: openrouter:fake/model\n"
+    )
+    assert any("not supported" in e for e in validate_file(tmp_path / "q1.yaml"))
+
+
+def test_short_override_must_go_to_concept_store(tmp_path: Path):
+    """Definition inlined in YAML that fits in concept store is rejected."""
+    p = tmp_path / "q5.yaml"
+    p.write_text(
+        "wikibase_id: Q5\n"
+        "concept_overrides:\n  definition: too short for an override\n"
+        "llm:\n  model_name: openrouter:openai/gpt-5\n"
+    )
+    assert any("put it in Wikibase" in e for e in validate_file(p))
+
+
+def test_live_check_against_mocked_session(MockedWikibaseSession):
+    """check_wikibase_ids works against the mocked session (no real network)."""
+    cfg = CustomClassifierConfig.from_yaml(CONFIG_PATHS[0])
+    assert isinstance(check_wikibase_ids(cfg, MockedWikibaseSession), list)

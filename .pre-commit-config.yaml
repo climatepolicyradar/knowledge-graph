@@ -40,3 +40,11 @@ repos:
     hooks:
       - id: typos
         exclude: ^(tests/fixtures|tests/flows/fixtures|tests/local_vespa/test_documents|tests/__snapshots__|flows/classifier_specs|.*\.csv$)
+  - repo: local
+    hooks:
+      - id: validate-classifier-configs
+        name: validate classifier configs
+        entry: uv run classifier-configs validate
+        language: system
+        pass_filenames: false
+        files: ^(scripts/custom_concept_training/configs/.*\.yaml|knowledge_graph/custom_classifier_config\.py)$

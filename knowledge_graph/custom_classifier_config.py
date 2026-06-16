@@ -21,6 +21,13 @@ from knowledge_graph.identifiers import WikibaseID
 DESCRIPTION_WIKIBASE_LENGTH_LIMIT = 2500
 DEFINITION_WIKIBASE_LENGTH_LIMIT = 2500
 
+# These are from the existing custom classifiers, need to check which are actually supported, whether keeping this up to date is feasible or can be automated or if this is necessary
+SUPPORTED_LLM_MODELS: set[str] = {
+    "openrouter:openai/gpt-5",
+    "openrouter:google/gemini-3.1-pro-preview",
+    "openrouter:google/gemini-3-flash-preview",
+}
+
 
 class ConceptOverrides(BaseModel):
     """Definition/description here must EXCEED the length limit."""
@@ -76,8 +83,20 @@ class LLMClassifierConfig(BaseModel):
 
     model_name: str
     system_prompt_template: str = DEFAULT_SYSTEM_PROMPT
-    labelling_guidelines: str | None = None
     related_definitions: list[WikibaseID] = Field(default_factory=list)
+    labelling_guidelines: str | None = None
+
+    # Need to check whether keeping the supported models up to date is feasible/if this can be automated somehow
+    @field_validator("model_name")
+    @classmethod
+    def _model_name_supported(cls, v: str) -> str:
+        """Reject a model_name that is not in the supported."""
+        if v not in SUPPORTED_LLM_MODELS:
+            raise ValueError(
+                f"model_name {v!r} is not supported; choose one of "
+                f"{sorted(SUPPORTED_LLM_MODELS)}"
+            )
+        return v
 
     @model_validator(mode="after")
     def _placeholders_match_related(self):

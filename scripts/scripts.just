@@ -178,3 +178,16 @@ audit-prefect-artifacts +OPTS="":
     else
         uv run collect_prefect_artifacts {{OPTS}}
     fi
+
+
+# Validate all custom-classifier config YAMLs (offline schema + structural checks)
+validate-configs:
+    uv run classifier-configs validate
+
+# Same, plus live Wikibase existence checks (needs WIKIBASE_* env vars)
+validate-configs-live:
+    uv run classifier-configs validate --check-wikibase
+
+# Interactively create a new custom-classifier config YAML
+new-classifier-config:
+    uv run classifier-configs create
