@@ -1,6 +1,7 @@
 import math
 from contextlib import nullcontext
-from typing import Annotated, cast
+from pathlib import Path
+from typing import Annotated, Any, cast
 
 import click
 import pandas as pd
@@ -16,7 +17,7 @@ from knowledge_graph.sampling import create_balanced_sample, split_evenly
 from knowledge_graph.utils import get_logger, serialise_pydantic_list_as_jsonl
 from knowledge_graph.wandb_helpers import log_labelled_passages_artifact_to_wandb_run
 from knowledge_graph.wikibase import WikibaseSession
-from scripts.train import parse_kwargs_from_strings
+from scripts.train import parse_kwargs_from_strings, resolve_config_inputs
 
 app = typer.Typer()
 
@@ -43,7 +44,7 @@ def run_sampling(
     max_size_to_sample_from: int = 500_000,
     max_negative_proportion: float | None = None,
     track_and_upload: bool = True,
-    concept_override: list[str] | None = None,
+    concept_overrides: dict[str, Any] | None = None,
     wikibase_username: str | None = None,
     wikibase_password: str | None = None,
     wikibase_url: str | None = None,
@@ -65,8 +66,8 @@ def run_sampling(
 
     The sampled passages are saved to a local file and uploaded to W&B.
 
-    :param concept_override: List of concept property overrides in key=value format (e.g., description, labels)
-    :type concept_override: list[str] | None
+    :param concept_overrides: Dict of concept property overrides from YAML
+    :type concept_override: dict[str, Any] | None = None
     """
     logger = get_logger()
 
@@ -109,7 +110,7 @@ def run_sampling(
     )
     concept = wikibase.get_concept(wikibase_id, include_labels_from_subconcepts=True)
 
-    if concept_overrides := parse_kwargs_from_strings(concept_override):
+    if concept_overrides:
         logger.info(f"🔧 Applying custom concept properties: {concept_overrides}")
         for key, value in concept_overrides.items():
             if hasattr(concept, key):
@@ -291,13 +292,12 @@ def run_sampling(
 @app.command()
 def main(
     wikibase_id: Annotated[
-        WikibaseID,
+        WikibaseID | None,
         typer.Option(
-            ...,
-            help="The Wikibase ID of the concept to sample passages for",
+            help="The Wikibase ID of the concept to sample passages for. Required unless --from-yaml-config is given.",
             parser=WikibaseID,
         ),
-    ],
+    ] = None,
     sample_size: int = typer.Option(130, help="The number of passages to sample"),
     min_negative_proportion: float = typer.Option(
         0.1, help="The minimum proportion of negative samples to take"
@@ -339,8 +339,27 @@ def main(
             help="Concept property overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
+    from_yaml_config: Annotated[
+        Path | None,
+        typer.Option(
+            help="Whether to use custom-classifier YAML config.",
+        ),
+    ] = None,
 ):
     logger = get_logger()
+
+    wikibase_id, cfg = resolve_config_inputs(wikibase_id, from_yaml_config)
+    if cfg is not None:
+        concept_overrides = cfg.concept_overrides.as_overrides()
+        dataset_name = cfg.sampling.dataset_name
+        sample_size = cfg.sampling.sample_size
+        min_negative_proportion = cfg.sampling.min_negative_proportion
+        max_negative_proportion = cfg.sampling.max_negative_proportion
+        corpus_types_include = cfg.sampling.corpus_types_include
+        corpus_types_exclude = cfg.sampling.corpus_types_exclude
+        max_size_to_sample_from = cfg.sampling.max_size_to_sample_from
+    else:
+        concept_overrides = parse_kwargs_from_strings(concept_override)
 
     if dataset_name == "balanced":
         dataset_filename = "sampled_dataset.feather"
@@ -371,7 +390,7 @@ def main(
         max_size_to_sample_from=max_size_to_sample_from,
         max_negative_proportion=max_negative_proportion,
         track_and_upload=track_and_upload,
-        concept_override=concept_override,
+        concept_overrides=concept_overrides,
     )
 
 

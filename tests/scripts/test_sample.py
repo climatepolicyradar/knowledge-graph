@@ -145,7 +145,7 @@ def test_run_sampling_applies_concept_override_to_attribute(patched_sample):
     run_sampling(
         wikibase_id=WikibaseID("Q787"),
         dataset=dataset,
-        concept_override=["description=overridden"],
+        concept_overrides={"description": "overridden"},
         track_and_upload=False,
     )
 
