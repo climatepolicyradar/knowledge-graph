@@ -89,14 +89,14 @@ class LLMClassifierConfig(BaseModel):
     # Need to check whether keeping the supported models up to date is feasible/if this can be automated somehow
     @field_validator("model_name")
     @classmethod
-    def _model_name_supported(cls, v: str) -> str:
+    def _model_name_supported(cls, model: str) -> str:
         """Reject a model_name that is not in the supported."""
-        if v not in SUPPORTED_LLM_MODELS:
+        if model not in SUPPORTED_LLM_MODELS:
             raise ValueError(
-                f"model_name {v!r} is not supported; choose one of "
+                f"model_name {model!r} is not supported; choose one of "
                 f"{sorted(SUPPORTED_LLM_MODELS)}"
             )
-        return v
+        return model
 
     @model_validator(mode="after")
     def _placeholders_match_related(self):
