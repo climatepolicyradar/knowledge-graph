@@ -160,7 +160,7 @@ def test_filename_mismatch_is_flagged(tmp_path: Path):
 def test_duplicate_concept_is_flagged(tmp_path: Path):
     body = "wikibase_id: Q1\nllm:\n  model_name: openrouter:openai/gpt-5\n"
     (tmp_path / "q1.yaml").write_text(body)
-    (tmp_path / "q01.yaml").write_text(body)
+    (tmp_path / "q2.yaml").write_text(body)
     results = validate_dir(tmp_path)
     assert any("duplicate concept" in e for errs in results.values() for e in errs)
 
@@ -185,5 +185,6 @@ def test_short_override_must_go_to_concept_store(tmp_path: Path):
 
 def test_live_check_against_mocked_session(MockedWikibaseSession):
     """check_wikibase_ids works against the mocked session (no real network)."""
+    session = MockedWikibaseSession()
     cfg = CustomClassifierConfig.from_yaml(CONFIG_PATHS[0])
-    assert isinstance(check_wikibase_ids(cfg, MockedWikibaseSession), list)
+    assert isinstance(check_wikibase_ids(cfg, session), list)

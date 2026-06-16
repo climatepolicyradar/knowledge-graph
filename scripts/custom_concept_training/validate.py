@@ -38,8 +38,8 @@ def validate_dir(config_dir: Path = CONFIG_DIR) -> dict[Path, list[str]]:
     seen: dict[WikibaseID, Path] = {}
     for p in paths:
         try:
-            wid = expected_wikibase_id(p)
-        except ValueError:
+            wid = CustomClassifierConfig.from_yaml(p).wikibase_id
+        except Exception:
             continue
         if wid in seen:
             results[p].append(
