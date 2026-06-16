@@ -1,0 +1,77 @@
+wikibase_id: Q32
+
+sampling:
+  dataset_name: combined
+  sample_size: 10000
+  min_negative_proportion: 0.1
+  max_negative_proportion: 0.3
+  corpus_types_exclude:
+    - Litigation
+  max_size_to_sample_from: 1000000
+
+llm:
+  model_name: openrouter:google/gemini-3.1-pro-preview
+  related_definitions:
+    - Q1731
+    - Q912
+    - Q911
+    - Q1730
+  labelling_guidelines: |
+    Use the following inclusion/exclusion criteria, in addition to the definition.
+
+    Your main task is to find positive examples; an EXCLUSION rule should never rule out whole passages, only specific phrases within that passage.
+
+    **THE NORMATIVE REQUIREMENT (Core Test)**
+    Before tagging, ask: Does this passage make an argument, either explicit or implicit, that is clearly linked to ethics, fairness or human rights, for improving the world or the position of vulnerable people?
+    ONLY tag parts of the text where the answer is yes. Remember you are a policy expert that is trained to see when and how abstract actions and arguments signal real commitment.
+
+    **OVERALL GUIDELINE:** **Examples that FAIL the test:**
+    *  "Women in this sector often earn less than men" — states a fact about inequality without proposing a fix.
+    *  "Land tenure insecurity leads to lower yields for female farmers" — impact analysis of a problem, not a justice solution.
+    *  "Child labour is common in informal waste picking" — descriptive statement of fact.
+
+    **Examples that PASS the test:**
+    *  "The policy aims to close the unjust gender pay gap" — identifies an injustice and proposes an action to fix it.
+    *  "We must ensure activities do not exacerbate existing inequalities" — a prescriptive safeguard to prevent injustice.
+    * "Strategies to eliminate child labour and uphold human rights" — a prescriptive solution.
+    * "We owe it to our children to ensure they can live fulfilling lives" — a normative ethical argument for intergenerational justice.
+
+    ### **1. PROBLEMS VS. FIXING AND JUDGING**
+    To be tagged, a passage must not just *describe* an unfair situation; it MUST attempt to *fix it*, *judge* it ethically, or provide a framework to *prevent* it.
+    * **INCLUDE**: Justice-aligned actions, safeguards, solutions, and proposals. High-level policy commitments (e.g., "Mainstreaming a gender framework into project MRV") are active efforts to fix systemic gaps and should be included.
+    * **EXCLUDE**: Passages that state an impact on a vulnerable group without providing a link to a remedial action or justice framing.
+
+    ### **2. ETHICAL ARGUMENTS & RIGHTS-BASED REASONING**
+    * **INCLUDE**: Passages stating why justice is important or why actions should be taken in a just, fair, or equitable way.
+    * **INCLUDE**: Rights-based reasoning where the text relies on "The Right to [X]" or "Rights of [Group]" as a tool to argue for social change, climate action, or the protection of vulnerable people.
+
+    ### **3. JUSTICE-ALIGNED VS. GENERIC ACTION**
+    Avoid tagging buzzwords unless they are specifically qualified by justice concepts.
+    * **INCLUDE**: phrases with justice-signalling qualifiers such as "ensure **Equal** representation" or "**Equitable** access to finance."
+    * **SCRUTINIZE**: Vague language, buzzwords and tokenistic mentions, like "Empowering communities" or "Inclusive by design." Tag ONLY if the phrase is made credible by additional information (e.g. vulnerable groups, pollicy action).
+
+    ### **4. HOLISTIC JUSTICE**
+    * **INCLUDE**: Passages that describe a specific type of justice. Tag any phrase matching the following definitions:
+      a) Recognition Justice: {Q1731}
+      b) Procedural Justice: {Q912}
+      c) Distributive Justice: {Q911}
+      d) Transformative Justice: {Q1730}
+    * **INCLUDE**: Ethical discussions of the root causes of inequality and proposals or arguments to fix these root causes.
+
+    ### **5. INSTITUTIONAL TITLES & CONTEXT**
+    * **INCLUDE**: Titles of policies, departments, or priority areas that name justice frameworks or targeted benefits (e.g., "Ministry GESI Action Plan," "Just Transition Priority Areas," "Regional Rights Resource Team"). These labels often represent the core substance of the text.
+    * **ACRONYMS**: Ambiguous acronyms (like "JET") should be interpreted within a climate-, nature-, and development context. Assume they are justice-relevant if the context points toward a "Just Transition."
+
+    ### **6. PRIORITIZE EXPLICIT KEYWORDS**
+    * **INCLUDE**: Explicit mentions of "Intergenerational justice," "Climate Ethics," "Restorative Justice," or "Climate Justice."
+    * **INCLUDE**: "Gender," "Vulnerable," or "Indigenous" ONLY when they are part of a phrase fulfilling the Normative Requirement (e.g., a goal to "double the productivity of indigenous farmers").
+    * **EXCLUDE**: Criminal justice or legal systems unless they are explicitly relevant to climate/environmental rights or transition impacts.
+
+    ### **7. SHORT PHRASES AND CITATIONS***
+    *   **SCRUTINIZE** titles, headers, proper nouns, or names of committees/documents. These are often too generic to be included, but can be included if they point point to justice-relevant policy or explicitly mention justice-aligned content.
+    *   **Exclude** citations or references generally. Explicit mentions of core justice concepts can sometimes be included, but not if they are generic (e.g., "As discussed in the 2021 Justice Reforms Report...").
+
+    ### **7. AMBIGUITY CHECK**
+    * **If the text identifies a justice-relevant barrier (e.g., "discriminatory norms prevent participation"):** Tag it if it is part of a strategy intended to address that barrier.
+    * **If the text names a justice-relevant goal (e.g., "Objective: Allocate 40% of funds to female-headed households"):** Tag it.
+    * **If the text does not match any criteria, return to the Core Test and the definition.**

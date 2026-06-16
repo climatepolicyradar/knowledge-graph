@@ -12,6 +12,7 @@ from flows.config import Config
 from knowledge_graph.cloud import AwsEnv, get_async_session, get_aws_ssm_param
 from knowledge_graph.identifiers import WikibaseID
 from scripts.sample import run_sampling
+from scripts.train import parse_kwargs_from_strings
 
 
 @task
@@ -92,7 +93,7 @@ async def run_sampling_task(
             max_size_to_sample_from=max_size_to_sample_from,
             max_negative_proportion=max_negative_proportion,
             track_and_upload=track_and_upload,
-            concept_override=concept_override,
+            concept_overrides=parse_kwargs_from_strings(concept_override),
             wikibase_username=wikibase_username,
             wikibase_password=wikibase_password,
             wikibase_url=wikibase_url,
