@@ -12,8 +12,8 @@ sampling:
 llm:
   model_name: openrouter:google/gemini-3.1-pro-preview
   related_definitions:
-    recognition: Q1731
-    distributive: Q911
+    - Q1731
+    - Q911
   labelling_guidelines: |
     Use the following inclusion/exclusion criteria, in addition to the definition.
     These are guidelines meant to help you disambiguate.
@@ -72,8 +72,8 @@ llm:
     ### 7. JUSTICE TYPE DIFFERENTIATION
     - **EXCLUDE**: generic discussions of justice, or other types of justice, such as the Justice System.
     - **EXCLUDE** passages that fit better under these definitions:
-        - Recognition Justice: {recognition}
-        -  Distributive Justice: {distributive}
+        - Recognition Justice: {Q1731}
+        -  Distributive Justice: {Q911}
 
     ### 8. CONTEXT REQUIREMENT
     - **EXCLUDE**: Single abstract words (e.g. "Democratization", "Accountability") without any context.

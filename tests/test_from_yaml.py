@@ -25,11 +25,11 @@ def test_config_loads_and_builds_llm_prompt(path: Path):
     """Every committed config loads, yields a valid LLM prompt, and interpolates its related definitions."""
     cfg = CustomClassifierConfig.from_yaml(path)
     assert cfg.wikibase_id == WikibaseID(path.stem.upper())
-    stub = {wid: f"DEF::{wid}" for wid in cfg.llm.related_definitions.values()}
+    stub = {wid: f"DEF::{wid}" for wid in cfg.llm.related_definitions}
     prompt = cfg.llm.to_classifier_kwargs(definitions=stub)["system_prompt_template"]
     assert isinstance(prompt, LLMClassifierPrompt)
     assert "{concept_description}" in prompt.system_prompt_template
-    for wid in cfg.llm.related_definitions.values():
+    for wid in cfg.llm.related_definitions:
         assert f"DEF::{wid}" in (prompt.labelling_guidelines or "")
 
 

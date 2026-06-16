@@ -4,7 +4,7 @@ import random
 import re
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, overload
 
 import torch
 import typer
@@ -49,6 +49,27 @@ from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
+
+
+# --wikibase-id given, --from-yaml-config not used  ->  no config returned
+@overload
+def resolve_config_inputs(
+    wikibase_id: WikibaseID, from_yaml_config: None
+) -> tuple[WikibaseID, None]: ...
+
+
+# --from-yaml-config given, --wikibase-id not used  ->  a config is returned
+@overload
+def resolve_config_inputs(
+    wikibase_id: None, from_yaml_config: Path
+) -> tuple[WikibaseID, CustomClassifierConfig]: ...
+
+
+# main() hands in two *optional* values, which matches neither strict overload above
+@overload
+def resolve_config_inputs(
+    wikibase_id: WikibaseID | None, from_yaml_config: Path | None
+) -> tuple[WikibaseID, CustomClassifierConfig | None]: ...
 
 
 def resolve_config_inputs(
@@ -499,7 +520,7 @@ def main(
             defs = (
                 {
                     wid: (session.get_concept(wid).definition or "")
-                    for wid in set(related.values())
+                    for wid in set(related)
                 }
                 if session
                 else {}

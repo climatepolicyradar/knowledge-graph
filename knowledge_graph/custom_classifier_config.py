@@ -77,7 +77,7 @@ class LLMClassifierConfig(BaseModel):
     model_name: str
     system_prompt_template: str = DEFAULT_SYSTEM_PROMPT
     labelling_guidelines: str | None = None
-    related_definitions: dict[str, WikibaseID] = Field(default_factory=dict)
+    related_definitions: list[WikibaseID] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _placeholders_match_related(self):
@@ -91,10 +91,11 @@ class LLMClassifierConfig(BaseModel):
             if self.labelling_guidelines
             else set()
         )
-        if slots != set(self.related_definitions):
+        expected = {str(wid) for wid in self.related_definitions}
+        if slots != expected:
             raise ValueError(
                 f"labelling_guidelines slots {sorted(slots)} != "
-                f"related_definitions {sorted(self.related_definitions)}"
+                f"related_definitions {sorted(expected)}"
             )
         return self
 
@@ -104,9 +105,7 @@ class LLMClassifierConfig(BaseModel):
             return None
         if not self.related_definitions:
             return self.labelling_guidelines
-        slots = {
-            name: definitions[wid] for name, wid in self.related_definitions.items()
-        }
+        slots = {str(wid): definitions[wid] for wid in self.related_definitions}
         return self.labelling_guidelines.format(**slots)
 
     def to_classifier_kwargs(

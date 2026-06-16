@@ -12,8 +12,8 @@ sampling:
 llm:
   model_name: openrouter:google/gemini-3.1-pro-preview
   related_definitions:
-    procedural: Q912
-    recognition: Q1731
+    - Q912
+    - Q1731
   labelling_guidelines: |
     Use the following inclusion/exclusion criteria, in addition to the definition.
     These are guidelines meant to help you disambiguate. Overall, your main task is to find positive examples. INCLUSION therefore generally trumps EXCLUSION, and an EXCLUSION rule should never rule out whole passages, only specific phrases within that passage.
@@ -90,8 +90,8 @@ llm:
 
     **F. Other/generic justice types
     *   **Exclude** passages that fit better under:
-            - Procedural Justice: {procedural}
-            - Recognition Justice: {recognition}
+            - Procedural Justice: {Q912}
+            - Recognition Justice: {Q1731}
     *   **Exclude**: generic mentions of justice and justice policies. For a passage to be Distributive Justice, there must be an allocation of tangible benefits, resources, funding, or compensation.
 
     ### 4. AMBIGUITY CHECK

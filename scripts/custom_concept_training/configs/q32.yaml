@@ -12,10 +12,10 @@ sampling:
 llm:
   model_name: openrouter:google/gemini-3.1-pro-preview
   related_definitions:
-    recognition: Q1731
-    procedural: Q912
-    distributive: Q911
-    transformative: Q1730
+    - Q1731
+    - Q912
+    - Q911
+    - Q1730
   labelling_guidelines: |
     Use the following inclusion/exclusion criteria, in addition to the definition.
 
@@ -52,10 +52,10 @@ llm:
 
     ### **4. HOLISTIC JUSTICE**
     * **INCLUDE**: Passages that describe a specific type of justice. Tag any phrase matching the following definitions:
-      a) Recognition Justice: {recognition}
-      b) Procedural Justice: {procedural}
-      c) Distributive Justice: {distributive}
-      d) Transformative Justice: {transformative}
+      a) Recognition Justice: {Q1731}
+      b) Procedural Justice: {Q912}
+      c) Distributive Justice: {Q911}
+      d) Transformative Justice: {Q1730}
     * **INCLUDE**: Ethical discussions of the root causes of inequality and proposals or arguments to fix these root causes.
 
     ### **5. INSTITUTIONAL TITLES & CONTEXT**
