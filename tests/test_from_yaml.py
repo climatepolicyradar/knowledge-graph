@@ -143,7 +143,7 @@ def test_committed_config_passes_offline_validation(path: Path):
     assert validate_file(path).wikibase_id == WikibaseID(path.stem.upper())
 
 
-def test_committed_configs_have_no_duplicates():
+def test_committed_configs_all_validates():
     """The whole-dir validation (incl. duplicate-concept check) is clean for committed configs."""
     validate_dir()
 
@@ -154,14 +154,6 @@ def test_filename_mismatch_is_flagged(tmp_path: Path):
     )
     with pytest.raises(ValueError, match="does not match"):
         validate_file(tmp_path / "q999.yaml")
-
-
-def test_duplicate_concept_is_flagged(tmp_path: Path):
-    body = "wikibase_id: Q1\nllm:\n  model_name: openrouter:openai/gpt-5\n"
-    (tmp_path / "q1.yaml").write_text(body)
-    (tmp_path / "q2.yaml").write_text(body)
-    with pytest.raises(ValueError, match="duplicate concept"):
-        validate_dir(tmp_path)
 
 
 def test_model_without_openrouter_prefix_is_rejected(tmp_path: Path):

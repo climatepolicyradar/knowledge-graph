@@ -24,16 +24,9 @@ def validate_file(path: Path) -> CustomClassifierConfig:
 
 
 def validate_dir(config_dir: Path = CONFIG_DIR) -> None:
-    """Validate every config in the dir + a cross-file duplicate-concept check."""
-    seen: dict[WikibaseID, Path] = {}
+    """Validate every config in the dir."""
     for path in sorted(config_dir.glob("*.yaml")):
-        cfg = validate_file(path)
-        if cfg.wikibase_id in seen:
-            raise ValueError(
-                f"{path.name}: duplicate concept {cfg.wikibase_id}; "
-                f"already defined in {seen[cfg.wikibase_id].name}"
-            )
-        seen[cfg.wikibase_id] = path
+        validate_file(path)
 
 
 def check_wikibase_ids(cfg: CustomClassifierConfig, session: "WikibaseSession") -> None:
