@@ -12,7 +12,12 @@ import wandb
 from rich import box
 from rich.console import Console
 from rich.table import Table
-from sklearn.metrics import precision_recall_curve, roc_curve
+from sklearn.metrics import (
+    average_precision_score,
+    precision_recall_curve,
+    roc_auc_score,
+    roc_curve,
+)
 from wandb.wandb_run import Run
 
 from knowledge_graph.classifier import Classifier
@@ -585,6 +590,12 @@ def create_wandb_model_evaluation_charts(
             "optimal_f1_threshold_precision": float(precision[optimal_idx_f1]),
             "optimal_f1_threshold_recall": float(recall[optimal_idx_f1]),
             "optimal_f1_threshold_f1_score": float(f1_scores[optimal_idx_f1]),
+            "passage_level_pr_auc": float(
+                average_precision_score(ground_truth_labels, pred_probabilities)
+            ),
+            "passage_level_roc_auc": float(
+                roc_auc_score(ground_truth_labels, pred_probabilities)
+            ),
         }
         for k, v in threshold_recommendations.items():
             wandb_run.summary[k] = v
