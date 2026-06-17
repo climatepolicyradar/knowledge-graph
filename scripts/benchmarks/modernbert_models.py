@@ -53,6 +53,11 @@ MODELS: list[str] = [
     "climatebert/distilroberta-base-climate-f",
 ]
 
+# Random seeds to train each (model x concept) with, for error bars + significance
+# testing (see scripts/benchmarks/seed_significance.py). Each seed gives an
+# independent training run; the spread across seeds is the error bar.
+SEEDS: list[int] = [42, 123, 2024]
+
 
 @dataclass
 class ConceptConfig:
@@ -127,6 +132,8 @@ METRIC_KEYS: list[str] = [
     "passage_level_accuracy",
     "passage_level_support",
     "optimal_f1_threshold",
+    "passage_level_pr_auc",
+    "passage_level_roc_auc",
 ]
 
 CSV_COLUMNS: list[str] = [
@@ -134,6 +141,7 @@ CSV_COLUMNS: list[str] = [
     "model_name",
     "unfreeze_layers",
     "limit_training_samples",
+    "seed",
     "status",
     *METRIC_KEYS,
     "wandb_run_url",
@@ -149,6 +157,7 @@ def _matches_config(
     unfreeze_layers: Any,
     limit_training_samples: Optional[int],
     training_data_wandb_path: Optional[str],
+    seed: Optional[int],
 ) -> bool:
     """Return whether a W&B run's config matches a benchmark config."""
     config = run.config
@@ -169,6 +178,11 @@ def _matches_config(
         return False
     if config.get("training_data_wandb_path") != training_data_wandb_path:
         return False
+    # Match on seed so different-seed runs don't collide. Runs trained before the
+    # seed param existed have no "seed" in config (None), so they only match a
+    # seed=None config and never a seeded benchmark run.
+    if config.get("seed") != seed:
+        return False
     return True
 
 
@@ -178,6 +192,7 @@ def get_matching_runs(
     unfreeze_layers: Any,
     limit_training_samples: Optional[int],
     training_data_wandb_path: Optional[str],
+    seed: Optional[int],
 ) -> list[Any]:
     """
     Return all train_model W&B runs matching a benchmark config.
@@ -200,6 +215,7 @@ def get_matching_runs(
             unfreeze_layers,
             limit_training_samples,
             training_data_wandb_path,
+            seed,
         )
     ]
 
@@ -220,6 +236,7 @@ def dispatch_training(
     limit_training_samples: Optional[int],
     training_data_wandb_path: Optional[str],
     aws_env: AwsEnv,
+    seed: Optional[int],
 ) -> FlowRun:
     """Start a train-on-gpu Coiled flow run for a single config (fire-and-forget)."""
     flow_name = "train-on-gpu"
@@ -236,6 +253,7 @@ def dispatch_training(
             "concept_overrides": None,
             "training_data_wandb_path": training_data_wandb_path,
             "limit_training_samples": limit_training_samples,
+            "seed": seed,
         },
         timeout=0,  # don't wait for the flow to finish
     )
@@ -250,6 +268,7 @@ def _make_row(
     model_name: str,
     unfreeze_layers: Any,
     limit_training_samples: Optional[int],
+    seed: Optional[int],
     status: str,
     metrics: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
@@ -258,6 +277,7 @@ def _make_row(
         "model_name": model_name,
         "unfreeze_layers": unfreeze_layers,
         "limit_training_samples": limit_training_samples,
+        "seed": seed,
         "status": status,
     }
     for key in METRIC_KEYS:
@@ -292,15 +312,15 @@ def print_summary(rows: list[dict[str, Any]]) -> None:
     table = Table(title="ModernBERT model benchmark", show_lines=False)
     table.add_column("Concept")
     table.add_column("Model")
+    table.add_column("Seed", justify="right")
     table.add_column("Status")
     table.add_column("F1", justify="right")
     table.add_column("Precision", justify="right")
     table.add_column("Recall", justify="right")
     table.add_column("Run", overflow="fold")
 
-    def _sort_key(row: dict[str, Any]) -> tuple[str, float]:
-        f1 = row.get("passage_level_f1")
-        return (str(row["wikibase_id"]), -(f1 if isinstance(f1, (int, float)) else -1))
+    def _sort_key(row: dict[str, Any]) -> tuple[str, str, Any]:
+        return (str(row["wikibase_id"]), row["model_name"], row.get("seed"))
 
     def _fmt(value: Any) -> str:
         return f"{value:.3f}" if isinstance(value, (int, float)) else "-"
@@ -309,6 +329,7 @@ def print_summary(rows: list[dict[str, Any]]) -> None:
         table.add_row(
             str(row["wikibase_id"]),
             row["model_name"],
+            str(row.get("seed", "-")),
             row["status"],
             _fmt(row.get("passage_level_f1")),
             _fmt(row.get("passage_level_precision")),
@@ -359,74 +380,93 @@ def main(
     writer = ResultsWriter(output_path)
     console.log(f"Writing results to {output_path}")
 
-    # (wikibase_id, model, set of pre-existing run ids)
-    pending: list[tuple[WikibaseID, str, set[str]]] = []
+    # (wikibase_id, model, seed, set of pre-existing run ids)
+    pending: list[tuple[WikibaseID, str, int, set[str]]] = []
 
     try:
-        # Phase 1: resolve cached configs, dispatch the rest.
+        # Phase 1: resolve cached configs, dispatch the rest. Each (concept, model)
+        # is trained once per seed to give error bars + a paired significance test.
         for wikibase_id in CONCEPT_CONFIGS:
             for model_name in MODELS:
                 classifier_kwargs, unfreeze_layers, limit, train_data = config_for(
                     wikibase_id, model_name
                 )
 
-                existing = get_matching_runs(
-                    wikibase_id, model_name, unfreeze_layers, limit, train_data
-                )
-                finished = [r for r in existing if r.state == "finished"]
+                for seed in SEEDS:
+                    existing = get_matching_runs(
+                        wikibase_id,
+                        model_name,
+                        unfreeze_layers,
+                        limit,
+                        train_data,
+                        seed,
+                    )
+                    finished = [r for r in existing if r.state == "finished"]
 
-                if finished and not force:
-                    metrics = extract_metrics(finished[0])
-                    writer.write(
-                        _make_row(
-                            wikibase_id,
-                            model_name,
-                            unfreeze_layers,
-                            limit,
-                            "cached",
-                            metrics,
+                    if finished and not force:
+                        metrics = extract_metrics(finished[0])
+                        writer.write(
+                            _make_row(
+                                wikibase_id,
+                                model_name,
+                                unfreeze_layers,
+                                limit,
+                                seed,
+                                "cached",
+                                metrics,
+                            )
                         )
+                        console.log(
+                            f"✅ cached: {wikibase_id} / {model_name} / seed={seed} "
+                            f"(F1={metrics.get('passage_level_f1')})"
+                        )
+                        continue
+
+                    if dry_run:
+                        console.log(
+                            f"🔸 would dispatch: {wikibase_id} / {model_name} / "
+                            f"seed={seed}"
+                        )
+                        writer.write(
+                            _make_row(
+                                wikibase_id,
+                                model_name,
+                                unfreeze_layers,
+                                limit,
+                                seed,
+                                "would-train",
+                            )
+                        )
+                        continue
+
+                    pre_existing_ids = {r.id for r in existing}
+                    flow_run = dispatch_training(
+                        wikibase_id,
+                        classifier_kwargs,
+                        limit,
+                        train_data,
+                        aws_env,
+                        seed,
                     )
                     console.log(
-                        f"✅ cached: {wikibase_id} / {model_name} "
-                        f"(F1={metrics.get('passage_level_f1')})"
+                        f"🚀 dispatched: {wikibase_id} / {model_name} / seed={seed} — "
+                        f"{get_flow_run_ui_url(flow_run)}"
                     )
-                    continue
-
-                if dry_run:
-                    console.log(f"🔸 would dispatch: {wikibase_id} / {model_name}")
-                    writer.write(
-                        _make_row(
-                            wikibase_id,
-                            model_name,
-                            unfreeze_layers,
-                            limit,
-                            "would-train",
-                        )
-                    )
-                    continue
-
-                pre_existing_ids = {r.id for r in existing}
-                flow_run = dispatch_training(
-                    wikibase_id, classifier_kwargs, limit, train_data, aws_env
-                )
-                console.log(
-                    f"🚀 dispatched: {wikibase_id} / {model_name} — "
-                    f"{get_flow_run_ui_url(flow_run)}"
-                )
-                pending.append((wikibase_id, model_name, pre_existing_ids))
+                    pending.append((wikibase_id, model_name, seed, pre_existing_ids))
 
         # Phase 2: poll W&B for each dispatched config to finish.
-        for wikibase_id, model_name, pre_existing_ids in pending:
+        for wikibase_id, model_name, seed, pre_existing_ids in pending:
             _, unfreeze_layers, limit, train_data = config_for(wikibase_id, model_name)
-            console.log(f"⏳ waiting for {wikibase_id} / {model_name} ...")
+            console.log(
+                f"⏳ waiting for {wikibase_id} / {model_name} / seed={seed} ..."
+            )
             deadline = time.monotonic() + timeout
             status = "timeout"
             metrics: Optional[dict[str, Any]] = None
 
             while time.monotonic() < deadline:
                 runs = get_matching_runs(
-                    wikibase_id, model_name, unfreeze_layers, limit, train_data
+                    wikibase_id, model_name, unfreeze_layers, limit, train_data, seed
                 )
                 # Only consider runs created by this benchmark invocation.
                 new_runs = [r for r in runs if r.id not in pre_existing_ids]
@@ -450,12 +490,18 @@ def main(
 
             writer.write(
                 _make_row(
-                    wikibase_id, model_name, unfreeze_layers, limit, status, metrics
+                    wikibase_id,
+                    model_name,
+                    unfreeze_layers,
+                    limit,
+                    seed,
+                    status,
+                    metrics,
                 )
             )
             console.log(
                 f"{'✅' if status == 'trained' else '⚠️'} {status}: "
-                f"{wikibase_id} / {model_name}"
+                f"{wikibase_id} / {model_name} / seed={seed}"
             )
     finally:
         writer.close()
