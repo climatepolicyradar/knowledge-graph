@@ -34,12 +34,13 @@ from flows.inference import (
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.modify_threshold import modify_threshold
 from flows.predict import predict_adhoc
 from flows.push_new_dataset import push_new_dataset
 from flows.sample import sample
 from flows.sync_concepts import sync_concepts
 from flows.topic_pipeline import topic_pipeline
-from flows.train import train_on_gpu
+from flows.train import train_on_cpu, train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import Compute, JsonDict, get_prefect_job_variables
 from flows.vibe_check import vibe_check_inference
@@ -218,6 +219,11 @@ async def main() -> None:
     )
 
     await create_deployment(
+        flow=modify_threshold,
+        description="Load a classifier from W&B, set a new prediction threshold, and upload the classifier with the new threshold to S3 and W&B",
+    )
+
+    await create_deployment(
         flow=push_new_dataset,
         description="Push labelled passages from a W&B artifact to Argilla as a new dataset",
     )
@@ -233,6 +239,13 @@ async def main() -> None:
         flow=train_on_gpu,
         description="Train concept classifiers with GPU compute",
         gpu=True,
+        flow_variables={},
+    )
+
+    await create_deployment(
+        flow=train_on_cpu,
+        description="Train non-BERT concept classifiers with CPU compute",
+        gpu=False,
         flow_variables={},
     )
 

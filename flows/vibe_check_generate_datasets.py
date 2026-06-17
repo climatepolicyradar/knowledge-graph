@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 from mypy_boto3_s3 import S3Client
 from prefect import flow, task
+from prefect.cache_policies import NO_CACHE
 
 from flows.config import Config
 from flows.sample import load_dataset_from_s3
@@ -50,7 +51,7 @@ async def _set_up_environment(
     return config, s3_client
 
 
-@task
+@task(cache_policy=NO_CACHE)
 def generate_embeddings(
     df: pd.DataFrame, embedding_model_name: str, batch_size: int
 ) -> np.ndarray:
@@ -86,7 +87,7 @@ def generate_embeddings(
     return embeddings
 
 
-@task(retries=3, retry_delay_seconds=5)
+@task(retries=3, retry_delay_seconds=5, cache_policy=NO_CACHE)
 def upload_vibe_checker_files(
     s3_client: S3Client,
     df: pd.DataFrame,

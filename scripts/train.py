@@ -3,8 +3,9 @@ import os
 import random
 import re
 from contextlib import nullcontext
+from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, Optional, overload
 
 import torch
 import typer
@@ -33,6 +34,7 @@ from knowledge_graph.cloud import (
     is_logged_in,
 )
 from knowledge_graph.config import WANDB_ENTITY, wandb_model_artifact_filename
+from knowledge_graph.custom_classifier_config import CustomClassifierConfig
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
@@ -43,11 +45,62 @@ from knowledge_graph.wandb_helpers import (
     load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
 )
-from knowledge_graph.wikibase import WikibaseConfig
+from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 from scripts.classifier_metadata import ComputeEnvironment
 from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
+
+
+class ComputeTarget(str, Enum):
+    """Where to run training."""
+
+    local = "local"
+    remote_cpu = "remote-cpu"
+    remote_gpu = "remote-gpu"
+
+
+# Maps remote compute targets to the Prefect flow that runs on that compute.
+_REMOTE_FLOW_NAMES: dict["ComputeTarget", str] = {
+    ComputeTarget.remote_cpu: "train-on-cpu",
+    ComputeTarget.remote_gpu: "train-on-gpu",
+}
+
+
+# --wikibase-id given, --from-yaml-config not used  ->  no config returned
+@overload
+def resolve_config_inputs(
+    wikibase_id: WikibaseID, from_yaml_config: None
+) -> tuple[WikibaseID, None]: ...
+
+
+# --from-yaml-config given, --wikibase-id not used  ->  a config is returned
+@overload
+def resolve_config_inputs(
+    wikibase_id: None, from_yaml_config: Path
+) -> tuple[WikibaseID, CustomClassifierConfig]: ...
+
+
+# main() hands in two *optional* values, which matches neither strict overload above
+@overload
+def resolve_config_inputs(
+    wikibase_id: WikibaseID | None, from_yaml_config: Path | None
+) -> tuple[WikibaseID, CustomClassifierConfig | None]: ...
+
+
+def resolve_config_inputs(
+    wikibase_id: WikibaseID | None,
+    from_yaml_config: Path | None,
+) -> tuple[WikibaseID, CustomClassifierConfig | None]:
+    """Enforce --wikibase-id OR --from-yaml-config and load the config when given."""
+    if from_yaml_config is not None and wikibase_id is not None:
+        raise typer.BadParameter("Pass --wikibase-id OR --from-yaml-config, not both.")
+    if from_yaml_config is not None:
+        cfg = CustomClassifierConfig.from_yaml(from_yaml_config)
+        return cfg.wikibase_id, cfg
+    if wikibase_id is None:
+        raise typer.BadParameter("Provide --wikibase-id or --from-yaml-config.")
+    return wikibase_id, None
 
 
 def parse_kwargs_from_strings(key_value_strings: Optional[list[str]]) -> dict[str, Any]:
@@ -371,13 +424,18 @@ def upload_model_artifact(
 @app.command()
 def main(
     wikibase_id: Annotated[
-        WikibaseID,
+        WikibaseID | None,
         typer.Option(
-            ...,
-            help="The Wikibase ID of the concept classifier to train",
+            help="The Wikibase ID to train. Required unless --from-yaml-config is given.",
             parser=WikibaseID,
         ),
-    ],
+    ] = None,
+    from_yaml_config: Annotated[
+        Path | None,
+        typer.Option(
+            help="Whether to use custom-classifier YAML config.",
+        ),
+    ] = None,
     track_and_upload: Annotated[
         bool,
         typer.Option(
@@ -392,16 +450,18 @@ def main(
             help="AWS environment to use for S3 uploads",
         ),
     ] = AwsEnv.production,
-    use_coiled_gpu: Annotated[
-        bool,
+    compute: Annotated[
+        ComputeTarget,
         typer.Option(
-            ...,
             help=(
-                "Run on Coiled with a GPU. This uses prefect to start a Coiled cluster. "
-                "Note, that the classifier won't be available locally after training."
+                "Where to run training. 'local' runs in-process. 'remote-cpu' and "
+                "'remote-gpu' dispatch the corresponding Prefect deployment (the "
+                "classifier won't be available locally after training). Use "
+                "'remote-gpu' for BERT classifiers and 'remote-cpu' for non-BERT "
+                "classifiers."
             ),
         ),
-    ] = False,
+    ] = ComputeTarget.local,
     evaluate: Annotated[
         bool,
         typer.Option(
@@ -445,12 +505,15 @@ def main(
 
     :param wikibase_id: The Wikibase ID of the concept classifier to train.
     :type wikibase_id: WikibaseID
+    :param from_yaml_config: Whether to use custom-classifier YAML config
+    :type from_yaml_config: path
     :param track_and_upload: Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.
     :type track_and_upload: bool
     :param aws_env: The AWS environment to use for S3 uploads.
     :type aws_env: AwsEnv
-    :param use_coiled_gpu: Whether to run training remotely using a coiled gpu
-    :type use_coiled_gpu: bool
+    :param compute: Where to run training: locally, or by dispatching the remote
+        CPU or GPU Prefect deployment
+    :type compute: ComputeTarget
     :param evaluate: Whether to evaluate the model after training
     :type evaluate: bool
     :param classifier_type: The classifier type to use, optional. Defaults to the
@@ -462,12 +525,37 @@ def main(
     :type concept_override: Optional[list[str]]
     :param limit_training_samples: Maximum number of training samples to use
     :type limit_training_samples: Optional[int]
+
     """
+
     classifier_kwargs = parse_kwargs_from_strings(classifier_override)
     concept_overrides = parse_kwargs_from_strings(concept_override)
+    wikibase_id, cfg = resolve_config_inputs(wikibase_id, from_yaml_config)
+    if cfg is not None:
+        concept_overrides = cfg.concept_overrides.as_overrides()
+        if classifier_type == "LLMClassifier":
+            related = cfg.llm.related_definitions
+            session = WikibaseSession() if related else None
+            defs = (
+                {
+                    wid: (session.get_concept(wid).definition or "")
+                    for wid in set(related)
+                }
+                if session
+                else {}
+            )
+            classifier_kwargs = cfg.llm.to_classifier_kwargs(definitions=defs)
+        elif classifier_type == "BertBasedClassifier":
+            classifier_kwargs = cfg.bert.to_classifier_kwargs()
+            training_data_wandb_path = cfg.bert.training_data_wandb_path
+            limit_training_samples = cfg.bert.limit_training_samples
+        else:
+            raise typer.BadParameter(
+                "--classifier-type must be LLMClassifier or BertBasedClassifier"
+            )
 
-    if use_coiled_gpu:
-        flow_name = "train-on-gpu"
+    if compute is not ComputeTarget.local:
+        flow_name = _REMOTE_FLOW_NAMES[compute]
         deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
         qualified_name = f"{flow_name}/{deployment_name}"
 

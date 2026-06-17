@@ -9,12 +9,16 @@ from knowledge_graph.classifier.targets import TargetClassifier
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.config import wandb_model_artifact_filename
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.span import Span
 from scripts.train import (
     Namespace,
     StorageLink,
     StorageUpload,
     create_and_link_model_artifact,
+    deduplicate_training_data,
     get_next_version,
+    limit_training_samples,
     run_training,
     upload_model_artifact,
 )
@@ -688,3 +692,74 @@ async def test_run_training_skips_pricing_for_non_openrouter_models(
 
         assert "prompt_price_usd" not in wandb_config
         assert "completion_price_usd" not in wandb_config
+
+
+def _negative_passage(text: str) -> LabelledPassage:
+    return LabelledPassage(text=text, spans=[])
+
+
+def _positive_passage(text: str) -> LabelledPassage:
+    return LabelledPassage(
+        text=text, spans=[Span(text=text, start_index=0, end_index=min(5, len(text)))]
+    )
+
+
+def test_deduplicate_training_data_removes_passages_present_in_eval_set():
+    training = [_negative_passage("a"), _negative_passage("b"), _negative_passage("c")]
+    evaluation = [_negative_passage("b"), _negative_passage("d")]
+    result = deduplicate_training_data(training, evaluation)
+    assert [p.text for p in result] == ["a", "c"]
+
+
+def test_deduplicate_training_data_with_empty_evaluation_returns_all():
+    training = [_negative_passage("a"), _negative_passage("b")]
+    result = deduplicate_training_data(training, [])
+    assert len(result) == 2
+
+
+def test_deduplicate_training_data_when_all_overlap_returns_empty():
+    training = [_negative_passage("a"), _negative_passage("b")]
+    result = deduplicate_training_data(
+        training, [_negative_passage("a"), _negative_passage("b")]
+    )
+    assert result == []
+
+
+def test_limit_training_samples_output_never_exceeds_max():
+    passages = [_positive_passage(f"pos {i}") for i in range(20)] + [
+        _negative_passage(f"neg {i}") for i in range(20)
+    ]
+    result = limit_training_samples(passages, max_samples=10)
+    assert len(result) <= 10
+
+
+def test_limit_training_samples_aims_for_balanced_split():
+    passages = [_positive_passage(f"pos {i}") for i in range(20)] + [
+        _negative_passage(f"neg {i}") for i in range(20)
+    ]
+    result = limit_training_samples(passages, max_samples=10)
+    positives = [p for p in result if p.spans]
+    negatives = [p for p in result if not p.spans]
+    assert len(positives) == 5
+    assert len(negatives) == 5
+
+
+def test_limit_training_samples_fills_remainder_from_larger_class():
+    passages = [_positive_passage(f"pos {i}") for i in range(2)] + [
+        _negative_passage(f"neg {i}") for i in range(20)
+    ]
+    result = limit_training_samples(passages, max_samples=10)
+    positives = [p for p in result if p.spans]
+    negatives = [p for p in result if not p.spans]
+    assert len(positives) == 2
+    assert len(negatives) == 8
+
+
+def test_limit_training_samples_returns_all_when_below_max():
+    passages = [
+        _positive_passage("pos 1"),
+        _negative_passage("neg 1"),
+        _negative_passage("neg 2"),
+    ]
+    result = limit_training_samples(passages, max_samples=10)
+    assert len(result) == 3
