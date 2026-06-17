@@ -192,6 +192,6 @@ validate-config path:
 validate-configs-live:
     uv run classifier-configs validate --check-all-configs --check-wikibase
 
-# Interactively create a new custom-classifier config YAML
-new-classifier-config:
-    uv run classifier-configs create
+# Write a template custom-classifier config YAML for a concept to fill in
+new-classifier-config id:
+    uv run classifier-configs create {{id}}

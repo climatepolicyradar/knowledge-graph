@@ -1,63 +1,45 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from knowledge_graph.custom_classifier_config import CustomClassifierConfig
+from knowledge_graph.exceptions import ConceptNotFoundError
 from knowledge_graph.identifiers import WikibaseID
+
+if TYPE_CHECKING:
+    from knowledge_graph.wikibase import WikibaseSession
 
 CONFIG_DIR = Path(__file__).parent / "configs"
 
 
-def expected_wikibase_id(path: Path) -> WikibaseID:
-    """Derive the WikibaseID a file must declare from its name (q32.yaml -> Q32)."""
-    return WikibaseID(path.stem.upper())
-
-
-def validate_file(path: Path) -> list[str]:
-    """Offline: schema + filename matches declared wikibase_id."""
-    try:
-        cfg = CustomClassifierConfig.from_yaml(path)
-    except Exception as e:  # pydantic ValidationError, malformed YAML, IO, etc.
-        return [str(e)]
-
-    errors: list[str] = []
-    try:
-        expected = expected_wikibase_id(path)
-    except ValueError:
-        return [f"filename {path.name!r} is not of the form q<number>.yaml"]
+def validate_file(path: Path) -> CustomClassifierConfig:
+    """Validate one config: schema (via from_yaml) + filename matches declared wikibase_id"""
+    cfg = CustomClassifierConfig.from_yaml(path)
+    expected = WikibaseID(path.stem.upper())
     if cfg.wikibase_id != expected:
-        errors.append(
-            f"wikibase_id {cfg.wikibase_id} does not match filename-derived {expected}"
+        raise ValueError(
+            f"{path.name}: wikibase_id {cfg.wikibase_id} does not match "
+            f"filename-derived {expected}"
         )
-    return errors
+    return cfg
 
 
-def validate_dir(config_dir: Path = CONFIG_DIR) -> dict[Path, list[str]]:
-    """Run validate_file on every YAML plus a cross-file duplicate-concept check."""
-    paths = sorted(config_dir.glob("*.yaml"))
-    results: dict[Path, list[str]] = {p: validate_file(p) for p in paths}
-
+def validate_dir(config_dir: Path = CONFIG_DIR) -> None:
+    """Validate every config in the dir + a cross-file duplicate-concept check."""
     seen: dict[WikibaseID, Path] = {}
-    for p in paths:
-        try:
-            wid = CustomClassifierConfig.from_yaml(p).wikibase_id
-        except Exception:
-            continue
-        if wid in seen:
-            results[p].append(
-                f"duplicate concept {wid}; already defined in {seen[wid].name}"
+    for path in sorted(config_dir.glob("*.yaml")):
+        cfg = validate_file(path)
+        if cfg.wikibase_id in seen:
+            raise ValueError(
+                f"{path.name}: duplicate concept {cfg.wikibase_id}; "
+                f"already defined in {seen[cfg.wikibase_id].name}"
             )
-        else:
-            seen[wid] = p
-    return results
+        seen[cfg.wikibase_id] = path
 
 
-def check_wikibase_ids(cfg: CustomClassifierConfig, session) -> list[str]:
+def check_wikibase_ids(cfg: CustomClassifierConfig, session: "WikibaseSession") -> None:
     """Live: confirm wikibase_id + related_definitions resolve in the concept store."""
-    from knowledge_graph.wikibase import ConceptNotFoundError
-
-    errors: list[str] = []
     for wid in [cfg.wikibase_id, *cfg.llm.related_definitions]:
         try:
             session.get_concept(wid)
-        except ConceptNotFoundError:
-            errors.append(f"{wid} does not exist in Wikibase")
-    return errors
+        except ConceptNotFoundError as e:
+            raise ValueError(f"{wid} does not exist in Wikibase") from e

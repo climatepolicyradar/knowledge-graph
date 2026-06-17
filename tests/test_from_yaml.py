@@ -140,36 +140,36 @@ def test_resolve_config_inputs_rejects_neither():
 @pytest.mark.parametrize("path", CONFIG_PATHS, ids=lambda p: p.stem)
 def test_committed_config_passes_offline_validation(path: Path):
     """Every committed config passes the offline validator with no errors."""
-    assert validate_file(path) == []
+    assert validate_file(path).wikibase_id == WikibaseID(path.stem.upper())
 
 
 def test_committed_configs_have_no_duplicates():
     """The whole-dir validation (incl. duplicate-concept check) is clean for committed configs."""
-    assert all(not errs for errs in validate_dir().values())
+    validate_dir()
 
 
 def test_filename_mismatch_is_flagged(tmp_path: Path):
     (tmp_path / "q999.yaml").write_text(
         "wikibase_id: Q1\nllm:\n  model_name: openrouter:openai/gpt-5\n"
     )
-    assert any(
-        "does not match filename" in e for e in validate_file(tmp_path / "q999.yaml")
-    )
+    with pytest.raises(ValueError, match="does not match"):
+        validate_file(tmp_path / "q999.yaml")
 
 
 def test_duplicate_concept_is_flagged(tmp_path: Path):
     body = "wikibase_id: Q1\nllm:\n  model_name: openrouter:openai/gpt-5\n"
     (tmp_path / "q1.yaml").write_text(body)
     (tmp_path / "q2.yaml").write_text(body)
-    results = validate_dir(tmp_path)
-    assert any("duplicate concept" in e for errs in results.values() for e in errs)
+    with pytest.raises(ValueError, match="duplicate concept"):
+        validate_dir(tmp_path)
 
 
-def test_unsupported_model_is_flagged(tmp_path: Path):
+def test_model_without_openrouter_prefix_is_rejected(tmp_path: Path):
     (tmp_path / "q1.yaml").write_text(
-        "wikibase_id: Q1\nllm:\n  model_name: openrouter:fake/model\n"
+        "wikibase_id: Q1\nllm:\n  model_name: openai/gpt-5\n"
     )
-    assert any("not supported" in e for e in validate_file(tmp_path / "q1.yaml"))
+    with pytest.raises(pydantic.ValidationError, match="openrouter:"):
+        validate_file(tmp_path / "q1.yaml")
 
 
 def test_short_override_must_go_to_concept_store(tmp_path: Path):
@@ -180,11 +180,13 @@ def test_short_override_must_go_to_concept_store(tmp_path: Path):
         "concept_overrides:\n  definition: too short for an override\n"
         "llm:\n  model_name: openrouter:openai/gpt-5\n"
     )
-    assert any("put it in Wikibase" in e for e in validate_file(p))
+    with pytest.raises(pydantic.ValidationError, match="put it in Wikibase"):
+        validate_file(p)
 
 
 def test_live_check_against_mocked_session(MockedWikibaseSession):
     """check_wikibase_ids works against the mocked session (no real network)."""
     session = MockedWikibaseSession()
     cfg = CustomClassifierConfig.from_yaml(CONFIG_PATHS[0])
-    assert isinstance(check_wikibase_ids(cfg, session), list)
+    check_wikibase_ids(cfg, session)
+    check_wikibase_ids(cfg, session)
