@@ -3,7 +3,10 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from scripts.build_dataset import get_world_bank_region, run_build_dataset
+from knowledge_graph.operations.build_dataset import (
+    get_world_bank_region,
+    run_build_dataset,
+)
 
 
 def _make_fake_snowflake_df(n_rows: int = 20) -> pd.DataFrame:
@@ -39,11 +42,12 @@ def mock_snowflake_connection():
     with (
         patch("snowflake.connector.connect", return_value=mock_conn) as mock_connect,
         patch(
-            "scripts.build_dataset.load_pem_private_key", return_value=mock_private_key
+            "knowledge_graph.operations.snowflake.load_pem_private_key",
+            return_value=mock_private_key,
         ),
         # create_balanced_sample fails on uniform fake data — just return head(n)
         patch(
-            "scripts.build_dataset.create_balanced_sample",
+            "knowledge_graph.operations.build_dataset.create_balanced_sample",
             side_effect=lambda df, sample_size, on_columns: df.head(sample_size),
         ),
     ):
@@ -164,9 +168,10 @@ def test_run_build_dataset_includes_corpus_type_in_sql_when_provided(
     assert len(execute_calls) == 2
     for single_call in execute_calls:
         sql = single_call[0][0]
-        assert "Litigation" in sql, (
-            f"Expected corpus type filter in SQL but got: {sql[:200]}"
-        )
+        params = single_call[0][1]
+        assert "METADATA_CORPUS_TYPE_NAME = %s" in sql
+        assert "Litigation" not in sql
+        assert params == ["Litigation"]
 
 
 def test_run_build_dataset_omits_corpus_type_filter_when_not_provided(

@@ -1,16 +1,17 @@
 """
-Prefect flow wrapping scripts/build_dataset.py.
+Build-dataset flow: Prefect orchestration over the build-dataset operation.
 
-Queries Snowflake for climate document passages, builds a combined (full corpus)
-and a balanced sampled dataset, and uploads both as feather files to S3 for use
-by the vibe checker and sampling flows.
+Wraps `knowledge_graph.operations.build_dataset.run_build_dataset` in a deployed flow that
+resolves Snowflake key-pair credentials from SSM, builds the combined and balanced sampled
+datasets, and uploads both as feather files to S3 (for the vibe checker and sampling flows).
+Runs on a monthly schedule (see deployments.py).
 
-Runs on a monthly schedule (see deployments.py). Data Scientists can pull the latest files
-locally with: just build-dataset-download
+For ad-hoc local builds that write to data/processed/ instead, run `just build-dataset`
+(or `just build-dataset-corpus`), which calls
+`knowledge_graph.operations.build_dataset.build_dataset_locally`.
 """
 
 import asyncio
-import base64
 import io
 from typing import cast
 
@@ -20,15 +21,12 @@ from prefect.logging import get_run_logger
 from pydantic import SecretStr
 
 from flows.config import Config
-from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param, get_s3_client
-from scripts.build_dataset import run_build_dataset
+from flows.snowflake import get_snowflake_credentials
+from knowledge_graph.cloud import AwsEnv, get_s3_client
+from knowledge_graph.operations.build_dataset import run_build_dataset
 
 COMBINED_S3_KEY = "build_dataset/combined_dataset.feather"
 SAMPLED_S3_KEY = "build_dataset/sampled_dataset.feather"
-
-SNOWFLAKE_ACCOUNT_SSM = "/Snowflake/Account"
-SNOWFLAKE_USER_SSM = "/Snowflake/ServiceUser/DbtBot/User"
-SNOWFLAKE_PRIVATE_KEY_SSM = "/Snowflake/ServiceUser/DbtBot/PrivateKey"
 
 
 async def _set_up_build_dataset_environment(
@@ -43,12 +41,8 @@ async def _set_up_build_dataset_environment(
     if not config:
         config = await Config.create()
 
-    snowflake_account = get_aws_ssm_param(SNOWFLAKE_ACCOUNT_SSM, aws_env=aws_env)
-    snowflake_user = get_aws_ssm_param(SNOWFLAKE_USER_SSM, aws_env=aws_env)
-    snowflake_private_key = SecretStr(
-        base64.b64decode(
-            get_aws_ssm_param(SNOWFLAKE_PRIVATE_KEY_SSM, aws_env=aws_env)
-        ).decode("utf-8")
+    snowflake_account, snowflake_user, snowflake_private_key = (
+        get_snowflake_credentials(aws_env)
     )
 
     return config, snowflake_account, snowflake_user, snowflake_private_key

@@ -7,7 +7,7 @@ from prefect import flow, task
 from prefect.logging import get_run_logger
 from pydantic import Field, SecretStr
 
-from flows.build_dataset_flow import COMBINED_S3_KEY, SAMPLED_S3_KEY
+from flows.build_dataset import COMBINED_S3_KEY, SAMPLED_S3_KEY
 from flows.config import Config
 from knowledge_graph.cloud import AwsEnv, get_async_session, get_aws_ssm_param
 from knowledge_graph.identifiers import WikibaseID

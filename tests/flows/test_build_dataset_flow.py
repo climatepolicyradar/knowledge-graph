@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from pydantic import SecretStr
 
-from flows.build_dataset_flow import (
+from flows.build_dataset import (
     COMBINED_S3_KEY,
     SAMPLED_S3_KEY,
     build_dataset_flow,
@@ -53,7 +53,7 @@ def _read_feather_from_s3(s3_client, bucket: str, key: str) -> pd.DataFrame:
 def _run_flow(fake_combined_df, fake_sampled_df, test_config):
     with (
         patch(
-            "flows.build_dataset_flow._set_up_build_dataset_environment",
+            "flows.build_dataset._set_up_build_dataset_environment",
             return_value=(
                 test_config,
                 "test_account",
@@ -62,7 +62,7 @@ def _run_flow(fake_combined_df, fake_sampled_df, test_config):
             ),
         ),
         patch(
-            "flows.build_dataset_flow.run_build_dataset",
+            "flows.build_dataset.run_build_dataset",
             return_value=(fake_combined_df, fake_sampled_df),
         ),
     ):

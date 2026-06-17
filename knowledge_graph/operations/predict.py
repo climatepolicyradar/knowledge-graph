@@ -1,27 +1,28 @@
-import asyncio
+"""
+Prediction operation: reusable, Prefect-free domain logic.
+
+Runs a trained classifier over passages to find concept mentions. Passages can come from
+a W&B artifact, a local .jsonl file, or be passed in directly; results are saved to a local
+directory and optionally tracked/uploaded to W&B.
+
+This module knows nothing about Prefect. The flows in `flows/predict.py` resolve
+credentials/config and then call into here.
+"""
+
 import json
 import os
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Annotated
 
-import snowflake.connector
-import typer
 import wandb
 from dotenv import load_dotenv
-from prefect.client.schemas.objects import FlowRun
-from prefect.deployments import run_deployment
 
-from flows.utils import get_flow_run_ui_url
-from knowledge_graph.cloud import (
-    AwsEnv,
-    generate_deployment_name,
-    get_s3_client,
-)
+from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import WANDB_ENTITY, predictions_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import label_passages_with_classifier
+from knowledge_graph.operations.snowflake import connect_to_snowflake
 from knowledge_graph.utils import (
     deserialise_pydantic_list_with_fallback,
     get_logger,
@@ -34,8 +35,6 @@ from knowledge_graph.wandb_helpers import (
     log_labelled_passages_artifact_to_wandb_run,
     log_labelled_passages_table_to_wandb_run,
 )
-
-app = typer.Typer()
 
 load_dotenv()
 
@@ -56,15 +55,25 @@ def deduplicate_labelled_passages(
 
 
 def load_passages_from_snowflake(
-    document_ids: list[str], minimum_text_chars: int = 0
+    document_ids: list[str],
+    minimum_text_chars: int = 0,
+    snowflake_user: str | None = None,
+    snowflake_private_key: str | None = None,
+    snowflake_account: str | None = None,
 ) -> list[LabelledPassage]:
-    """Load English passages from Snowflake for the given document IDs."""
+    """
+    Load English passages from Snowflake for the given document IDs.
+
+    When key-pair credentials are supplied (e.g. resolved from SSM by the
+    `predict_documents` flow), connects with the DbtBot service account; otherwise
+    falls back to the local `~/.snowflake/config.toml` connection.
+    """
     logger = get_logger()
     logger.info(
         f"Connecting to Snowflake to load passages for {len(document_ids)} document(s)"
     )
 
-    con = snowflake.connector.connect(connection_name="local_dev")
+    con = connect_to_snowflake(snowflake_user, snowflake_private_key, snowflake_account)
     cur = con.cursor()
 
     placeholders = ", ".join(["%s"] * len(document_ids))
@@ -405,237 +414,3 @@ async def run_prediction(
         # Re-raise the exception after saving
         if prediction_exception:
             raise prediction_exception
-
-
-@app.command()
-def main(
-    wikibase_id: Annotated[
-        WikibaseID,
-        typer.Option(
-            ...,
-            help="The Wikibase ID of the concept classifier to run",
-            parser=WikibaseID,
-        ),
-    ],
-    classifier_wandb_path: Annotated[
-        str,
-        typer.Option(
-            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
-        ),
-    ],
-    labelled_passages_path: Annotated[
-        Path | None,
-        typer.Option(
-            help="Optional local path to labelled passages .jsonl file.",
-            dir_okay=False,
-            exists=True,
-        ),
-    ] = None,
-    labelled_passages_wandb_path: Annotated[
-        str | None,
-        typer.Option(
-            help="""Optional W&B artifact path to load labelled passages from.
-
-            E.g. 'climatepolicyradar/Q913/rsgz5ygh-labelled-passages:v0'.
-            """
-        ),
-    ] = None,
-    track_and_upload: Annotated[
-        bool,
-        typer.Option(
-            ...,
-            help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
-        ),
-    ] = True,
-    batch_size: int = typer.Option(
-        15,
-        help="Number of passages to process in each batch",
-    ),
-    limit: Annotated[
-        int | None,
-        typer.Option(
-            ...,
-            help="Optionally limit the number of passages predicted on",
-        ),
-    ] = None,
-    deduplicate_inputs: bool = typer.Option(
-        True,
-        help="Remove duplicate passages based on text content before prediction",
-    ),
-    exclude_training_data: bool = typer.Option(
-        True,
-        help="Exclude passages that were in the model's training data from prediction",
-    ),
-    prediction_threshold: float | None = typer.Option(
-        None, help="Optional prediction threshold for the classifier."
-    ),
-    stop_after_n_positives: Annotated[
-        int | None,
-        typer.Option(
-            help="Stop prediction after finding this many positive passages",
-        ),
-    ] = None,
-    restart_from_wandb_run: Annotated[
-        str | None,
-        typer.Option(
-            help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
-        ),
-    ] = None,
-    use_prefect: Annotated[
-        bool,
-        typer.Option(
-            ...,
-            help=("Run on Prefect. Note that the results won't be available locally."),
-        ),
-    ] = False,
-    aws_env: Annotated[
-        AwsEnv,
-        typer.Option(
-            ...,
-            help="AWS environment to use for downloading the model from S3",
-        ),
-    ] = AwsEnv.production,
-):
-    """
-    Load labelled passages from local dir or W&B, and run a classifier on them.
-
-    Saves predicted passages to a local directory. Tracks the run and uploads results
-    if `track_and_upload` is set.
-
-    For probability-capable classifiers inference is run twice per passage – once to
-    get the prediction, and once to get the prediction probability. This is due to the
-    fact that we only store `Span` objects for *positive* predictions.
-    """
-    if use_prefect:
-        flow_name = "predict-adhoc"
-        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
-        qualified_name = f"{flow_name}/{deployment_name}"
-
-        flow_run: FlowRun = run_deployment(  # type: ignore[misc]
-            name=qualified_name,
-            parameters={
-                "wikibase_id": wikibase_id,
-                "classifier_wandb_path": classifier_wandb_path,
-                "labelled_passages_wandb_path": labelled_passages_wandb_path,
-                "track_and_upload": track_and_upload,
-                "batch_size": batch_size,
-                "limit": limit,
-                "deduplicate_inputs": deduplicate_inputs,
-                "exclude_training_data": exclude_training_data,
-                "prediction_threshold": prediction_threshold,
-                "stop_after_n_positives": stop_after_n_positives,
-                "restart_from_wandb_run": restart_from_wandb_run,
-                "aws_env": aws_env,
-            },
-            timeout=0,  # Don't wait for the flow to finish before continuing
-        )
-        get_logger().info(
-            f"Deployment started. Flow run URL: {get_flow_run_ui_url(flow_run)}"
-        )
-    else:
-        asyncio.run(
-            run_prediction(
-                wikibase_id=wikibase_id,
-                classifier_wandb_path=classifier_wandb_path,
-                labelled_passages_path=labelled_passages_path,
-                labelled_passages_wandb_path=labelled_passages_wandb_path,
-                track_and_upload=track_and_upload,
-                batch_size=batch_size,
-                limit=limit,
-                deduplicate_inputs=deduplicate_inputs,
-                exclude_training_data=exclude_training_data,
-                prediction_threshold=prediction_threshold,
-                stop_after_n_positives=stop_after_n_positives,
-                restart_from_wandb_run=restart_from_wandb_run,
-            )
-        )
-
-
-@app.command()
-def documents(
-    document_ids: Annotated[
-        list[str],
-        typer.Argument(help="One or more document IDs to load passages from Snowflake"),
-    ],
-    wikibase_id: Annotated[
-        WikibaseID,
-        typer.Option(
-            ...,
-            help="The Wikibase ID of the concept classifier to run",
-            parser=WikibaseID,
-        ),
-    ],
-    classifier_wandb_path: Annotated[
-        str,
-        typer.Option(
-            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
-        ),
-    ],
-    track_and_upload: Annotated[
-        bool,
-        typer.Option(
-            ...,
-            help="Whether to track the run with Weights & Biases and upload results.",
-        ),
-    ] = True,
-    batch_size: int = typer.Option(
-        15,
-        help="Number of passages to process in each batch",
-    ),
-    limit: Annotated[
-        int | None,
-        typer.Option(
-            ...,
-            help="Optionally limit the number of passages predicted on",
-        ),
-    ] = None,
-    deduplicate_inputs: bool = typer.Option(
-        True,
-        help="Remove duplicate passages based on text content before prediction",
-    ),
-    exclude_training_data: bool = typer.Option(
-        True,
-        help="Exclude passages that were in the model's training data from prediction",
-    ),
-    prediction_threshold: float | None = typer.Option(
-        None, help="Optional prediction threshold for the classifier."
-    ),
-    stop_after_n_positives: Annotated[
-        int | None,
-        typer.Option(
-            help="Stop prediction after finding this many positive passages",
-        ),
-    ] = None,
-    restart_from_wandb_run: Annotated[
-        str | None,
-        typer.Option(
-            help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
-        ),
-    ] = None,
-):
-    """
-    Load passages for specific document IDs from Snowflake and run a classifier on them.
-
-    Saves predicted passages to a local directory. Tracks the run and uploads results
-    if `track_and_upload` is set.
-    """
-    passages = load_passages_from_snowflake(document_ids)
-    asyncio.run(
-        run_prediction(
-            wikibase_id=wikibase_id,
-            classifier_wandb_path=classifier_wandb_path,
-            input_passages=passages,
-            track_and_upload=track_and_upload,
-            batch_size=batch_size,
-            limit=limit,
-            deduplicate_inputs=deduplicate_inputs,
-            exclude_training_data=exclude_training_data,
-            prediction_threshold=prediction_threshold,
-            stop_after_n_positives=stop_after_n_positives,
-            restart_from_wandb_run=restart_from_wandb_run,
-        )
-    )
-
-
-if __name__ == "__main__":
-    app()
