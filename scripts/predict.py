@@ -5,7 +5,6 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Annotated
 
-import snowflake.connector
 import typer
 import wandb
 from dotenv import load_dotenv
@@ -34,6 +33,7 @@ from knowledge_graph.wandb_helpers import (
     log_labelled_passages_artifact_to_wandb_run,
     log_labelled_passages_table_to_wandb_run,
 )
+from scripts.build_dataset import _connect_to_snowflake
 
 app = typer.Typer()
 
@@ -56,7 +56,11 @@ def deduplicate_labelled_passages(
 
 
 def load_passages_from_snowflake(
-    document_ids: list[str], minimum_text_chars: int = 0
+    document_ids: list[str],
+    minimum_text_chars: int = 0,
+    snowflake_user: str | None = None,
+    snowflake_private_key: str | None = None,
+    snowflake_account: str | None = None,
 ) -> list[LabelledPassage]:
     """Load English passages from Snowflake for the given document IDs."""
     logger = get_logger()
@@ -64,7 +68,9 @@ def load_passages_from_snowflake(
         f"Connecting to Snowflake to load passages for {len(document_ids)} document(s)"
     )
 
-    con = snowflake.connector.connect(connection_name="local_dev")
+    con = _connect_to_snowflake(
+        snowflake_user, snowflake_private_key, snowflake_account
+    )
     cur = con.cursor()
 
     placeholders = ", ".join(["%s"] * len(document_ids))

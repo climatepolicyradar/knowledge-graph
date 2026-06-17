@@ -35,7 +35,7 @@ from flows.inference import (
     inference_batch_of_documents_gpu,
 )
 from flows.modify_threshold import modify_threshold
-from flows.predict import predict_adhoc
+from flows.predict import predict_adhoc, predict_documents
 from flows.push_new_dataset import push_new_dataset
 from flows.sample import sample
 from flows.sync_concepts import sync_concepts
@@ -252,6 +252,11 @@ async def main() -> None:
     await create_deployment(
         flow=predict_adhoc,
         description="Run ad-hoc prediction on labelled passages using a trained classifier",
+    )
+
+    await create_deployment(
+        flow=predict_documents,
+        description="Load passages for specific document IDs from Snowflake and run a trained classifier on them",
     )
 
     # Inference
