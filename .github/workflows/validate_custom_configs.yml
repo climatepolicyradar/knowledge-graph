@@ -5,10 +5,12 @@ on:
     branches:
       - main
     paths:
-      - 'scripts/custom_concept_training/configs/**'
+      - 'scripts/custom_concept_training/configs/*.yaml'
+      - 'knowledge_graph/custom_classifier_config.py'
   pull_request:
     paths:
-      - 'scripts/custom_concept_training/configs/**'
+     - 'scripts/custom_concept_training/configs/*.yaml'
+     - 'knowledge_graph/custom_classifier_config.py'
   workflow_dispatch:
 
 jobs:
