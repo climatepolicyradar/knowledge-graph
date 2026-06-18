@@ -247,6 +247,7 @@ class PassageLengthBenchmarkClassifier(bert_based.BertBasedClassifier):
         labelled_passages: list[LabelledPassage],
         validation_size: float = 0.2,
         enable_wandb: bool = False,
+        seed: int | None = None,
         *,
         max_length: int = 512,
         use_dynamic_padding: bool = True,
