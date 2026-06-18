@@ -606,6 +606,7 @@ async def train_classifier(
     train_validation_data: Optional[list[LabelledPassage]] = None,
     max_training_samples: Optional[int] = None,
     force: bool = True,
+    seed: Optional[int] = None,
 ) -> "Classifier":
     """Train a classifier and optionally track the run, uploading the model."""
     logger = get_logger()
@@ -696,9 +697,13 @@ async def train_classifier(
         else:
             deduplicated_training_data = []
 
+        fit_kwargs: dict[str, Any] = {}
+        if seed is not None:
+            fit_kwargs["seed"] = seed
         classifier.fit(
             labelled_passages=deduplicated_training_data,
             enable_wandb=track_and_upload,
+            **fit_kwargs,
         )
 
         # Log the final prompt to W&B. Useful for AutoLLMClassifier, which
@@ -812,6 +817,7 @@ async def run_training(
     training_data_wandb_path: Optional[str] = None,
     limit_training_samples: Optional[int] = None,
     force: bool = True,
+    seed: Optional[int] = None,
 ) -> Classifier:
     """
     Get a concept and create a classifier, then train the classifier.
@@ -868,6 +874,8 @@ async def run_training(
         extra_wandb_config["training_data_wandb_path"] = training_data_wandb_path
     if limit_training_samples is not None:
         extra_wandb_config["limit_training_samples"] = limit_training_samples
+    if seed is not None:
+        extra_wandb_config["seed"] = seed
     if hasattr(classifier, "model_name"):
         wandb_classifier_kwargs: dict[str, object] = dict(classifier_kwargs or {})
         wandb_classifier_kwargs["model_name"] = getattr(classifier, "model_name")
@@ -884,6 +892,7 @@ async def run_training(
         train_validation_data=labelled_passages,
         max_training_samples=limit_training_samples,
         force=force,
+        seed=seed,
     )
 
 

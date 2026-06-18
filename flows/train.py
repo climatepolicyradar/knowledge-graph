@@ -74,6 +74,7 @@ async def train_on_gpu(
     concept_overrides: Optional[dict[str, Any]] = None,
     training_data_wandb_path: Optional[str] = None,
     limit_training_samples: Optional[int] = None,
+    seed: Optional[int] = None,
     config: Config | None = None,
 ):
     """Trigger the training script in prefect on a GPU using coiled."""
@@ -94,6 +95,7 @@ async def train_on_gpu(
         concept_overrides=concept_overrides,
         training_data_wandb_path=training_data_wandb_path,
         limit_training_samples=limit_training_samples,
+        seed=seed,
     )
 
 
@@ -108,6 +110,7 @@ async def train_on_cpu(
     concept_overrides: Optional[dict[str, Any]] = None,
     training_data_wandb_path: Optional[str] = None,
     limit_training_samples: Optional[int] = None,
+    seed: Optional[int] = None,
     config: Config | None = None,
 ):
     """
@@ -134,6 +137,7 @@ async def train_on_cpu(
         concept_overrides=concept_overrides,
         training_data_wandb_path=training_data_wandb_path,
         limit_training_samples=limit_training_samples,
+        seed=seed,
     )
 
 
