@@ -4,10 +4,10 @@ from typing import Any
 import typer
 import yaml
 from pydantic import BaseModel
-from rich.console import Console
 
 from knowledge_graph.custom_classifier_config import CustomClassifierConfig
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.utils import get_logger
 from knowledge_graph.wikibase import WikibaseSession
 from scripts.custom_concept_training.validate import (
     CONFIG_DIR,
@@ -17,7 +17,7 @@ from scripts.custom_concept_training.validate import (
 )
 
 app = typer.Typer()
-console = Console()
+logger = get_logger()
 
 
 # --- readable YAML output (literal block style for multiline strings) ---
@@ -63,10 +63,10 @@ def validate(
             for p in paths:
                 check_wikibase_ids(CustomClassifierConfig.from_yaml(p), session)
     except ValueError as e:
-        console.print(f"[red]FAIL[/red] {e}")
+        logger.error("FAIL: %s", e)
         raise typer.Exit(code=1)
 
-    console.print("[green]All config(s) valid.[/green]")
+    logger.info("All config(s) valid.")
 
 
 def _example_value(field_name: str, field_info: Any) -> Any:
@@ -106,9 +106,11 @@ def create(
             data, Dumper=_LiteralDumper, sort_keys=False, allow_unicode=True, width=4096
         )
     )
-    console.print(
-        f"[green]Wrote template to {out}.[/green] Fill in llm.model_name etc., then run "
-        f"`uv run classifier-configs validate {out}`."
+    logger.info(
+        "Wrote template to %s. Fill in fields, then run "
+        "`uv run classifier-configs validate %s`.",
+        out,
+        out,
     )
 
 
