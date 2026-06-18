@@ -90,15 +90,40 @@ async def test_get_concepts_async__logs_warning_on_retry(MockedWikibaseSession, 
 
 @pytest.mark.skip(reason="Not implemented")
 def test_wikibase__get_statements(MockedWikibaseSession):
-    raise NotImplementedError(
-        "The test_wikibase__get_statements test is not implemented yet."
+    raise NotImplementedError
+
+
+def test_wikibase__create_concept(MockedWikibaseSession):
+    wikibase = MockedWikibaseSession()
+    concept = Concept(
+        preferred_label="Test concept",
+        description="A test description",
+        definition="A longer definition of the concept.",
+        alternative_labels=["alias one", "alias two"],
     )
+    new_id = wikibase.create_concept(
+        concept,
+        subconcept_of=[WikibaseID("Q1")],
+        has_subconcept=[WikibaseID("Q2")],
+        related_to=[WikibaseID("Q3")],
+        wikidata_id="Q12345",
+    )
+    assert isinstance(new_id, WikibaseID)
 
 
-@pytest.mark.skip(reason="Not implemented")
-def test_wikibase__add_statement(MockedWikibaseSession):
-    raise NotImplementedError(
-        "The test_wikibase__add_statement test is not implemented yet."
+def test_wikibase__create_concept__minimal(MockedWikibaseSession):
+    wikibase = MockedWikibaseSession()
+    new_id = wikibase.create_concept(Concept(preferred_label="Minimal concept"))
+    assert isinstance(new_id, WikibaseID)
+
+
+def test_wikibase__add_claim(MockedWikibaseSession):
+    wikibase = MockedWikibaseSession()
+    # Should not raise
+    wikibase.add_claim(
+        entity_id=WikibaseID("Q10"),
+        property_id="P1",
+        target_id=WikibaseID("Q20"),
     )
 
 

@@ -1,17 +1,14 @@
-import logging
 from collections import Counter
 
 import pandas as pd
 from pydantic import BaseModel, computed_field
-from rich.logging import RichHandler
 
 from knowledge_graph.concept import Concept
+from knowledge_graph.utils import get_logger
 from knowledge_graph.wikibase import WikibaseSession
 from knowledge_graph.wikidata import WikidataSession
 
-logger = logging.getLogger(__name__)
-logger.addHandler(RichHandler())
-logger.setLevel(logging.INFO)
+logger = get_logger()
 
 logger.info("Connecting to Wikibase")
 wikibase = WikibaseSession()

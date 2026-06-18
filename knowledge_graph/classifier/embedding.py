@@ -1,4 +1,3 @@
-import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -15,8 +14,9 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, Identifier
 from knowledge_graph.span import Span
+from knowledge_graph.utils import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class _EmbeddingCache:
@@ -328,6 +328,35 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier, ProbabilityCapableClas
             )
             threshold = 0.0
 
+        similarities = self._similarities(texts, show_progress_bar=show_progress_bar)
+
+        spans_per_text = []
+        for text, similarity in zip(texts, similarities):
+            spans = []
+            if similarity > threshold:
+                spans = [
+                    Span(
+                        text=text,
+                        concept_id=self.concept.wikibase_id,
+                        prediction_probability=float(similarity),
+                        start_index=0,
+                        end_index=len(text),
+                        labellers=[str(self)],
+                        timestamps=[datetime.now()],
+                    )
+                ]
+            spans_per_text.append(spans)
+
+        return spans_per_text
+
+    def _similarities(
+        self, texts: Sequence[str], show_progress_bar: bool = False
+    ) -> list[float]:
+        """
+        Return the dot product between each text and the concept embedding.
+
+        For normalised embeddings, this is equivalent to the cosine similarity.
+        """
         # get embeddings for all text
         if self._cache is None:
             # if there's no cache, calculate all embeddings
@@ -365,22 +394,8 @@ class EmbeddingClassifier(Classifier, ZeroShotClassifier, ProbabilityCapableClas
 
             keys = cache_keys
 
-        spans_per_text = []
-        for text, key in zip(texts, keys):
-            similarity = float(self.concept_embedding @ embeddings_dict[key].T)
-            spans = []
-            if similarity > threshold:
-                spans = [
-                    Span(
-                        text=text,
-                        concept_id=self.concept.wikibase_id,
-                        prediction_probability=float(similarity),
-                        start_index=0,
-                        end_index=len(text),
-                        labellers=[str(self)],
-                        timestamps=[datetime.now()],
-                    )
-                ]
-            spans_per_text.append(spans)
+        return [float(self.concept_embedding @ embeddings_dict[key].T) for key in keys]
 
-        return spans_per_text
+    def predict_proba_batch(self, texts: Sequence[str]) -> list[float]:
+        """Return the per-text cosine similarity to the concept embedding."""
+        return self._similarities(texts)

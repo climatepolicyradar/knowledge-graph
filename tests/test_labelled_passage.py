@@ -297,6 +297,52 @@ def test_labelled_passages_to_dataframe_without_probabilities(
     assert df["prediction_probability"].tolist() == [None, None]
 
 
+def test_labelled_passages_to_dataframe_uses_metadata_probability_for_negatives():
+    """Negatives (no spans) take their probability from metadata["prediction_probability"]."""
+    passages = [
+        LabelledPassage(
+            text="positive passage",
+            spans=[
+                Span(
+                    text="positive passage",
+                    start_index=0,
+                    end_index=16,
+                    concept_id="Q123",
+                    prediction_probability=0.8,
+                )
+            ],
+            metadata={"prediction_probability": 0.8},
+        ),
+        LabelledPassage(
+            text="negative passage",
+            spans=[],
+            metadata={"prediction_probability": 0.2},
+        ),
+    ]
+
+    df = labelled_passages_to_dataframe(passages)
+
+    assert df["prediction"].tolist() == [True, False]
+    assert df["prediction_probability"].tolist() == [0.8, 0.2]
+
+
+def test_labelled_passages_to_dataframe_all_negatives_with_metadata_probability():
+    """An all-negative batch still surfaces metadata probabilities (no spans at all)."""
+    passages = [
+        LabelledPassage(
+            text="neg one", spans=[], metadata={"prediction_probability": 0.1}
+        ),
+        LabelledPassage(
+            text="neg two", spans=[], metadata={"prediction_probability": 0.3}
+        ),
+    ]
+
+    df = labelled_passages_to_dataframe(passages)
+
+    assert df["prediction"].tolist() == [False, False]
+    assert df["prediction_probability"].tolist() == [0.1, 0.3]
+
+
 def test_dataframe_to_labelled_passages_without_human_labels():
     """Test that passages created without human labels have no spans."""
     df = pd.DataFrame(

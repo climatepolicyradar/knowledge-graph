@@ -16,7 +16,10 @@ WORKDIR /app
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     --mount=type=bind,source=uv.lock,target=uv.lock \
-    uv pip install -r pyproject.toml --extra transformers_gpu --extra coiled --link-mode=copy
+    uv export --frozen --no-emit-project --no-dev --no-hashes \
+        --extra transformers_gpu --extra coiled -o /tmp/requirements.lock.txt \
+    && uv pip install -r pyproject.toml --extra transformers_gpu --extra coiled \
+        -c /tmp/requirements.lock.txt --link-mode=copy
 
 # Runtime stage with slim image
 FROM python:3.13-slim-bookworm@sha256:9b8102b7b3a61db24fe58f335b526173e5aeaaf7d13b2fbfb514e20f84f5e386
@@ -51,6 +54,7 @@ COPY flows ./flows/
 COPY scripts ./scripts/
 COPY static_sites ./static_sites/
 COPY vibe-checker ./vibe-checker/
+COPY data/raw/geography-iso-3166.csv ./data/raw/geography-iso-3166.csv
 
 # Install the project
 RUN uv pip install --system -e .

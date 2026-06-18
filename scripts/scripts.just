@@ -94,10 +94,6 @@ sample-corpus id corpus:
 extend-dataset id workspace:
     uv run python scripts/argilla/extend_existing_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
 
-# push a sampled set of passages to argilla for a specific wikibase ID
-push-to-argilla id workspace:
-    uv run python scripts/argilla/push_new_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
-
 # generate an HTML report of classifier performance
 generate-report wikibase-ids:
     uv run python scripts/generate_report.py --wikibase-ids {{wikibase-ids}}
@@ -182,3 +178,20 @@ audit-prefect-artifacts +OPTS="":
     else
         uv run collect_prefect_artifacts {{OPTS}}
     fi
+
+
+# Validate all custom-classifier config YAMLs (offline schema + structural checks)
+validate-configs:
+    uv run classifier-configs validate --check-all-configs
+
+# Validate a single config file
+validate-config path:
+    uv run classifier-configs validate {{path}}
+
+# Same, plus live Wikibase existence checks (needs WIKIBASE_* env vars)
+validate-configs-live:
+    uv run classifier-configs validate --check-all-configs --check-wikibase
+
+# Write a template custom-classifier config YAML for a concept to fill in
+new-classifier-config id:
+    uv run classifier-configs create {{id}}

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import random
 from collections.abc import Generator, Sequence
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -54,6 +55,7 @@ from flows.utils import (
     filter_non_english_language_file_stems,
     map_as_sub_flow,
     return_with,
+    sanitise_artifact_key_component,
     wait_for_semaphore,
 )
 from knowledge_graph.classifier import Classifier
@@ -83,7 +85,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 
 CLASSIFIER_CPU_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 CLASSIFIER_GPU_CONCURRENCY_LIMIT: Final[PositiveInt] = 10
-INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 1000
+INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 200
 CLASSIFIER_PREDICT_BATCH_SIZE: Final[PositiveInt] = 32
 AWS_ENV: str = os.environ["AWS_ENV"]
 S3_BLOCK_RESULTS_CACHE: str = f"s3-bucket/cpr-{AWS_ENV}-prefect-results-cache"
@@ -766,6 +768,7 @@ async def run_classifier_inference_on_document(
     input_schema: InputSchema = "v1",
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
+    logger = get_logger()
     assert result.document  # For typing, we already check this properly earlier
     if input_schema == "v1":
         document = cast(BaseParserOutput, result.document)
@@ -782,6 +785,8 @@ async def run_classifier_inference_on_document(
     all_spans: list[list[Span]] = classifier.predict(
         all_text, batch_size=CLASSIFIER_PREDICT_BATCH_SIZE
     )
+    if random.random() < 0.1:
+        logger.info(f"Completed inference on {result.document_stem}")
     for spans in all_spans:
         _validate_spans(spans)
 
@@ -853,8 +858,10 @@ async def create_inference_on_batch_summary_artifact(
     if not flow_run_name:
         flow_run_name = f"unknown-{generate_slug(2)}"
 
+    sanitised_flow_run_name = sanitise_artifact_key_component(flow_run_name)
+
     await acreate_table_artifact(
-        key=f"batch-inference-{config.aws_env.value}-{flow_run_name}",
+        key=f"batch-inference-{config.aws_env.value}-{sanitised_flow_run_name}",
         table=document_details,
         description=overview_description,
     )
@@ -1128,6 +1135,7 @@ async def inference_batch_of_documents_cpu(
     result_storage=S3_BLOCK_RESULTS_CACHE,
     retries=INFERENCE_BATCH_RETRIES,
     retry_delay_seconds=INFERENCE_BATCH_RETRY_DELAY_S,
+    timeout_seconds=int(timedelta(hours=24).total_seconds()),
 )
 async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],

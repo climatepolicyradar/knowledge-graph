@@ -1,0 +1,84 @@
+wikibase_id: Q912
+
+sampling:
+  dataset_name: combined
+  sample_size: 10000
+  min_negative_proportion: 0.1
+  max_negative_proportion: 0.3
+  corpus_types_exclude:
+    - Litigation
+  max_size_to_sample_from: 1000000
+
+llm:
+  model_name: openrouter:google/gemini-3.1-pro-preview
+  related_definitions:
+    - Q1731
+    - Q911
+  labelling_guidelines: |
+    Use the following inclusion/exclusion criteria, in addition to the definition.
+    These are guidelines meant to help you disambiguate.
+    Overall, your main task is to find positive examples. An EXCLUSION rule should never rule out whole passages, only specific phrases within that passage.
+
+    ### THE POWER TEST
+    Before tagging, ask: Does this passage describe a process that helps marginalized or impacted groups to influence, challenge, or shape a decision?
+    ONLY tag if the answer is yes.
+
+    **Examples that FAIL the power test:**
+    - "it is necessary to empower the most vulnerable" — too vague, no mechanism described
+    - "civil society must hold governments to account" — no procedural element
+    - "increased communication with energy users" — interaction ≠ influence
+    - "stakeholders will be consulted during planning and monitoring" — unclear who stakeholders are, nor if they have power to shape decisions
+
+    **Examples that PASS the power test:**
+    - "subsistence farmers took part in workshops on land tenure rights, including joint management" — organising of an impacted group towards inclusive decision-making
+    - "Indigenous Peoples have mandated representation in the project oversight committee" - meaningful procedural safeguards
+    - "promoted PLP in 40 rural communities" - in this context, PLP is likely participatory land use planning, a strong method with a named vulnerable group
+    - "the national committee's proposal reflects input from over 30,000 citizens, trade unions and advisory bodies" — large-scale public input solicited by a powerful institution suggests meaningful change
+    - "co-design with local stakeholders through sectoral workshops" — strong participatory method with stakeholders
+    - "women-led FGDs resulted in" — Focus Group Discussions are not very strong, but with a named group and suggestion that outcomes were taken up
+
+    ### 1. MEANINGFUL PARTICIPATION vs. GENERIC MENTIONS
+    - **INCLUDE**: Specific, named participatory methods (e.g. co-design, Participatory Land Use Planning) as long as impacted groups have a meaningful role.
+    - **INCLUDE**: Large-scale public input processes where significant numbers of citizens, communities, or Indigenous peoples contributed to policy development.
+    - **INCLUDE**: Processes described as building "consensus" through multi-stakeholder engagement — consensus-building implies negotiation and influence, not one-way information.
+    - **NOTE**: Be careful around generic inclusion methods (e.g. workshops, consultation, engagement):
+        a)Especially if they explicitly mention involvement of a vulnerable group, it can pass the POWER TEST.
+        b) Without mention of a group or goal, such generic languages suggests a one-way information session which should be excluded.
+    - **EXCLUDE**: Tokenistic inclusion where consultation is a checkbox.
+    - **EXCLUDE**: Mentions of groups receiving things (e.g. money, training) without a say in the management of those things (distribution, not participation).
+
+    ### 2. ACCESSIBLE JUSTICE vs. ADMINISTRATIVE LAW
+    - **INCLUDE**: Grievance mechanisms, accountability channels, or rights to appeal ONLY if they are accessible to local communities or the vulnerable.
+    - **EXCLUDE**: Standard administrative law boilerplate. These are general regulatory functions, not procedural justice.
+
+    ### 3. EMPOWERING TRANSPARENCY vs. COMPLIANCE
+    - **INCLUDE**: Transparency processes that build community agency. Also include transparency processes that explicitly mention accountability to impacted/vulnerable groups.
+    - **EXCLUDE**: Technical or bureaucratic transparency (e.g. publishing emission inventories, financial audits, standard MRV). These are for donors/regulators/other countries, not for justice.
+
+    ### 4. FAIRNESS vs. PROTECTIVE SAFEGUARDS
+    - **INCLUDE**: Include measures which meaningfully improve the fairness of decision making, such as special protections and procedures for vulnerable groups.
+    - **EXCLUDE**: General safety protocols or confidentiality measures. While vital for safety, these are safeguards, not procedural justice (decision-making power).
+
+    ### 5. PROCEDURAL JUSTICE SOLUTIONS vs. PROBLEM DESCRIPTIONS
+    - **INCLUDE**: Passages that describe a *lack* of procedural justice as a justice problem or that suggest fair decision-making as a potential solution.
+    - **EXCLUDE**: General descriptions of injustice or unjust representation without a mention of procedural remedies.
+    - **EXCLUDE**: Descriptions of barriers TO participation (e.g. "discriminatory norms prevent women from decision-making", "fail to take into account needs of vulnerable groups"). These describe problems, not solutions. Only tag if the passage also describes mechanisms to ADDRESS these barriers.
+
+    ### 6. INSTITUTIONAL POWER & MAINSTREAMING
+    - **INCLUDE**: High-level mandates and formal commitments from those in power to give decision-making power to vulnerable stakeholders. These represent institutional commitments to justice.
+    - **NOTE**: If a justice-relevant topic is being 'mainstreamed', the nominal meaning is an institution-wide consideration for the topic which should be included, unless it is very clearly used only as a buzzword or a vague goal.
+    - **INCLUDE**: Decentralization/Joint-Management should be tagged, but only if power is (likely) being moved closer to the community.
+
+    ### 7. JUSTICE TYPE DIFFERENTIATION
+    - **EXCLUDE**: generic discussions of justice, or other types of justice, such as the Justice System.
+    - **EXCLUDE** passages that fit better under these definitions:
+        - Recognition Justice: {Q1731}
+        -  Distributive Justice: {Q911}
+
+    ### 8. CONTEXT REQUIREMENT
+    - **EXCLUDE**: Single abstract words (e.g. "Democratization", "Accountability") without any context.
+    - **NOTE**: When in doubt about short phrases with no means to gauge the depth of involvement nor the importance of the process, ask: does this name a specific process (consultation, FGD, workshop, input gathering) AND at least one impacted group or justice goal? If yes, include it.
+
+    ### 8. HEADINGS, DOCUMENT TITLES AND REFERENCES
+    - **INCLUDE**: Headings, document titles, report names, or publication references that explicitly name participatory processes (e.g. "Lessons from the field: Including Women in Community Forestry").
+    - **NOTE**: Even in reference lists or citations, tag the participation-relevant portion of the title. The title indicates the document substantively addresses procedural justice.

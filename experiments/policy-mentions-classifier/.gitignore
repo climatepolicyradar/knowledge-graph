@@ -1,0 +1,6 @@
+# Model artifacts live in s3://policy-mentions-classifier/models (598 MB) and are
+# downloaded on first run — never commit them.
+models/
+
+# Local prediction outputs
+*.csv

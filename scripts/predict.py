@@ -1,13 +1,23 @@
+import asyncio
+import json
 import os
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
+import snowflake.connector
 import typer
 import wandb
 from dotenv import load_dotenv
+from prefect.client.schemas.objects import FlowRun
+from prefect.deployments import run_deployment
 
-from knowledge_graph.cloud import AwsEnv, get_s3_client
+from flows.utils import get_flow_run_ui_url
+from knowledge_graph.cloud import (
+    AwsEnv,
+    generate_deployment_name,
+    get_s3_client,
+)
 from knowledge_graph.config import WANDB_ENTITY, predictions_dir
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -22,6 +32,7 @@ from knowledge_graph.wandb_helpers import (
     load_classifier_from_wandb,
     load_labelled_passages_from_wandb,
     log_labelled_passages_artifact_to_wandb_run,
+    log_labelled_passages_table_to_wandb_run,
 )
 
 app = typer.Typer()
@@ -44,82 +55,96 @@ def deduplicate_labelled_passages(
     return deduplicated_passages
 
 
-@app.command()
-def main(
-    wikibase_id: Annotated[
-        WikibaseID,
-        typer.Option(
-            ...,
-            help="The Wikibase ID of the concept classifier to run",
-            parser=WikibaseID,
-        ),
-    ],
-    classifier_wandb_path: Annotated[
-        str,
-        typer.Option(
-            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
-        ),
-    ],
-    labelled_passages_path: Annotated[
-        Optional[Path],
-        typer.Option(
-            help="Optional local path to labelled passages .jsonl file.",
-            dir_okay=False,
-            exists=True,
-        ),
-    ] = None,
-    labelled_passages_wandb_run_path: Annotated[
-        Optional[str],
-        typer.Option(
-            help="""Optional W&B run name to look for a labelled passages artifact in.
-            
-            Will look for an artifact of type `labelled-passages` in the project 
-            <wikibase_id>.
-            """
-        ),
-    ] = None,
-    track_and_upload: Annotated[
-        bool,
-        typer.Option(
-            ...,
-            help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
-        ),
-    ] = True,
-    batch_size: int = typer.Option(
-        15,
-        help="Number of passages to process in each batch",
-    ),
-    limit: Annotated[
-        Optional[int],
-        typer.Option(
-            ...,
-            help="Optionally limit the number of passages predicted on",
-        ),
-    ] = None,
-    deduplicate_inputs: bool = typer.Option(
-        True,
-        help="Remove duplicate passages based on text content before prediction",
-    ),
-    exclude_training_data: bool = typer.Option(
-        True,
-        help="Exclude passages that were in the model's training data from prediction",
-    ),
-    prediction_threshold: float | None = typer.Option(
-        None, help="Optional prediction threshold for the classifier."
-    ),
-    stop_after_n_positives: Annotated[
-        Optional[int],
-        typer.Option(
-            help="Stop prediction after finding this many positive passages",
-        ),
-    ] = None,
-    restart_from_wandb_run: Annotated[
-        Optional[str],
-        typer.Option(
-            help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
-        ),
-    ] = None,
-):
+def load_passages_from_snowflake(
+    document_ids: list[str], minimum_text_chars: int = 0
+) -> list[LabelledPassage]:
+    """Load English passages from Snowflake for the given document IDs."""
+    logger = get_logger()
+    logger.info(
+        f"Connecting to Snowflake to load passages for {len(document_ids)} document(s)"
+    )
+
+    con = snowflake.connector.connect(connection_name="local_dev")
+    cur = con.cursor()
+
+    placeholders = ", ".join(["%s"] * len(document_ids))
+    query = f"""
+    SELECT
+        p.CONTENT AS text_block_text,
+        p.content_type AS text_block_type,
+        d.DOCUMENT_ID,
+        d.content_type AS document_content_type,
+        d.document_name AS document_name,
+        d.document_slug AS document_slug,
+        d.TRANSLATED AS document_metadata_translated,
+        d.METADATA_CORPUS_TYPE_NAME AS document_metadata_corpus_type_name,
+        d.METADATA_GEOGRAPHIES AS document_metadata_geographies
+    FROM PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS_V1 d
+    JOIN PRODUCTION.PUBLISHED.PASSAGES_V2 p
+        ON d.DOCUMENT_ID = p.DOCUMENT_ID
+    WHERE p.LANGUAGE = 'en'
+      AND p.CONTENT IS NOT NULL
+      AND LENGTH(p.CONTENT) > {minimum_text_chars}
+      AND d.DOCUMENT_ID IN ({placeholders})
+    """
+
+    cur.execute(query, document_ids)
+    df = cur.fetch_pandas_all()
+    con.close()
+
+    logger.info(f"✓ Loaded {len(df)} passages from Snowflake")
+
+    rename_cols = {
+        "TEXT_BLOCK_TEXT": "text_block.text",
+        "TEXT_BLOCK_TYPE": "text_block.type",
+        "DOCUMENT_ID": "document_id",
+        "DOCUMENT_CONTENT_TYPE": "document_content_type",
+        "DOCUMENT_NAME": "document_name",
+        "DOCUMENT_SLUG": "document_slug",
+        "DOCUMENT_METADATA_TRANSLATED": "document_metadata.translated",
+        "DOCUMENT_METADATA_CORPUS_TYPE_NAME": "document_metadata.corpus_type_name",
+        "DOCUMENT_METADATA_GEOGRAPHIES": "document_metadata.geographies",
+    }
+    df = df.rename(columns=rename_cols)
+
+    df["document_metadata.geographies"] = df["document_metadata.geographies"].apply(
+        lambda x: json.loads(x) if isinstance(x, str) else x
+    )
+
+    labelled_passages = []
+    for _, row in df.iterrows():
+        metadata = row.to_dict()
+        metadata.pop("text_block.text")
+        for key, value in metadata.items():
+            if hasattr(value, "tolist"):
+                metadata[key] = value.tolist()
+        labelled_passages.append(
+            LabelledPassage(
+                text=str(row["text_block.text"]),
+                metadata=metadata,
+                spans=[],
+            )
+        )
+
+    return labelled_passages
+
+
+async def run_prediction(
+    wikibase_id: WikibaseID,
+    classifier_wandb_path: str,
+    labelled_passages_path: Path | None = None,
+    labelled_passages_wandb_path: str | None = None,
+    input_passages: list[LabelledPassage] | None = None,
+    track_and_upload: bool = True,
+    batch_size: int = 15,
+    limit: int | None = None,
+    deduplicate_inputs: bool = True,
+    exclude_training_data: bool = True,
+    prediction_threshold: float | None = None,
+    stop_after_n_positives: int | None = None,
+    restart_from_wandb_run: str | None = None,
+    aws_env: AwsEnv = AwsEnv.production,
+) -> None:
     """
     Load labelled passages from local dir or W&B, and run a classifier on them.
 
@@ -134,7 +159,7 @@ def main(
         "limit": limit,
         "classifier_path": classifier_wandb_path,
         "labelled_passages_path": labelled_passages_path,
-        "labelled_passages_wandb_run_path": labelled_passages_wandb_run_path,
+        "labelled_passages_wandb_path": labelled_passages_wandb_path,
         "prediction_threshold": prediction_threshold,
         "stop_after_n_positives": stop_after_n_positives,
         "exclude_training_data": exclude_training_data,
@@ -157,23 +182,27 @@ def main(
         wandb_api = wandb.Api()
 
         # 1. load labelled passages
-        if labelled_passages_path and labelled_passages_wandb_run_path:
+        if labelled_passages_path and labelled_passages_wandb_path:
             raise ValueError(
-                "Both `labelled_passages_path` and `labelled_passages_run_name` cannot be defined."
+                "Both `labelled_passages_path` and `labelled_passages_wandb_path` cannot be defined."
             )
+        elif input_passages is not None:
+            labelled_passages: list[LabelledPassage] = input_passages
         elif labelled_passages_path:
-            labelled_passages: list[LabelledPassage] = (
-                deserialise_pydantic_list_with_fallback(
-                    content=labelled_passages_path.read_text(),
-                    model_class=LabelledPassage,
-                )
+            labelled_passages = deserialise_pydantic_list_with_fallback(
+                content=labelled_passages_path.read_text(),
+                model_class=LabelledPassage,
             )
-        elif labelled_passages_wandb_run_path:
-            wandb_run = wandb_api.run(labelled_passages_wandb_run_path)
-            labelled_passages = load_labelled_passages_from_wandb(run=wandb_run)
+        elif labelled_passages_wandb_path:
+            labelled_passages = load_labelled_passages_from_wandb(
+                wandb_path=labelled_passages_wandb_path
+            )
+            # Record the artifact as an input to this run so it shows up in W&B lineage
+            if run:
+                run.use_artifact(labelled_passages_wandb_path)
         else:
             raise ValueError(
-                "One of `labelled_passages_path` and `labelled_passages_run_name` must be defined."
+                "One of `labelled_passages_path`, `labelled_passages_wandb_path`, or `input_passages` must be provided."
             )
 
         already_predicted_passages: list[LabelledPassage] = []
@@ -268,10 +297,11 @@ def main(
 
         # 3. load model
         region_name = "eu-west-1"
-        aws_env = AwsEnv.labs
         # When running in prefect the client is instantiated earlier
         # Set this, so W&B knows where to look for AWS credentials profile
-        os.environ["AWS_PROFILE"] = aws_env
+        # Only set AWS_PROFILE when using named profiles (local dev).
+        if os.environ.get("USE_AWS_PROFILES", "false").lower() == "true":
+            os.environ["AWS_PROFILE"] = aws_env.value
         get_s3_client(aws_env, region_name)
 
         classifier = load_classifier_from_wandb(classifier_wandb_path)
@@ -297,7 +327,7 @@ def main(
                 )
 
             logger.info(
-                "You can end prediction early by pressing Ctrl+C. This will save passages predicted thus far."
+                "You can end prediction early by pressing Ctrl+C or cancelling the Prefect flow. This will save passages predicted thus far."
             )
 
             for i in range(0, len(labelled_passages), batch_size):
@@ -308,6 +338,7 @@ def main(
                     labelled_passages=batch,
                     batch_size=batch_size,
                     show_progress=True,
+                    include_prediction_probabilities=True,
                 )
 
                 passages_processed += len(batch)
@@ -334,6 +365,11 @@ def main(
                         f"Processed {passages_processed}/{len(labelled_passages)} passages"
                     )
 
+        except KeyboardInterrupt:
+            logger.info(
+                f"Prediction stopped early by user. "
+                f"Saving {len(output_labelled_passages)} passages predicted thus far..."
+            )
         except Exception as e:
             prediction_exception = e
             logger.error(f"⚠ Prediction failed: {e}")
@@ -363,11 +399,242 @@ def main(
                     log_labelled_passages_artifact_to_wandb_run(
                         all_passages, run=run, concept=classifier.concept
                     )
+                    log_labelled_passages_table_to_wandb_run(all_passages, run=run)
                     logger.info(f"✓ Uploaded passages to W&B run {run.name}")
 
         # Re-raise the exception after saving
         if prediction_exception:
             raise prediction_exception
+
+
+@app.command()
+def main(
+    wikibase_id: Annotated[
+        WikibaseID,
+        typer.Option(
+            ...,
+            help="The Wikibase ID of the concept classifier to run",
+            parser=WikibaseID,
+        ),
+    ],
+    classifier_wandb_path: Annotated[
+        str,
+        typer.Option(
+            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
+        ),
+    ],
+    labelled_passages_path: Annotated[
+        Path | None,
+        typer.Option(
+            help="Optional local path to labelled passages .jsonl file.",
+            dir_okay=False,
+            exists=True,
+        ),
+    ] = None,
+    labelled_passages_wandb_path: Annotated[
+        str | None,
+        typer.Option(
+            help="""Optional W&B artifact path to load labelled passages from.
+
+            E.g. 'climatepolicyradar/Q913/rsgz5ygh-labelled-passages:v0'.
+            """
+        ),
+    ] = None,
+    track_and_upload: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Whether to track the training run with Weights & Biases. Includes uploading the model artifact to S3.",
+        ),
+    ] = True,
+    batch_size: int = typer.Option(
+        15,
+        help="Number of passages to process in each batch",
+    ),
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            ...,
+            help="Optionally limit the number of passages predicted on",
+        ),
+    ] = None,
+    deduplicate_inputs: bool = typer.Option(
+        True,
+        help="Remove duplicate passages based on text content before prediction",
+    ),
+    exclude_training_data: bool = typer.Option(
+        True,
+        help="Exclude passages that were in the model's training data from prediction",
+    ),
+    prediction_threshold: float | None = typer.Option(
+        None, help="Optional prediction threshold for the classifier."
+    ),
+    stop_after_n_positives: Annotated[
+        int | None,
+        typer.Option(
+            help="Stop prediction after finding this many positive passages",
+        ),
+    ] = None,
+    restart_from_wandb_run: Annotated[
+        str | None,
+        typer.Option(
+            help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
+        ),
+    ] = None,
+    use_prefect: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help=("Run on Prefect. Note that the results won't be available locally."),
+        ),
+    ] = False,
+    aws_env: Annotated[
+        AwsEnv,
+        typer.Option(
+            ...,
+            help="AWS environment to use for downloading the model from S3",
+        ),
+    ] = AwsEnv.production,
+):
+    """
+    Load labelled passages from local dir or W&B, and run a classifier on them.
+
+    Saves predicted passages to a local directory. Tracks the run and uploads results
+    if `track_and_upload` is set.
+
+    For probability-capable classifiers inference is run twice per passage – once to
+    get the prediction, and once to get the prediction probability. This is due to the
+    fact that we only store `Span` objects for *positive* predictions.
+    """
+    if use_prefect:
+        flow_name = "predict-adhoc"
+        deployment_name = generate_deployment_name(flow_name=flow_name, aws_env=aws_env)
+        qualified_name = f"{flow_name}/{deployment_name}"
+
+        flow_run: FlowRun = run_deployment(  # type: ignore[misc]
+            name=qualified_name,
+            parameters={
+                "wikibase_id": wikibase_id,
+                "classifier_wandb_path": classifier_wandb_path,
+                "labelled_passages_wandb_path": labelled_passages_wandb_path,
+                "track_and_upload": track_and_upload,
+                "batch_size": batch_size,
+                "limit": limit,
+                "deduplicate_inputs": deduplicate_inputs,
+                "exclude_training_data": exclude_training_data,
+                "prediction_threshold": prediction_threshold,
+                "stop_after_n_positives": stop_after_n_positives,
+                "restart_from_wandb_run": restart_from_wandb_run,
+                "aws_env": aws_env,
+            },
+            timeout=0,  # Don't wait for the flow to finish before continuing
+        )
+        get_logger().info(
+            f"Deployment started. Flow run URL: {get_flow_run_ui_url(flow_run)}"
+        )
+    else:
+        asyncio.run(
+            run_prediction(
+                wikibase_id=wikibase_id,
+                classifier_wandb_path=classifier_wandb_path,
+                labelled_passages_path=labelled_passages_path,
+                labelled_passages_wandb_path=labelled_passages_wandb_path,
+                track_and_upload=track_and_upload,
+                batch_size=batch_size,
+                limit=limit,
+                deduplicate_inputs=deduplicate_inputs,
+                exclude_training_data=exclude_training_data,
+                prediction_threshold=prediction_threshold,
+                stop_after_n_positives=stop_after_n_positives,
+                restart_from_wandb_run=restart_from_wandb_run,
+            )
+        )
+
+
+@app.command()
+def documents(
+    document_ids: Annotated[
+        list[str],
+        typer.Argument(help="One or more document IDs to load passages from Snowflake"),
+    ],
+    wikibase_id: Annotated[
+        WikibaseID,
+        typer.Option(
+            ...,
+            help="The Wikibase ID of the concept classifier to run",
+            parser=WikibaseID,
+        ),
+    ],
+    classifier_wandb_path: Annotated[
+        str,
+        typer.Option(
+            help="Path of the classifier in W&B. E.g. 'climatepolicyradar/Q913/rsgz5ygh:v0'"
+        ),
+    ],
+    track_and_upload: Annotated[
+        bool,
+        typer.Option(
+            ...,
+            help="Whether to track the run with Weights & Biases and upload results.",
+        ),
+    ] = True,
+    batch_size: int = typer.Option(
+        15,
+        help="Number of passages to process in each batch",
+    ),
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            ...,
+            help="Optionally limit the number of passages predicted on",
+        ),
+    ] = None,
+    deduplicate_inputs: bool = typer.Option(
+        True,
+        help="Remove duplicate passages based on text content before prediction",
+    ),
+    exclude_training_data: bool = typer.Option(
+        True,
+        help="Exclude passages that were in the model's training data from prediction",
+    ),
+    prediction_threshold: float | None = typer.Option(
+        None, help="Optional prediction threshold for the classifier."
+    ),
+    stop_after_n_positives: Annotated[
+        int | None,
+        typer.Option(
+            help="Stop prediction after finding this many positive passages",
+        ),
+    ] = None,
+    restart_from_wandb_run: Annotated[
+        str | None,
+        typer.Option(
+            help="Optional W&B run path to restart from. Loads already-predicted passages from this run and skips them.",
+        ),
+    ] = None,
+):
+    """
+    Load passages for specific document IDs from Snowflake and run a classifier on them.
+
+    Saves predicted passages to a local directory. Tracks the run and uploads results
+    if `track_and_upload` is set.
+    """
+    passages = load_passages_from_snowflake(document_ids)
+    asyncio.run(
+        run_prediction(
+            wikibase_id=wikibase_id,
+            classifier_wandb_path=classifier_wandb_path,
+            input_passages=passages,
+            track_and_upload=track_and_upload,
+            batch_size=batch_size,
+            limit=limit,
+            deduplicate_inputs=deduplicate_inputs,
+            exclude_training_data=exclude_training_data,
+            prediction_threshold=prediction_threshold,
+            stop_after_n_positives=stop_after_n_positives,
+            restart_from_wandb_run=restart_from_wandb_run,
+        )
+    )
 
 
 if __name__ == "__main__":

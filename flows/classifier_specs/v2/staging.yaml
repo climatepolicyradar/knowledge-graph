@@ -28,14 +28,14 @@
   concept_id: s9rbcnjc
   classifier_id: zahr3y3c
   classifiers_profile: primary
-  wandb_registry_version: v15
-  dont_run_on:
-  - sabin
+  wandb_registry_version: v16
 - wikibase_id: Q221
   concept_id: s9rbcnjc
   classifier_id: zahr3y3c
   classifiers_profile: primary
-  wandb_registry_version: v16
+  wandb_registry_version: v15
+  dont_run_on:
+  - sabin
 - wikibase_id: Q223
   concept_id: fxx6vsts
   classifier_id: dntrzvg4

@@ -1,4 +1,13 @@
 ---
+- wikibase_id: Q32
+  concept_id: qr9e3354
+  classifier_id: thhpmb5e
+  classifiers_profile: primary
+  wandb_registry_version: v0
+  compute_environment:
+    gpu: true
+  dont_run_on:
+  - sabin
 - wikibase_id: Q47
   concept_id: hdgvd2ju
   classifier_id: rfvhzrck
@@ -274,6 +283,24 @@
   classifier_id: rqtk7h47
   classifiers_profile: primary
   wandb_registry_version: v15
+- wikibase_id: Q911
+  concept_id: bus9h2mt
+  classifier_id: xaxa59eg
+  classifiers_profile: primary
+  wandb_registry_version: v0
+  compute_environment:
+    gpu: true
+  dont_run_on:
+  - sabin
+- wikibase_id: Q912
+  concept_id: z4yvxcr8
+  classifier_id: trrqcen3
+  classifiers_profile: primary
+  wandb_registry_version: v0
+  compute_environment:
+    gpu: true
+  dont_run_on:
+  - sabin
 - wikibase_id: Q954
   concept_id: eaupne6f
   classifier_id: fyhqe7b6
@@ -469,16 +496,9 @@
   wandb_registry_version: v3
 - wikibase_id: Q1829
   concept_id: d2sckcja
-  classifier_id: 7n27za9e
+  classifier_id: ds667yyj
   classifiers_profile: primary
-  wandb_registry_version: v1
-  compute_environment:
-    gpu: true
-- wikibase_id: Q1829
-  concept_id: d2sckcja
-  classifier_id: fuqmphf9
-  classifiers_profile: primary
-  wandb_registry_version: v0
+  wandb_registry_version: v2
   compute_environment:
     gpu: true
 - wikibase_id: Q1830

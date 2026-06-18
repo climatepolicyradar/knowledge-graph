@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 import random
 from abc import ABC, abstractmethod
 from typing import Annotated, Optional, Sequence
@@ -24,8 +23,7 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span, SpanXMLConceptFormattingError
-
-logger = logging.getLogger(__name__)
+from knowledge_graph.utils import get_logger
 
 
 class LLMResponse(BaseModel):
@@ -148,6 +146,16 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 )
             ),
         ] = 42,
+        temperature: Annotated[
+            float | None,
+            Field(
+                description=(
+                    "Sampling temperature for the LLM. If None, defaults to 0.0 — "
+                    "preserves the prior deterministic behaviour. Used by ensemble "
+                    "strategies that want to induce variability across variants."
+                )
+            ),
+        ] = None,
         structured_output: Annotated[
             bool,
             Field(
@@ -164,6 +172,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         self.model_name = model_name
         self.system_prompt_template = system_prompt_template
         self.random_seed = random_seed
+        self.temperature = temperature if temperature is not None else 0.0
         self.structured_output = structured_output
 
         self.system_prompt = system_prompt_template.format(concept)
@@ -184,6 +193,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             self.model_name,
             self.system_prompt,
             self.random_seed,
+            self.temperature,
         )
 
     def __hash__(self) -> int:
@@ -203,11 +213,18 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 
     def get_variant(self) -> Self:
         """Get a variant of the classifier, using a different random seed."""
+
+        if self.temperature < 0.7:
+            get_logger().warning(
+                "LLMClassifier temperature has been set to below 0.7. This will be overridden to 0.7 when creating an ensemble, to ensure variance in the ensemble's predictions."
+            )
+
         return type(self)(
             concept=self.concept,
             model_name=self.model_name,
             system_prompt_template=self.system_prompt_template,
             random_seed=random.randint(0, 1000000),
+            temperature=max(self.temperature, 0.7),
             structured_output=self.structured_output,
         )
 
@@ -250,6 +267,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         :param float | None threshold: Optional prediction threshold
         :return list[Span]: A list of spans identified in the text
         """
+        logger = get_logger(__name__)
         if threshold is not None:
             logger.warning(
                 f"`threshold` parameter ignored - {self.__class__.__name__} does not output prediction probabilities",
@@ -261,7 +279,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
             response: AgentRunResult[LLMResponse | str] = self.agent.run_sync(  # type: ignore[assignment]
                 text,
                 model_settings=ModelSettings(
-                    seed=self.random_seed or 42, temperature=0
+                    seed=self.random_seed if self.random_seed is not None else 42,
+                    temperature=self.temperature,
                 ),  # type: ignore[arg-type]
             )
             if isinstance(response.output, str):
@@ -271,8 +290,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 )
         except (UnexpectedModelBehavior, ValidationError) as e:
             logger.warning(
-                f"LLM failed to produce valid response after retries: {e}. "
-                f"Text (truncated): {text[:100]}..."
+                f"LLM failed to produce valid response after retries: {e}. Text: {text}"
             )
             return []
 
@@ -302,6 +320,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
         :param float | None threshold: Optional prediction threshold
         :return list[list[Span]]: A list of span lists identified in each text
         """
+        logger = get_logger(__name__)
         self._check_and_nest_event_loop()
 
         async def run_predictions():
@@ -309,7 +328,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 self.agent.run(
                     text,
                     model_settings=ModelSettings(
-                        seed=self.random_seed or 42, temperature=0
+                        seed=self.random_seed if self.random_seed is not None else 42,
+                        temperature=self.temperature,
                     ),  # type: ignore[arg-type]
                 )
                 for text in texts
@@ -343,12 +363,11 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                 if isinstance(response, (UnexpectedModelBehavior, ValidationError)):
                     logger.warning(
                         f"LLM failed to produce valid response after retries: {response}. "
-                        f"Text (truncated): {text[:100]}..."
+                        f"Text: {text}"
                     )
                 else:
                     logger.warning(
-                        f"Prediction failed with exception: {response}. "
-                        f"Text (truncated): {text[:100]}..."
+                        f"Prediction failed with exception: {response}. Text: {text}"
                     )
                 batch_spans.append([])
                 continue
@@ -388,6 +407,8 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
 class LLMClassifier(BaseLLMClassifier):
     """A classifier which uses a third-party LLM to identify concept mentions in text"""
 
+    N_RETRIES = 3
+
     def __init__(
         self,
         concept: Concept,
@@ -417,6 +438,14 @@ class LLMClassifier(BaseLLMClassifier):
                 )
             ),
         ] = 42,
+        temperature: Annotated[
+            float | None,
+            Field(
+                description=(
+                    "Sampling temperature for the LLM. If None, defaults to 0.0."
+                )
+            ),
+        ] = None,
         structured_output: Annotated[
             bool,
             Field(
@@ -433,6 +462,7 @@ class LLMClassifier(BaseLLMClassifier):
             model_name=model_name,
             system_prompt_template=system_prompt_template,
             random_seed=random_seed,
+            temperature=temperature,
             structured_output=structured_output,
         )
 
@@ -443,6 +473,7 @@ class LLMClassifier(BaseLLMClassifier):
             model=self.model_name,
             system_prompt=self.system_prompt,
             output_type=output_type,
+            retries=self.N_RETRIES,
         )
 
 
@@ -482,6 +513,14 @@ class LocalLLMClassifier(BaseLLMClassifier):
                 )
             ),
         ] = 42,
+        temperature: Annotated[
+            float | None,
+            Field(
+                description=(
+                    "Sampling temperature for the LLM. If None, defaults to 0.0."
+                )
+            ),
+        ] = None,
         structured_output: Annotated[
             bool,
             Field(
@@ -506,6 +545,7 @@ class LocalLLMClassifier(BaseLLMClassifier):
             model_name=model_name,
             system_prompt_template=system_prompt_template,
             random_seed=random_seed,
+            temperature=temperature,
             structured_output=structured_output,
         )
 

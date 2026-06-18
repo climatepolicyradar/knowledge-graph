@@ -9,11 +9,12 @@ import prefect
 import prefect.exceptions
 import prefect.logging
 from pydantic import BaseModel, ValidationError
+from rich.logging import RichHandler
 
 LoggingAdapter = logging.LoggerAdapter[logging.Logger]
 
 
-def get_logger() -> logging.Logger | LoggingAdapter:
+def get_logger(name: str = "knowledge_graph") -> logging.Logger | LoggingAdapter:
     """
     Get a logger via Prefect.
 
@@ -31,7 +32,12 @@ def get_logger() -> logging.Logger | LoggingAdapter:
     try:
         return prefect.logging.get_run_logger()
     except prefect.exceptions.MissingContextError:
-        return logging.getLogger("knowledge_graph")
+        root = logging.getLogger("knowledge_graph")
+        if not root.handlers:
+            root.addHandler(RichHandler())
+        if not root.level:
+            root.setLevel(logging.INFO)
+        return logging.getLogger(name)
 
 
 T = TypeVar("T")

@@ -2,13 +2,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from flows.train import train_on_gpu
+from flows.train import train_on_cpu, train_on_gpu
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 
 
 @pytest.mark.asyncio
-async def test_train_on_gpu(mock_s3_client, mock_wandb, test_config):
+@pytest.mark.parametrize("train_flow", [train_on_gpu, train_on_cpu])
+async def test_train_flow(train_flow, mock_s3_client, mock_wandb, test_config):
     # Create a mock session that returns our mock_s3_client
     mock_session = MagicMock()
     mock_session.client.return_value = mock_s3_client
@@ -18,25 +19,19 @@ async def test_train_on_gpu(mock_s3_client, mock_wandb, test_config):
             "flows.train.run_training", return_value=AsyncMock()
         ) as mock_run_training,
         patch("boto3.session.Session", return_value=mock_session),
-        patch(
-            "flows.train.get_aws_ssm_param", return_value="mock-wandb-api-key"
-        ) as mock_get_aws_ssm_param,
     ):
         pass_through_kwargs = {
             "wikibase_id": WikibaseID("Q1"),
             "track_and_upload": False,
         }
 
-        _ = await train_on_gpu(
+        _ = await train_flow(
             wikibase_id=pass_through_kwargs["wikibase_id"],
             track_and_upload=pass_through_kwargs["track_and_upload"],
             aws_env=AwsEnv.labs,
             config=test_config,
         )
 
-        mock_get_aws_ssm_param.assert_called_once_with(
-            "WANDB_API_KEY", aws_env=AwsEnv.labs
-        )
         mock_run_training.assert_called_once()
         got_kwargs = mock_run_training.call_args.kwargs
         for kwarg, value in pass_through_kwargs.items():

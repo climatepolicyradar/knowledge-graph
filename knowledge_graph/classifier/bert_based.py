@@ -1,4 +1,3 @@
-import logging
 import os
 import random
 import re
@@ -11,7 +10,6 @@ import numpy as np
 import pandas as pd
 import torch
 from datasets import Dataset
-from rich.logging import RichHandler
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
@@ -23,6 +21,7 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizer,
     pipeline,
+    set_seed,
 )
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
@@ -38,9 +37,9 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
+from knowledge_graph.utils import get_logger
 
-logging.basicConfig(handlers=[RichHandler()])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def compute_metrics(eval_pred: EvalPrediction) -> dict[str, float]:
@@ -293,62 +292,60 @@ class BertBasedClassifier(
         self, texts: Sequence[str], threshold: float | None = None
     ) -> list[list[Span]]:
         """Predict whether the supplied texts contain instances of the concept."""
-        if self._use_dropout_during_inference:
-            with self._dropout_enabled():
-                with torch.no_grad():
-                    scores, predicted_classes = self._forward(texts)
-        else:
-            self.model.eval()  # type: ignore[attr-defined]
-            with torch.no_grad():
-                scores, predicted_classes = self._forward(texts)
+        positive_probs = self.predict_proba_batch(texts)
 
-        effective_threshold = (
-            threshold if threshold is not None else self.prediction_threshold
-        )
+        if threshold is not None:
+            effective_threshold = threshold
+        elif self.prediction_threshold is not None:
+            effective_threshold = self.prediction_threshold
+        else:
+            effective_threshold = 0.5
 
         now = datetime.now()
         labeller = str(self)
         results = []
-        for text, score, cls in zip(texts, scores, predicted_classes):
+        for text, pos_prob in zip(texts, positive_probs):
             text_results = []
-            # LABEL_1 (class index 1) is the positive prediction.
-            if cls == 1:
-                if effective_threshold is None or score >= effective_threshold:
-                    span = Span(
-                        text=text,
-                        concept_id=self.concept.wikibase_id,
-                        prediction_probability=score,
-                        start_index=0,
-                        end_index=len(text),
-                        labellers=[labeller],
-                        timestamps=[now],
-                    )
-                    text_results.append(span)
+            if pos_prob >= effective_threshold:
+                span = Span(
+                    text=text,
+                    concept_id=self.concept.wikibase_id,
+                    prediction_probability=pos_prob,
+                    start_index=0,
+                    end_index=len(text),
+                    labellers=[labeller],
+                    timestamps=[now],
+                )
+                text_results.append(span)
             results.append(text_results)
 
         return results
 
-    def _forward(self, texts: Sequence[str]) -> tuple[list[float], list[int]]:
+    def predict_proba_batch(self, texts: Sequence[str]) -> list[float]:
         """
-        Run a batched forward pass and return per-text scores and predicted classes.
+        Return P(class=1) per text, independent of the argmax decision.
 
-        :param texts: Texts to classify.
-        :returns: Tuple of `(scores, predicted_classes)` where `scores[i]` is the
-            probability of the predicted class for text `i`
+        This is needed because `predict` only returns a `Span` for positive examples,
+        but probability calibration needs examples from probabilities 0 <= p <= 1.
         """
-        device = self.device
+        if self._use_dropout_during_inference:
+            with self._dropout_enabled():
+                with torch.no_grad():
+                    return self._forward_positive_probs(texts)
+        self.model.eval()  # type: ignore[attr-defined]
+        with torch.no_grad():
+            return self._forward_positive_probs(texts)
+
+    def _forward_positive_probs(self, texts: Sequence[str]) -> list[float]:
         inputs = self.tokenizer(
             list(texts),
             padding=True,
             truncation=True,
             max_length=512,
             return_tensors="pt",
-        ).to(device)
+        ).to(self.device)
         logits = self.model(**inputs).logits
-        probs = torch.softmax(logits, dim=-1)
-        predicted_classes = torch.argmax(probs, dim=-1)
-        scores = probs[torch.arange(len(probs)), predicted_classes]
-        return scores.tolist(), predicted_classes.tolist()
+        return torch.softmax(logits, dim=-1)[:, 1].tolist()
 
     def get_variant(
         self, random_seed: int | None = None, dropout_rate: float = 0.1
@@ -431,6 +428,7 @@ class BertBasedClassifier(
         labelled_passages: list[LabelledPassage],
         validation_size: float = 0.2,
         enable_wandb: bool = False,
+        seed: int | None = None,
         **kwargs,
     ) -> "BertBasedClassifier":
         """
@@ -466,6 +464,11 @@ class BertBasedClassifier(
             labelled_passages: The labelled passages to train the classifier on.
             validation_size: The proportion of labelled passages to use for validation.
             enable_wandb: Whether to enable W&B logging for training metrics and model checkpoints.
+            seed: Optional random seed making the run reproducible. When set, it seeds
+                all random number generators- the train/validation split, classification-head
+                initialisation, data shuffling and dropout. When ``None``
+                (the default), the previous behaviour is preserved: a fixed split
+                (``random_state=42``) with otherwise nondeterministic training.
             **kwargs: Additional keyword arguments passed to the base class
         Returns:
             BertBasedClassifier: The trained classifier
@@ -475,6 +478,22 @@ class BertBasedClassifier(
                 f"Not enough labelled passages to train a {self.name} for "
                 f"{self.concept.wikibase_id}. At least 10 are required."
             )
+
+        # The classification head is randomly initialised when the model is first loaded
+        # (in `__init__`, before any seed is known), so simply seeding here is not enough
+        # to make a run reproducible. When a seed is given we seed every random number generator
+        # and re-initialise the head under that seed, leaving the (possibly fine-tuned/checkpointed)
+        # encoder backbone untouched.
+        # The train/validation split and Trainer also use this seed below.
+        if seed is not None:
+            logger.info("Seeding training run with seed %d", seed)
+            set_seed(seed)
+            if torch.backends.mps.is_available():
+                torch.mps.manual_seed(seed)
+            for name, module in self.model.named_modules():
+                if name and ("classifier" in name or "head" in name):
+                    self.model._init_weights(module)  # noqa: SLF001
+        data_seed = seed if seed is not None else 42
 
         labels = [
             1
@@ -493,7 +512,7 @@ class BertBasedClassifier(
             labelled_passages,
             labels,
             test_size=validation_size,
-            random_state=42,
+            random_state=data_seed,
             stratify=labels,
         )
 
@@ -588,6 +607,8 @@ class BertBasedClassifier(
         with tempfile.TemporaryDirectory() as temp_dir:
             training_args = TrainingArguments(
                 output_dir=os.path.join(temp_dir, "results"),
+                seed=data_seed,
+                data_seed=data_seed,
                 # high number of train epochs as we enable early stopping below
                 num_train_epochs=10,
                 # batch size scales with dataset size, to avoid batches or epochs that
@@ -611,7 +632,7 @@ class BertBasedClassifier(
                 load_best_model_at_end=True,
                 metric_for_best_model="eval_f1",
                 greater_is_better=True,
-                dataloader_num_workers=2,
+                dataloader_num_workers=0,
                 report_to=["wandb"] if enable_wandb else [],
                 disable_tqdm=True,
                 # W&B-specific settings when enabled

@@ -21,7 +21,11 @@ from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
 
 from flows.aggregate import aggregate, aggregate_batch_of_documents
+from flows.build_dataset_flow import build_dataset_flow
 from flows.classifiers_profiles import sync_classifiers_profiles
+from flows.create_evaluation_dataset_in_argilla import (
+    create_evaluation_dataset_in_argilla,
+)
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.index import index, index_batch_of_documents
@@ -30,12 +34,17 @@ from flows.inference import (
     inference_batch_of_documents_cpu,
     inference_batch_of_documents_gpu,
 )
+from flows.modify_threshold import modify_threshold
+from flows.predict import predict_adhoc
+from flows.push_new_dataset import push_new_dataset
+from flows.sample import sample
 from flows.sync_concepts import sync_concepts
 from flows.topic_pipeline import topic_pipeline
-from flows.train import train_on_gpu
+from flows.train import train_on_cpu, train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import Compute, JsonDict, get_prefect_job_variables
 from flows.vibe_check import vibe_check_inference
+from flows.vibe_check_generate_datasets import generate_vibe_checker_datasets
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import (
     PROJECT_NAME,
@@ -202,12 +211,47 @@ def _version() -> str:
 
 
 async def main() -> None:
+    # Sample
+
+    await create_deployment(
+        flow=sample,
+        description="Sample passages for a concept from the dataset for labelling",
+    )
+
+    await create_deployment(
+        flow=modify_threshold,
+        description="Load a classifier from W&B, set a new prediction threshold, and upload the classifier with the new threshold to S3 and W&B",
+    )
+
+    await create_deployment(
+        flow=push_new_dataset,
+        description="Push labelled passages from a W&B artifact to Argilla as a new dataset",
+    )
+
+    await create_deployment(
+        flow=create_evaluation_dataset_in_argilla,
+        description="Sample passages for a concept and push them directly to Argilla as a new dataset",
+    )
+
     # Train
+
     await create_deployment(
         flow=train_on_gpu,
         description="Train concept classifiers with GPU compute",
         gpu=True,
         flow_variables={},
+    )
+
+    await create_deployment(
+        flow=train_on_cpu,
+        description="Train non-BERT concept classifiers with CPU compute",
+        gpu=False,
+        flow_variables={},
+    )
+
+    await create_deployment(
+        flow=predict_adhoc,
+        description="Run ad-hoc prediction on labelled passages using a trained classifier",
     )
 
     # Inference
@@ -406,6 +450,24 @@ async def main() -> None:
         },
     )
 
+    # Build Dataset
+
+    await create_deployment(
+        flow=build_dataset_flow,
+        description=(
+            "Build the combined and balanced sampled passage "
+            "datasets from Snowflake and upload as feather files to S3."
+        ),
+        flow_variables={
+            **DEFAULT_FLOW_VARIABLES,
+            "cpu": MEGABYTES_PER_GIGABYTE * 8,
+            "memory": MEGABYTES_PER_GIGABYTE * 32,
+        },
+        env_schedules={
+            AwsEnv.production: "0 8 1 * *",  # 8am on the 1st of each month
+        },
+    )
+
     # Vibe Check
 
     await create_deployment(
@@ -418,6 +480,20 @@ async def main() -> None:
         },
         env_schedules={
             AwsEnv.labs: "0 8 * * MON-THU",  # Every working day at 8am
+        },
+    )
+
+    await create_deployment(
+        flow=generate_vibe_checker_datasets,  # pyright: ignore[reportArgumentType]
+        description="Generate vibe-checker passage embeddings from the balanced sampled dataset in s3://cpr-kg-feather-files",
+        gpu=True,
+        flow_variables={
+            "cpu": 8,
+            "memory": "32 GiB",
+        },
+        env_schedules={
+            # 03:00 on the 1st of each month, before any 8am vibe-check run
+            AwsEnv.labs: "0 3 1 * *",
         },
     )
 

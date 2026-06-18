@@ -1,4 +1,3 @@
-import logging
 import os
 import random
 import re
@@ -12,7 +11,6 @@ import numpy as np
 import pandas as pd
 import torch
 from datasets import Dataset
-from rich.logging import RichHandler
 from seqeval.metrics import (
     accuracy_score as seqeval_accuracy_score,
 )
@@ -49,9 +47,9 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
+from knowledge_graph.utils import get_logger
 
-logging.basicConfig(handlers=[RichHandler()])
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # BIO label scheme
 O_LABEL = 0
@@ -539,6 +537,51 @@ class BertTokenClassifier(
 
         return batch_labels, batch_probs, offset_mapping
 
+    def predict_proba_batch(self, texts: Sequence[str]) -> list[float]:
+        """
+        Return the per-text positive-class probability.
+
+        For this token-level model, the passage-level probability is the maximum
+        probability of any non-O ("B"/"I") prediction across the passage's content
+        tokens, i.e. the model's strongest signal that any token mentions the concept.
+        """
+        if self._use_dropout_during_inference:
+            with self._dropout_enabled():
+                with torch.no_grad():
+                    return self._forward_positive_probs(texts)
+        self.model.eval()  # type: ignore[attr-defined]
+        with torch.no_grad():
+            return self._forward_positive_probs(texts)
+
+    def _forward_positive_probs(self, texts: Sequence[str]) -> list[float]:
+        """Return the max non-O token probability per text (content tokens only)."""
+        tokenized = self.tokenizer(
+            list(texts),
+            padding=True,
+            truncation=True,
+            max_length=512,
+            return_tensors="pt",
+            return_offsets_mapping=True,
+        )
+        offset_mapping = tokenized.pop("offset_mapping")
+        inputs = {k: v.to(self.device) for k, v in tokenized.items()}
+        logits = self.model(**inputs).logits  # [batch, seq_len, num_labels]
+
+        probs = torch.softmax(logits, dim=-1)
+        # P(token mentions the concept) = 1 - P(O)
+        positive_probs = 1.0 - probs[..., O_LABEL]  # [batch, seq_len]
+
+        # Only consider real text tokens: special tokens have (start_idx, end_idx) == (0, 0) and
+        # padding tokens have attention_mask == 0.
+        offsets = offset_mapping.to(positive_probs.device)
+        content_mask = (offsets[..., 0] != offsets[..., 1]) & inputs[
+            "attention_mask"
+        ].bool()
+
+        # Where a passage has no content tokens, fall back to 0.0.
+        masked = positive_probs.masked_fill(~content_mask, 0.0)
+        return masked.max(dim=-1).values.tolist()
+
     def fit(
         self,
         labelled_passages: list[LabelledPassage],
@@ -694,7 +737,7 @@ class BertTokenClassifier(
                 load_best_model_at_end=True,
                 metric_for_best_model="eval_f1",
                 greater_is_better=True,
-                dataloader_num_workers=2,
+                dataloader_num_workers=0,
                 report_to=["wandb"] if enable_wandb else [],
                 disable_tqdm=True,
                 run_name=(f"{self.concept.id}_{self.name}" if enable_wandb else None),

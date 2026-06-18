@@ -1,6 +1,6 @@
 [project]
 name = "knowledge-graph"
-version = "0.21.0"
+version = "0.21.1"
 description = ""
 authors = [
   { name = "CPR Data Science", email = "dsci@climatepolicyradar.org" },
@@ -11,7 +11,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.14"
 
 dependencies = [
-  "pydantic-ai>=1.0.1",
+  "pydantic-ai-slim[openrouter]>=1.76.0",
   "rich>=13.7.0",
   "ipykernel>=6.29.3",
   "neomodel>=5.3.3",
@@ -20,7 +20,7 @@ dependencies = [
   "more-itertools>=10.3.0",
   "argilla>=2.5",
   "cpr-sdk==4.3.0",
-  "wandb>=0.21.0",
+  "wandb>=0.22.3",
   "boto3>=1.35.31",
   "pyvespa>=0.54.0",
   "pyyaml>=6.0.2",
@@ -103,6 +103,7 @@ mcp = ["fastmcp>=2.12.3"]
 
 [project.scripts]
 train = "scripts.train:app"
+classifier-configs = "scripts.custom_concept_training.configs_cli:app"
 promote = "scripts.promote:app"
 demote = "scripts.demote:app"
 evaluate = "scripts.evaluate:app"

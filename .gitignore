@@ -16,6 +16,9 @@ eggs/
 .eggs/
 lib/
 lib64/
+# The Python `lib/` rule above is unanchored, so it also matches the first-party
+# Next.js lib dir in the vibe-checker webapp. Keep that one tracked.
+!/vibe-checker/webapp/lib/
 parts/
 sdist/
 var/
@@ -164,6 +167,7 @@ artifacts/*
 
 !data/raw/litigation-non-us.csv
 !data/raw/litigation-us.csv
+!data/raw/geography-iso-3166.csv
 
 tmp/
 scratch/
@@ -179,3 +183,4 @@ tests/local_vespa/test_app/search/query-profiles/lower_max_hits.xml
 
 # Output report created by the scripts/audit/do_s3_passages_align_with_vespa.py audit script
 missing_passages.csv
+.vscode/

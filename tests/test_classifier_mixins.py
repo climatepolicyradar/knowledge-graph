@@ -1,8 +1,11 @@
 """Tests for isinstance behaviour of classifier mixins."""
 
+import pytest
+
 from knowledge_graph.classifier.classifier import (
     Classifier,
     GPUBoundClassifier,
+    ProbabilityCapableClassifier,
     ZeroShotClassifier,
 )
 from knowledge_graph.concept import Concept
@@ -56,3 +59,15 @@ def test_isinstance_for_a_non_gpu_classifier():
     """Test that a non-GPU classifier is not an instance of the GPU marker class."""
     classifier = DummyClassifier(concept)
     assert not isinstance(classifier, GPUBoundClassifier)
+
+
+def test_probability_capable_classifier_requires_predict_proba_batch():
+    """A ProbabilityCapableClassifier subclass must implement predict_proba_batch."""
+
+    class IncompleteProbabilityClassifier(
+        DummyClassifier, ProbabilityCapableClassifier
+    ):
+        """Declares the capability but does not implement the required method."""
+
+    with pytest.raises(TypeError):
+        IncompleteProbabilityClassifier(concept)  # type: ignore[abstract]

@@ -104,6 +104,12 @@ def file_name_from_path(path: str) -> str:
     return os.path.splitext(os.path.basename(path))[0]
 
 
+def sanitise_artifact_key_component(value: str) -> str:
+    """Convert a string into a valid Prefect artifact key component."""
+    sanitised = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+    return sanitised or "unknown"
+
+
 def get_flow_run_ui_url(flow_run: FlowRun):
     """Determine the prefect console URL for a flow run."""
     return f"{get_current_settings().ui_url}/flow-runs/flow-run/{flow_run.id}"

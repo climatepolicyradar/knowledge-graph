@@ -7,10 +7,9 @@ import boto3
 import wandb
 import yaml
 from prefect import flow
-from pydantic import SecretStr
 
 from flows.config import Config
-from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
+from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.utils import get_logger
@@ -40,8 +39,8 @@ async def _set_up_training_environment(
     ):
         raise ValueError("Missing values in config.")
 
-    wandb_api_key = SecretStr(get_aws_ssm_param("WANDB_API_KEY", aws_env=aws_env))
-    wandb.login(key=wandb_api_key.get_secret_value())
+    if config.wandb_api_key:
+        wandb.login(key=config.wandb_api_key.get_secret_value())
 
     wikibase_config = WikibaseConfig(
         username=config.wikibase_username,
@@ -75,9 +74,10 @@ async def train_on_gpu(
     concept_overrides: Optional[dict[str, Any]] = None,
     training_data_wandb_path: Optional[str] = None,
     limit_training_samples: Optional[int] = None,
+    seed: Optional[int] = None,
     config: Config | None = None,
 ):
-    """Trigger the training script in prefect using coiled."""
+    """Trigger the training script in prefect on a GPU using coiled."""
     _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
         config=config, aws_env=aws_env
     )
@@ -95,6 +95,49 @@ async def train_on_gpu(
         concept_overrides=concept_overrides,
         training_data_wandb_path=training_data_wandb_path,
         limit_training_samples=limit_training_samples,
+        seed=seed,
+    )
+
+
+@flow()
+async def train_on_cpu(
+    wikibase_id: WikibaseID,
+    track_and_upload: bool = True,
+    aws_env: AwsEnv = AwsEnv.production,
+    evaluate: bool = True,
+    classifier_type: Optional[str] = None,
+    classifier_kwargs: Optional[dict[str, Any]] = None,
+    concept_overrides: Optional[dict[str, Any]] = None,
+    training_data_wandb_path: Optional[str] = None,
+    limit_training_samples: Optional[int] = None,
+    seed: Optional[int] = None,
+    config: Config | None = None,
+):
+    """
+    Trigger the training script in prefect on CPU compute (ECS).
+
+    Intended for non-BERT classifiers (e.g. keyword, LLM, embedding) that don't
+    require a GPU, avoiding the cost of spinning up a Coiled GPU cluster. BERT
+    classifiers should be trained with ``train_on_gpu``.
+    """
+    _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
+        config=config, aws_env=aws_env
+    )
+
+    return await run_training(
+        wikibase_id=wikibase_id,
+        track_and_upload=track_and_upload,
+        aws_env=aws_env,
+        wikibase_config=wikibase_config,
+        argilla_config=argilla_config,
+        s3_client=s3_client,
+        evaluate=evaluate,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs,
+        concept_overrides=concept_overrides,
+        training_data_wandb_path=training_data_wandb_path,
+        limit_training_samples=limit_training_samples,
+        seed=seed,
     )
 
 

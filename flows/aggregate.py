@@ -45,6 +45,7 @@ from flows.utils import (
     build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
     map_as_sub_flow,
+    sanitise_artifact_key_component,
 )
 from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.concept import Concept
@@ -452,8 +453,10 @@ async def create_aggregate_inference_summary_artifact(
     if not flow_run_name:
         flow_run_name = f"unknown-{generate_slug(2)}"
 
+    sanitised_flow_run_name = sanitise_artifact_key_component(flow_run_name)
+
     await create_table_artifact(  # pyright: ignore[reportGeneralTypeIssues]
-        key=f"batch-aggregate-{config.aws_env.value}-{flow_run_name}",
+        key=f"batch-aggregate-{config.aws_env.value}-{sanitised_flow_run_name}",
         table=details,
         description=overview_description,
     )

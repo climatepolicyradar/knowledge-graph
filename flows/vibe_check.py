@@ -16,7 +16,6 @@ See vibe-checker/README.md for more details!
 
 import io
 import json
-import logging
 import os
 import random
 from datetime import datetime
@@ -32,10 +31,8 @@ from mypy_boto3_s3 import S3Client
 from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
 from prefect.futures import wait
-from prefect.logging import get_logger
 from prefect.task_runners import ThreadPoolTaskRunner
 from pydantic import Field
-from rich.logging import RichHandler
 from sentence_transformers import SentenceTransformer
 
 from flows.config import Config
@@ -44,7 +41,7 @@ from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
-from knowledge_graph.utils import serialise_pydantic_list_as_jsonl
+from knowledge_graph.utils import get_logger, serialise_pydantic_list_as_jsonl
 from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 from scripts.train import run_training
 
@@ -77,7 +74,7 @@ class LabelledPassageWithMarkup(LabelledPassage):
         )
 
 
-def _get_bucket_name_from_ssm() -> str:
+def get_bucket_name_from_ssm() -> str:
     """Fetch bucket name from AWS Systems Manager Parameter Store."""
     session = boto3.Session(
         region_name=aws_region,
@@ -97,13 +94,7 @@ def _get_bucket_name_from_ssm() -> str:
         ) from e
 
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(message)s",
-    handlers=[RichHandler(markup=True, rich_tracebacks=True)],
-)
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 def get_s3_client() -> S3Client:
@@ -117,13 +108,13 @@ def get_s3_client() -> S3Client:
 
 def get_object_bytes_from_s3(s3_client: S3Client, key: str) -> bytes:
     """Load bytes from S3 object."""
-    bucket_name = _get_bucket_name_from_ssm()
+    bucket_name = get_bucket_name_from_ssm()
     return s3_client.get_object(Bucket=bucket_name, Key=key)["Body"].read()
 
 
 def push_object_bytes_to_s3(s3_client: S3Client, key: str | Path, data: bytes) -> None:
     """Push bytes to S3 object."""
-    bucket_name = _get_bucket_name_from_ssm()
+    bucket_name = get_bucket_name_from_ssm()
     s3_client.put_object(Bucket=bucket_name, Key=str(key), Body=data)
 
 
@@ -141,58 +132,18 @@ def load_passages_dataset(
     except Exception as e:
         raise ValueError("Failed to load dataset") from e
 
-    # keep only the useful columns
+    # keep only the useful columns (matching the combined_dataset schema from
+    # the build_dataset Prefect flow / s3://cpr-kg-feather-files)
     dataset = dataset[
         [
             "text_block.text",
-            "text_block.text_block_id",
-            # "text_block.language",
-            # "text_block.type",
-            # "text_block.type_confidence",
-            "text_block.page_number",
-            # "text_block.coords",
             "document_id",
-            # "document_name",
-            # "document_source_url",
-            # "document_content_type",
-            # "document_md5_sum",
-            # "languages",
+            "document_name",
+            "document_slug",
+            "family_slug",
             "translated",
-            # "has_valid_text",
-            # "pipeline_metadata",
-            # "document_metadata.name",
-            # "document_metadata.document_title",
-            # "document_metadata.description",
-            # "document_metadata.import_id",
-            "document_metadata.slug",
-            # "document_metadata.family_import_id",
-            "document_metadata.family_slug",
-            "document_metadata.publication_ts",
-            # "document_metadata.date",
-            # "document_metadata.source_url",
-            # "document_metadata.download_url",
-            # "document_metadata.corpus_import_id",
+            "publication_ts",
             "document_metadata.corpus_type_name",
-            # "document_metadata.collection_title",
-            # "document_metadata.collection_summary",
-            # "document_metadata.type",
-            # "document_metadata.source",
-            # "document_metadata.category",
-            # "document_metadata.geography",
-            # "document_metadata.geographies",
-            # "document_metadata.languages",
-            # "document_metadata.metadata",
-            # "document_description",
-            # "document_cdn_object",
-            # "document_slug",
-            # "pdf_data.md5sum",
-            # "pdf_data_page_metadata.dimensions",
-            # "pdf_data_page_metadata.page_number",
-            # "_html_data.detected_title",
-            # "_html_data.detected_date",
-            # "_html_data.has_valid_text",
-            # "pipeline_metadata.parser_metadata",
-            # "text_block.index",
             "world_bank_region",
         ]
     ]
@@ -368,7 +319,7 @@ async def process_single_concept(
         # before uploading the passages, we should shuffle them
         random.shuffle(labelled_passages)
 
-        bucket_name = _get_bucket_name_from_ssm()
+        bucket_name = get_bucket_name_from_ssm()
         output_prefix = Path(wikibase_id) / classifier.id
         logger.info(f"Outputs will be stored in s3://{bucket_name}/{output_prefix}")
 
