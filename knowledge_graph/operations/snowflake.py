@@ -38,41 +38,45 @@ def connect_to_snowflake(
     empty SSM parameter), so it raises rather than silently falling back to local_dev
     and surfacing a misleading "config.toml not found" error.
     """
-    provided = [snowflake_user, snowflake_private_key, snowflake_account]
-    if any(provided) and not all(provided):
-        raise ValueError(
-            "Partial Snowflake credentials supplied: snowflake_user, "
-            "snowflake_private_key, and snowflake_account must all be provided "
-            "together for key-pair authentication, or all omitted to use the local "
-            "config.toml connection."
-        )
+    # Normalise empty strings (e.g. an empty SSM parameter) to None so they're
+    # treated as "not supplied" rather than as valid credentials.
+    match tuple(
+        value or None
+        for value in (snowflake_user, snowflake_private_key, snowflake_account)
+    ):
+        case (str() as user, str() as private_key_pem, str() as account):
+            private_key = load_pem_private_key(private_key_pem.encode(), password=None)
+            private_key_bytes = private_key.private_bytes(
+                encoding=Encoding.DER,
+                format=PrivateFormat.PKCS8,
+                encryption_algorithm=NoEncryption(),
+            )
+            return snowflake.connector.connect(
+                account=account,
+                user=user,
+                private_key=private_key_bytes,
+                warehouse=SNOWFLAKE_WAREHOUSE,
+                database=SNOWFLAKE_DATABASE,
+                schema=SNOWFLAKE_SCHEMA,
+            )
 
-    if snowflake_user and snowflake_private_key and snowflake_account:
-        private_key = load_pem_private_key(
-            snowflake_private_key.encode(), password=None
-        )
-        private_key_bytes = private_key.private_bytes(
-            encoding=Encoding.DER,
-            format=PrivateFormat.PKCS8,
-            encryption_algorithm=NoEncryption(),
-        )
-        return snowflake.connector.connect(
-            account=snowflake_account,
-            user=snowflake_user,
-            private_key=private_key_bytes,
-            warehouse=SNOWFLAKE_WAREHOUSE,
-            database=SNOWFLAKE_DATABASE,
-            schema=SNOWFLAKE_SCHEMA,
-        )
+        case (None, None, None):
+            # Local development fallback reads from ~/.snowflake/config.toml
+            try:
+                return snowflake.connector.connect(connection_name="local_dev")
+            except snowflake.connector.errors.Error as e:
+                get_logger().error(
+                    "Failed to connect to Snowflake. "
+                    f"Error: {e!r} "
+                    "Ensure you have a config.toml generated. You can find one in your Snowflake account settings. "
+                    "See https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-connections#define-connections"
+                )
+                raise
 
-    # Local development fallback reads from ~/.snowflake/config.toml
-    try:
-        return snowflake.connector.connect(connection_name="local_dev")
-    except snowflake.connector.errors.Error as e:
-        get_logger().error(
-            "Failed to connect to Snowflake. "
-            f"Error: {e!r} "
-            "Ensure you have a config.toml generated. You can find one in your Snowflake account settings. "
-            "See https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-connections#define-connections"
-        )
-        raise
+        case _:
+            raise ValueError(
+                "Partial Snowflake credentials supplied: snowflake_user, "
+                "snowflake_private_key, and snowflake_account must all be provided "
+                "together for key-pair authentication, or all omitted to use the local "
+                "config.toml connection."
+            )
