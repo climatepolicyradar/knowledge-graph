@@ -305,6 +305,13 @@ class BertTokenClassifier(
 
         self.max_length = max_length or 1024
 
+    def __setstate__(self, state: dict):
+        """Ensure max_length is set when loading classifiers pickled before this attribute existed."""
+
+        if "max_length" not in state:
+            state["max_length"] = 512
+        self.__dict__.update(state)
+
     def _resolve_device(self) -> torch.device:
         if torch.backends.mps.is_available():
             return torch.device("mps")
