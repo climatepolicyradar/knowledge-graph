@@ -7,9 +7,10 @@ import boto3
 import wandb
 import yaml
 from prefect import flow
+from pydantic import SecretStr
 
 from flows.config import Config
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.utils import get_logger
@@ -41,6 +42,11 @@ async def _set_up_training_environment(
 
     if config.wandb_api_key:
         wandb.login(key=config.wandb_api_key.get_secret_value())
+
+    openrouter_api_key = SecretStr(
+        get_aws_ssm_param("/OpenRouter/KGApiKey", aws_env=aws_env)
+    )
+    os.environ["OPENROUTER_API_KEY"] = openrouter_api_key.get_secret_value()
 
     wikibase_config = WikibaseConfig(
         username=config.wikibase_username,
