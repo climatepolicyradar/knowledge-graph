@@ -14,6 +14,11 @@ from knowledge_graph.custom_classifier_config import (
     LLMClassifierConfig,
 )
 from knowledge_graph.identifiers import WikibaseID
+from scripts.custom_concept_training.validate import (
+    check_wikibase_ids,
+    validate_dir,
+    validate_file,
+)
 from scripts.train import resolve_config_inputs
 
 CONFIG_DIR = Path(__file__).parents[1] / "scripts/custom_concept_training/configs"
@@ -130,3 +135,50 @@ def test_resolve_config_inputs_rejects_neither():
     """One of --wikibase-id / --from-yaml-config is required."""
     with pytest.raises(typer.BadParameter):
         resolve_config_inputs(None, None)
+
+
+@pytest.mark.parametrize("path", CONFIG_PATHS, ids=lambda p: p.stem)
+def test_committed_config_passes_offline_validation(path: Path):
+    """Every committed config passes the offline validator with no errors."""
+    assert validate_file(path).wikibase_id == WikibaseID(path.stem.upper())
+
+
+def test_committed_configs_all_validates():
+    """The whole-dir validation (incl. duplicate-concept check) is clean for committed configs."""
+    validate_dir()
+
+
+def test_filename_mismatch_is_flagged(tmp_path: Path):
+    (tmp_path / "q999.yaml").write_text(
+        "wikibase_id: Q1\nllm:\n  model_name: openrouter:openai/gpt-5\n"
+    )
+    with pytest.raises(ValueError, match="does not match"):
+        validate_file(tmp_path / "q999.yaml")
+
+
+def test_model_without_openrouter_prefix_is_rejected(tmp_path: Path):
+    (tmp_path / "q1.yaml").write_text(
+        "wikibase_id: Q1\nllm:\n  model_name: openai/gpt-5\n"
+    )
+    with pytest.raises(pydantic.ValidationError, match="openrouter:"):
+        validate_file(tmp_path / "q1.yaml")
+
+
+def test_short_override_must_go_to_concept_store(tmp_path: Path):
+    """Definition inlined in YAML that fits in concept store is rejected."""
+    p = tmp_path / "q5.yaml"
+    p.write_text(
+        "wikibase_id: Q5\n"
+        "concept_overrides:\n  definition: too short for an override\n"
+        "llm:\n  model_name: openrouter:openai/gpt-5\n"
+    )
+    with pytest.raises(pydantic.ValidationError, match="put it in Wikibase"):
+        validate_file(p)
+
+
+def test_live_check_against_mocked_session(MockedWikibaseSession):
+    """check_wikibase_ids works against the mocked session (no real network)."""
+    session = MockedWikibaseSession()
+    cfg = CustomClassifierConfig.from_yaml(CONFIG_PATHS[0])
+    check_wikibase_ids(cfg, session)
+    check_wikibase_ids(cfg, session)
