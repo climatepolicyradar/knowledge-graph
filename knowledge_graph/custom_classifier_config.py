@@ -76,8 +76,19 @@ class LLMClassifierConfig(BaseModel):
 
     model_name: str
     system_prompt_template: str = DEFAULT_SYSTEM_PROMPT
-    labelling_guidelines: str | None = None
     related_definitions: list[WikibaseID] = Field(default_factory=list)
+    labelling_guidelines: str | None = None
+
+    @field_validator("model_name")
+    @classmethod
+    def _model_name_has_openrouter_prefix(cls, model: str) -> str:
+        """Require the openrouter: provider prefix; the model itself is validated at call time."""
+        if not model.startswith("openrouter:"):
+            raise ValueError(
+                f"model_name {model!r} must start with 'openrouter:' "
+                "(e.g. 'openrouter:openai/gpt-5')"
+            )
+        return model
 
     @model_validator(mode="after")
     def _placeholders_match_related(self):

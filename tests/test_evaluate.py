@@ -396,6 +396,31 @@ def test_create_wandb_model_evaluation_charts_logs_roc_and_pr_curves_when_probab
     assert "Precision-Recall Curve" in line_titles
 
 
+def test_create_wandb_model_evaluation_charts_logs_pr_and_roc_auc_to_summary():
+    texts = [f"passage {i}" for i in range(6)]
+    predictions = _make_passages_with_probability(texts[:3], has_span=True, prob=0.9)
+    predictions += _make_passages_with_probability(texts[3:], has_span=False, prob=0.0)
+    ground_truth = predictions[:]
+
+    mock_run = Mock()
+    mock_run.summary = {}
+
+    with (
+        patch("wandb.plot.line"),
+        patch("wandb.plot.confusion_matrix"),
+        patch("wandb.Table"),
+    ):
+        create_wandb_model_evaluation_charts(
+            wandb_run=mock_run,
+            predictions=predictions,
+            ground_truth=ground_truth,
+        )
+
+    for key in ("passage_level_pr_auc", "passage_level_roc_auc"):
+        assert key in mock_run.summary
+        assert 0.0 <= mock_run.summary[key] <= 1.0
+
+
 def test_create_wandb_model_evaluation_charts_skips_curves_when_no_probabilities():
     texts = [f"passage {i}" for i in range(4)]
     predictions = [

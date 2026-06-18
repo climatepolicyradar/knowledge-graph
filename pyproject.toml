@@ -103,6 +103,7 @@ mcp = ["fastmcp>=2.12.3"]
 
 [project.scripts]
 train = "scripts.train:app"
+classifier-configs = "scripts.custom_concept_training.configs_cli:app"
 promote = "scripts.promote:app"
 demote = "scripts.demote:app"
 evaluate = "scripts.evaluate:app"

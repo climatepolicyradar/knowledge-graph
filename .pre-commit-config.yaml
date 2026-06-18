@@ -40,3 +40,4 @@ repos:
     hooks:
       - id: typos
         exclude: ^(tests/fixtures|tests/flows/fixtures|tests/local_vespa/test_documents|tests/__snapshots__|flows/classifier_specs|.*\.csv$)
+        
