@@ -89,7 +89,7 @@ When migrating a remaining `scripts/` operation, follow this:
 | Operation | Core (`knowledge_graph/operations/`) | Flow (`flows/`) | Local run (`just`) |
 | --- | --- | --- | --- |
 | build_dataset | `run_build_dataset`, `build_dataset_locally` | `build_dataset_flow` → S3 (SSM creds) | `just build-dataset` / `build-dataset-corpus` → `build_dataset_locally`, writes to `data/processed/` |
-| predict | `run_prediction`, `load_passages_from_snowflake`, `deduplicate_labelled_passages` | `predict_adhoc` (deployed), `predict_documents` (deployed, on-demand) | `just predict` / `predict-documents` → calls the operation directly (no Prefect) |
+| predict | `run_prediction`, `load_passages_from_snowflake`, `deduplicate_labelled_passages` | `predict_adhoc` (deployed), `predict_document_passages` (deployed, on-demand) | `just predict` / `predict-documents` → calls the operation directly (no Prefect) |
 | infer | — not yet extracted; pure helpers (`document_passages`, `is_noop_document`, `_validate_spans`, …) still live in `flows/inference.py` | `inference` (+ batch variants) | `infer` — **deployment trigger only** (no local mode) |
 
 ### Known follow-ups

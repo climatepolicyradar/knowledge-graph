@@ -21,9 +21,9 @@ from prefect.logging import get_run_logger
 from pydantic import SecretStr
 
 from flows.config import Config
-from flows.snowflake import get_snowflake_credentials
 from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.operations.build_dataset import run_build_dataset
+from knowledge_graph.operations.snowflake import get_snowflake_credentials
 
 COMBINED_S3_KEY = "build_dataset/combined_dataset.feather"
 SAMPLED_S3_KEY = "build_dataset/sampled_dataset.feather"

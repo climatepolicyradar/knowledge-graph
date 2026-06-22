@@ -3,9 +3,12 @@ Shared Snowflake connection logic: reusable, Prefect-free domain code.
 
 Both `build_dataset` and `predict` operations query Snowflake, so the connection
 logic lives here rather than in either one. When explicit key-pair credentials are
-supplied (cloud/ECS path, resolved from SSM by the flows), uses the DbtBot service
-account; otherwise falls back to the local `~/.snowflake/config.toml` connection.
+supplied (cloud/ECS path, resolved from SSM via `get_snowflake_credentials`), uses
+the DbtBot service account; otherwise falls back to the local
+`~/.snowflake/config.toml` connection.
 """
+
+import base64
 
 import snowflake.connector
 from cryptography.hazmat.primitives.serialization import (
@@ -14,12 +17,35 @@ from cryptography.hazmat.primitives.serialization import (
     PrivateFormat,
     load_pem_private_key,
 )
+from pydantic import SecretStr
 
+from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.utils import get_logger
 
 SNOWFLAKE_WAREHOUSE = "PRODUCTION_DBT_WH"
 SNOWFLAKE_DATABASE = "PRODUCTION"
 SNOWFLAKE_SCHEMA = "PUBLISHED"
+
+SNOWFLAKE_ACCOUNT_SSM = "/Snowflake/Account"
+SNOWFLAKE_USER_SSM = "/Snowflake/ServiceUser/DbtBot/User"
+SNOWFLAKE_PRIVATE_KEY_SSM = "/Snowflake/ServiceUser/DbtBot/PrivateKey"
+
+
+def get_snowflake_credentials(aws_env: AwsEnv) -> tuple[str, str, SecretStr]:
+    """
+    Resolve Snowflake key-pair credentials from SSM.
+
+    Returns (snowflake_account, snowflake_user, snowflake_private_key).
+    """
+    snowflake_account = get_aws_ssm_param(SNOWFLAKE_ACCOUNT_SSM, aws_env=aws_env)
+    snowflake_user = get_aws_ssm_param(SNOWFLAKE_USER_SSM, aws_env=aws_env)
+    snowflake_private_key = SecretStr(
+        base64.b64decode(
+            get_aws_ssm_param(SNOWFLAKE_PRIVATE_KEY_SSM, aws_env=aws_env)
+        ).decode("utf-8")
+    )
+
+    return snowflake_account, snowflake_user, snowflake_private_key
 
 
 def connect_to_snowflake(

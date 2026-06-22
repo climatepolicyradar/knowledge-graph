@@ -5,7 +5,7 @@ Two flows, both resolving credentials/config and then calling into
 `knowledge_graph.operations.predict`:
 - `predict_adhoc` — predict on passages from a W&B artifact (or a local .jsonl file). This
   is the deployed flow.
-- `predict_documents` — load passages for specific document IDs from Snowflake, then
+- `predict_document_passages` — load passages for specific document IDs from Snowflake, then
   predict. Resolves Snowflake key-pair credentials from SSM (so it can run in the cloud).
   Registered as an on-demand deployment in deployments.py.
 
@@ -23,13 +23,13 @@ from prefect import flow
 from pydantic import SecretStr
 
 from flows.config import Config
-from flows.snowflake import get_snowflake_credentials
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.operations.predict import (
     load_passages_from_snowflake,
     run_prediction,
 )
+from knowledge_graph.operations.snowflake import get_snowflake_credentials
 
 
 async def _set_up_prediction_environment(
@@ -99,7 +99,7 @@ async def predict_adhoc(
 
 
 @flow()
-async def predict_documents(
+async def predict_document_passages(
     document_ids: list[str],
     wikibase_id: WikibaseID,
     classifier_wandb_path: str,

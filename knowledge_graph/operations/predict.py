@@ -65,7 +65,7 @@ def load_passages_from_snowflake(
     Load English passages from Snowflake for the given document IDs.
 
     When key-pair credentials are supplied (e.g. resolved from SSM by the
-    `predict_documents` flow), connects with the DbtBot service account; otherwise
+    `predict_document_passages` flow), connects with the DbtBot service account; otherwise
     falls back to the local `~/.snowflake/config.toml` connection.
     """
     logger = get_logger()
