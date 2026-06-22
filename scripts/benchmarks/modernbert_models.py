@@ -299,11 +299,13 @@ class ResultsWriter:
         self.rows: list[dict[str, Any]] = []
 
     def write(self, row: dict[str, Any]) -> None:
+        """Write a single result row and flush it to disk immediately."""
         self._writer.writerow(row)
         self._fh.flush()
         self.rows.append(row)
 
     def close(self) -> None:
+        """Close the underlying CSV file handle."""
         self._fh.close()
 
 
@@ -371,14 +373,33 @@ def main(
         bool,
         typer.Option(help="Look up existing runs but do not dispatch any training."),
     ] = False,
+    model: Annotated[
+        Optional[list[str]],
+        typer.Option(
+            "--model",
+            help="Restrict to these model backbones (repeatable). Defaults to all "
+            "of MODELS. Runs cache per (model, concept, seed), so a later run with "
+            "more models reuses these.",
+        ),
+    ] = None,
 ) -> None:
     """Benchmark BERT backbones across concepts, pulling metrics from W&B."""
+    selected_models = model or MODELS
+
+    if unknown := [m for m in selected_models if m not in MODELS]:
+        raise typer.BadParameter(f"Unknown model(s): {unknown}. Choose from: {MODELS}")
+
     output_path = output or (
         processed_data_dir / "benchmarks" / "modernbert_models.csv"
     )
 
     writer = ResultsWriter(output_path)
     console.log(f"Writing results to {output_path}")
+    console.log(
+        f"Grid: {len(selected_models)} models x {len(CONCEPT_CONFIGS)} concepts "
+        f"x {len(SEEDS)} seeds = "
+        f"{len(selected_models) * len(CONCEPT_CONFIGS) * len(SEEDS)} runs"
+    )
 
     # (wikibase_id, model, seed, set of pre-existing run ids)
     pending: list[tuple[WikibaseID, str, int, set[str]]] = []
@@ -387,7 +408,7 @@ def main(
         # Phase 1: resolve cached configs, dispatch the rest. Each (concept, model)
         # is trained once per seed to give error bars + a paired significance test.
         for wikibase_id in CONCEPT_CONFIGS:
-            for model_name in MODELS:
+            for model_name in selected_models:
                 classifier_kwargs, unfreeze_layers, limit, train_data = config_for(
                     wikibase_id, model_name
                 )
