@@ -25,6 +25,7 @@ WIKIBASE_URL_SSM_NAME = "/Wikibase/Cloud/URL"
 ARGILLA_URL_SSM_NAME = "/Argilla/APIURL"
 ARGILLA_API_KEY_SSM_NAME = "/Argilla/Owner/APIKey"
 WANDB_API_KEY_SSM_NAME = "WANDB_API_KEY"
+OPENROUTER_API_KEY_SSM_NAME = "/OpenRouter/KGApiKey"
 
 
 def validate_s3_prefix(value: str) -> str:
@@ -113,6 +114,11 @@ class Config(BaseModel):
     wandb_api_key: Optional[SecretStr] = Field(
         default=None,
         description="Weights & Biases API Key",
+    )
+
+    openrouter_api_key: Optional[SecretStr] = Field(
+        default=None,
+        description="OpenRouter API Key, used by LLM classifiers",
     )
 
     wikibase_username: Optional[str] = Field(
@@ -233,6 +239,17 @@ class Config(BaseModel):
                 )
             except Exception:
                 logger.debug("allowing no W&B API key parameter")
+
+        if not config.openrouter_api_key:
+            try:
+                config.openrouter_api_key = SecretStr(
+                    get_aws_ssm_param(
+                        OPENROUTER_API_KEY_SSM_NAME,
+                        aws_env=config.aws_env,
+                    )
+                )
+            except Exception:
+                logger.debug("allowing no OpenRouter API key parameter")
 
         return config
 
