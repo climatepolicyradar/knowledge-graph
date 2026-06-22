@@ -30,6 +30,7 @@ from knowledge_graph.cloud import (
     AwsEnv,
     Namespace,
     generate_deployment_name,
+    get_aws_ssm_param,
     get_s3_client,
     is_logged_in,
 )
@@ -862,6 +863,14 @@ async def run_training(
         classifier_type=classifier_type,
         classifier_kwargs=classifier_kwargs or {},
     )
+
+    # For local LLMCLassifier runs, remote runs fetches via flows/train/py
+    model_name = getattr(classifier, "model_name", None)
+    if isinstance(model_name, str) and model_name.startswith("openrouter:"):
+        logger.info("Fetching OpenRouter API key from SSM")
+        os.environ["OPENROUTER_API_KEY"] = get_aws_ssm_param(
+            "/OpenRouter/KGApiKey", aws_env=aws_env
+        )
 
     extra_wandb_config: dict[str, object] = {
         "experimental_model_type": classifier_type is not None,

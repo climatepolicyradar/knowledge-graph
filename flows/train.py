@@ -42,6 +42,9 @@ async def _set_up_training_environment(
     if config.wandb_api_key:
         wandb.login(key=config.wandb_api_key.get_secret_value())
 
+    if config.openrouter_api_key:
+        os.environ["OPENROUTER_API_KEY"] = config.openrouter_api_key.get_secret_value()
+
     wikibase_config = WikibaseConfig(
         username=config.wikibase_username,
         password=config.wikibase_password,

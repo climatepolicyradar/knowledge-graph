@@ -64,6 +64,7 @@ def test_config():
         wandb_model_registry="test_org/test_wandb_model_registry",
         wandb_entity="test_entity",
         wandb_api_key=SecretStr("test_wandb_api_key"),
+        openrouter_api_key=SecretStr("test_openrouter_api_key"),
         aws_env=AwsEnv("sandbox"),
         bucket_region="eu-west-1",
         wikibase_password=SecretStr("test_password"),
