@@ -6,7 +6,7 @@ from typing import Any, Optional
 import boto3
 import wandb
 import yaml
-from prefect import flow
+from prefect import flow, task
 
 from flows.config import Config
 from knowledge_graph.cloud import AwsEnv
@@ -144,7 +144,8 @@ async def train_on_cpu(
     )
 
 
-def _load_wikibase_ids_from_config(
+@task
+def load_wikibase_ids_from_config(
     config_file_path: str,
 ) -> list[WikibaseID]:
     """Load concept IDs from a configuration YAML file."""
@@ -205,7 +206,7 @@ async def train_from_config(
     )
 
     # Load Wikibase IDs from config file
-    wikibase_ids = _load_wikibase_ids_from_config(config_file_path)
+    wikibase_ids = load_wikibase_ids_from_config(config_file_path)
     logger.info(
         f"Training classifiers for {len(wikibase_ids)} concepts "
         f"(max {concurrency_limit} at a time)"
