@@ -34,3 +34,9 @@ llm:
     - Exclude hypothetical flows and financial discussions which are not tied to concrete financial commitments.
     - Exclude financial flows that are outside the real economy, which means excluding factors like operational expenses or investments made into financial markets. Note, however, that flows such as development assistance or payments to/from climate funds are to be included.
     - Exclude discussions on the need for finance or finance flows, as well as discussions- or statistics on the economy or performance of a company.
+
+bert:
+  model_name: climatebert/distilroberta-base-climate-f
+  unfreeze_layers: 0
+  limit_training_samples: 5500
+  training_data_wandb_path: climatepolicyradar/Q1829/labelled-passages:v6

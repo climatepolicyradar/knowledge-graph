@@ -98,3 +98,9 @@ llm:
     *   **If the text implies "fairness" but is vague:** Ask, "Does this text explain *who* gets *what* and *why*?" If it provides an answer to at least two elements, **INCLUDE**.
     *   **If the text is a goal statement:** "Objective: Allocate 40% of project funding to female-headed households." -> **INCLUDE** (This sets a distributive aim).
     *   **If the text does not match any of the criteria, go back to the definition and the core test.**
+
+bert:
+  model_name: answerdotai/ModernBERT-base
+  unfreeze_layers: 1
+  limit_training_samples: 1850
+  training_data_wandb_path: climatepolicyradar/Q911/updated_bert_training_data:v5

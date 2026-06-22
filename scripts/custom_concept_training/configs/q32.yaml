@@ -75,3 +75,9 @@ llm:
     * **If the text identifies a justice-relevant barrier (e.g., "discriminatory norms prevent participation"):** Tag it if it is part of a strategy intended to address that barrier.
     * **If the text names a justice-relevant goal (e.g., "Objective: Allocate 40% of funds to female-headed households"):** Tag it.
     * **If the text does not match any criteria, return to the Core Test and the definition.**
+
+bert:
+  model_name: answerdotai/ModernBERT-base
+  unfreeze_layers: 2
+  limit_training_samples: 5600
+  training_data_wandb_path: climatepolicyradar/Q32/labelled-passages:v10
