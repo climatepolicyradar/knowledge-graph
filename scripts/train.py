@@ -866,11 +866,7 @@ async def run_training(
 
     # For local LLMCLassifier runs, remote runs fetches via flows/train/py
     model_name = getattr(classifier, "model_name", None)
-    if (
-        isinstance(model_name, str)
-        and model_name.startswith("openrouter:")
-        and not os.environ.get("OPENROUTER_API_KEY")
-    ):
+    if isinstance(model_name, str) and model_name.startswith("openrouter:"):
         logger.info("Fetching OpenRouter API key from SSM")
         os.environ["OPENROUTER_API_KEY"] = get_aws_ssm_param(
             "/OpenRouter/KGApiKey", aws_env=aws_env

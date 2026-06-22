@@ -19,6 +19,7 @@ async def test_train_flow(train_flow, mock_s3_client, mock_wandb, test_config):
             "flows.train.run_training", return_value=AsyncMock()
         ) as mock_run_training,
         patch("boto3.session.Session", return_value=mock_session),
+        patch("flows.train.get_aws_ssm_param", return_value="test-openrouter-key"),
     ):
         pass_through_kwargs = {
             "wikibase_id": WikibaseID("Q1"),

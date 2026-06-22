@@ -479,6 +479,7 @@ async def test_run_training_continues_when_openrouter_api_fails(
         patch(
             "scripts.train.get_openrouter_pricing", return_value=None
         ) as mock_pricing,
+        patch("scripts.train.get_aws_ssm_param", return_value="test-openrouter-key"),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
@@ -567,6 +568,7 @@ async def test_run_training_includes_pricing_when_openrouter_api_succeeds(
         patch(
             "scripts.train.get_openrouter_pricing", return_value=mock_pricing_data
         ) as mock_pricing_func,
+        patch("scripts.train.get_aws_ssm_param", return_value="test-openrouter-key"),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
