@@ -82,3 +82,9 @@ llm:
     ### 8. HEADINGS, DOCUMENT TITLES AND REFERENCES
     - **INCLUDE**: Headings, document titles, report names, or publication references that explicitly name participatory processes (e.g. "Lessons from the field: Including Women in Community Forestry").
     - **NOTE**: Even in reference lists or citations, tag the participation-relevant portion of the title. The title indicates the document substantively addresses procedural justice.
+
+bert:
+  model_name: answerdotai/ModernBERT-base
+  unfreeze_layers: 1
+  limit_training_samples: 4006
+  training_data_wandb_path: climatepolicyradar/Q912/labelled-passages:v20
