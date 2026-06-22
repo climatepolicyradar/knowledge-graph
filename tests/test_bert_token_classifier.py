@@ -1,5 +1,6 @@
 """Tests for BertTokenClassifier alignment and span reconstruction utilities."""
 
+import pickle
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -17,6 +18,8 @@ from knowledge_graph.classifier.bert_token_classifier import (
     _compute_entity_metrics,
     _reconstruct_spans_from_predictions,
 )
+from knowledge_graph.classifier.classifier import Classifier
+from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.span import Span
 
@@ -392,3 +395,52 @@ class TestPredictProbaBatch:
         assert probs[0] > 0.9
         assert probs[1] < 0.1
         assert probs[0] > probs[1]
+
+
+def test_token_classifier_load_defaults_missing_max_length_to_512(tmp_path):
+    """Old token-classifier pickles predate max_length and load with the 512 default."""
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
+
+    original = BertTokenClassifier(
+        concept=concept,
+        model_name="test-model",
+        download_pretrained_model_on_init=False,
+    )
+    # A string stands in for the trained model: Classifier.load only needs an attribute
+    # without a `.to` method so move_model_to_device skips device placement.
+    original.model = "fake_trained_model"  # type: ignore[assignment]
+
+    # Simulate a classifier pickled before the max_length attribute existed.
+    del original.__dict__["max_length"]
+
+    path = tmp_path / "old_token_classifier.pkl"
+    with open(path, "wb") as f:
+        pickle.dump(original, f)
+
+    loaded = Classifier.load(path)
+
+    assert isinstance(loaded, BertTokenClassifier)
+    assert loaded.max_length == 512
+
+
+def test_token_classifier_load_preserves_new_max_length_default(tmp_path):
+    """Newly constructed token classifiers keep the 1024 default across a load round-trip."""
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
+
+    original = BertTokenClassifier(
+        concept=concept,
+        model_name="test-model",
+        download_pretrained_model_on_init=False,
+    )
+    original.model = "fake_trained_model"  # type: ignore[assignment]
+
+    assert original.max_length == 1024
+
+    path = tmp_path / "new_token_classifier.pkl"
+    with open(path, "wb") as f:
+        pickle.dump(original, f)
+
+    loaded = Classifier.load(path)
+
+    assert isinstance(loaded, BertTokenClassifier)
+    assert loaded.max_length == 1024
