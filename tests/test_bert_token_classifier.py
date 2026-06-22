@@ -352,6 +352,7 @@ class TestPredictProbaBatch:
         clf = BertTokenClassifier.__new__(BertTokenClassifier)
         clf._use_dropout_during_inference = False
         clf.device = "cpu"
+        clf.max_length = 512
 
         batch = {
             "input_ids": torch.zeros_like(logits[..., 0], dtype=torch.long),
