@@ -1,28 +1,28 @@
+"""
+Build-dataset operation: reusable, Prefect-free domain logic.
+
+Queries Snowflake for climate document passages and builds two datasets: a combined
+(full corpus) one and a balanced sampled one. This module knows nothing about Prefect or
+where the output goes — `run_build_dataset` returns the dataframes and the caller decides
+what to do with them:
+
+- `flows/build_dataset.py` wraps this in a flow that uploads to S3 (deployed, SSM creds).
+- `build_dataset_locally` runs it ad-hoc and writes feather files to data/processed/
+  using local Snowflake credentials.
+"""
+
 import json
 import re
-from typing import Annotated
 
 import pandas as pd
-import snowflake.connector
-import typer
-from cryptography.hazmat.primitives.serialization import (
-    Encoding,
-    NoEncryption,
-    PrivateFormat,
-    load_pem_private_key,
-)
 from rich.console import Console
 
 from knowledge_graph.config import processed_data_dir
 from knowledge_graph.geography import iso_to_world_bank_region
+from knowledge_graph.operations.snowflake import connect_to_snowflake
 from knowledge_graph.sampling import create_balanced_sample
 from knowledge_graph.utils import get_logger
 
-SNOWFLAKE_WAREHOUSE = "PRODUCTION_DBT_WH"
-SNOWFLAKE_DATABASE = "PRODUCTION"
-SNOWFLAKE_SCHEMA = "PUBLISHED"
-
-app = typer.Typer()
 console = Console(highlight=False)
 
 
@@ -52,51 +52,8 @@ def get_world_bank_region(geo_array):
         return None
 
 
-def _connect_to_snowflake(
-    snowflake_user: str | None,
-    snowflake_private_key: str | None,
-    snowflake_account: str | None,
-):
-    """
-    Connect to Snowflake.
-
-    When explicit credentials are supplied (cloud/ECS path), uses key-pair
-    authentication with the DbtBot service account. Falls back to
-    connection_name="local_dev" for local development.
-    """
-    if snowflake_user and snowflake_private_key and snowflake_account:
-        private_key = load_pem_private_key(
-            snowflake_private_key.encode(), password=None
-        )
-        private_key_bytes = private_key.private_bytes(
-            encoding=Encoding.DER,
-            format=PrivateFormat.PKCS8,
-            encryption_algorithm=NoEncryption(),
-        )
-        return snowflake.connector.connect(
-            account=snowflake_account,
-            user=snowflake_user,
-            private_key=private_key_bytes,
-            warehouse=SNOWFLAKE_WAREHOUSE,
-            database=SNOWFLAKE_DATABASE,
-            schema=SNOWFLAKE_SCHEMA,
-        )
-
-    # Local development fallback reads from ~/.snowflake/config.toml
-    try:
-        return snowflake.connector.connect(connection_name="local_dev")
-    except snowflake.connector.errors.Error as e:
-        console.log(
-            "[red]Failed to connect to Snowflake.[/red] "
-            f"Error: {e!r} "
-            "Ensure you have a config.toml generated. You can find one in your Snowflake account settings. "
-            "See https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-connections#define-connections"
-        )
-        raise
-
-
 def run_build_dataset(
-    n: int = 10000,
+    n: int = 10_000,
     corpus_type: str | None = None,
     snowflake_user: str | None = None,
     snowflake_private_key: str | None = None,
@@ -115,13 +72,14 @@ def run_build_dataset(
     presample_size = n * 20
     minimum_text_chars = 20
 
+    # Parameterise the corpus_type rather than interpolating it into the SQL.
     corpus_filter = ""
+    corpus_params: list[str] = []
     if corpus_type:
-        corpus_filter = f"AND d.METADATA_CORPUS_TYPE_NAME = '{corpus_type}'"
+        corpus_filter = "AND d.METADATA_CORPUS_TYPE_NAME = %s"
+        corpus_params = [corpus_type]
 
-    con = _connect_to_snowflake(
-        snowflake_user, snowflake_private_key, snowflake_account
-    )
+    con = connect_to_snowflake(snowflake_user, snowflake_private_key, snowflake_account)
     cur = con.cursor()
 
     full_query = f"""
@@ -146,7 +104,7 @@ def run_build_dataset(
       {corpus_filter}
     """
 
-    cur.execute(full_query)
+    cur.execute(full_query, corpus_params or None)
     df_full = cur.fetch_pandas_all(force_microsecond_precision=True)
 
     presample_query = f"""
@@ -202,7 +160,7 @@ def run_build_dataset(
     LIMIT {presample_size}
     """
 
-    cur.execute(presample_query)
+    cur.execute(presample_query, corpus_params or None)
     df = cur.fetch_pandas_all(force_microsecond_precision=True)
     con.close()
 
@@ -276,27 +234,19 @@ def run_build_dataset(
     return df_combined, df_balanced
 
 
-@app.command()
-def build_dataset(
-    n: Annotated[
-        int, typer.Option(help="Target number of samples in the final dataset")
-    ] = 10000,
-    corpus_type: Annotated[
-        str | None,
-        typer.Option(
-            help="Filter to a specific corpus type (i.e., 'Litigation', 'Laws and Policies', 'Intl. agreements', 'Reports', 'AF', 'GEF', 'CIF', 'GCF')"
-        ),
-    ] = None,
-):
+def build_dataset_locally(
+    n: int = 10_000,
+    corpus_type: str | None = None,
+) -> tuple[str, str]:
     """
-    Build a balanced, sampled dataset from Snowflake and save locally.
+    Build datasets ad-hoc and save them locally to data/processed/.
 
     Outputs combined_dataset.feather (full corpus) and sampled_dataset.feather
-    (balanced n-row subset) to data/processed/. Uses local Snowflake credentials
-    from ~/.snowflake/config.toml.
+    (balanced n-row subset) using local Snowflake credentials from
+    ~/.snowflake/config.toml. Returns the (combined_path, sampled_path) written.
 
-    In production, use the Prefect flow (flows/build_dataset_flow.py) which
-    writes to S3 instead.
+    This is the ad-hoc local entry point. In production, the build_dataset_flow
+    (see flows/build_dataset.py) writes to S3 instead.
     """
     if corpus_type:
         console.log(f"Filtering for corpus type: {corpus_type}")
@@ -334,6 +284,4 @@ def build_dataset(
     sampled_df.to_feather(sampled_path)
     console.log(f"✅ Saved the dataset to {sampled_path}")
 
-
-if __name__ == "__main__":
-    app()
+    return str(combined_path), str(sampled_path)

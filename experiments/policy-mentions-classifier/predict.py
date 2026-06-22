@@ -7,7 +7,7 @@ and ``scripts/use_model.py``). The fine-tuned ModernBERT-base weights live in
 on first run.
 
 Documents are selected by id or slug; all English passages for each document are
-fetched from Snowflake (same connection as ``scripts/build_dataset.py``),
+fetched from Snowflake (same connection as ``knowledge_graph.operations.snowflake``),
 classified, and written to one CSV per document under ``data/processed/predictions/``.
 
     uv run python experiments/policy-mentions-classifier/predict.py --document-id <id>
@@ -36,7 +36,7 @@ from rich.table import Table
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 from knowledge_graph.config import data_dir
-from scripts.build_dataset import _connect_to_snowflake
+from knowledge_graph.operations.snowflake import connect_to_snowflake
 
 console = Console()
 app = typer.Typer()
@@ -47,7 +47,7 @@ MODEL_S3_PREFIX = "models"
 MODEL_DIR = Path(__file__).parent / "models"
 BASE_MODEL_ID = "answerdotai/ModernBERT-base"
 
-# Snowflake — schema mirrors scripts/build_dataset.py
+# Snowflake — schema mirrors knowledge_graph/operations/build_dataset.py
 DOCUMENTS_TABLE = "PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS_V1"
 PASSAGES_TABLE = "PRODUCTION.PUBLISHED.PASSAGES_V2"
 MINIMUM_TEXT_CHARS = 20
@@ -142,7 +142,7 @@ def load_documents_from_snowflake(
     """
 
     console.print("❄️  Connecting to Snowflake")
-    con = _connect_to_snowflake(None, None, None)
+    con = connect_to_snowflake(None, None, None)
     cur = con.cursor()
     cur.execute(query, params)
     df = cur.fetch_pandas_all()

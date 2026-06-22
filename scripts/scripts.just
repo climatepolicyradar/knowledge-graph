@@ -1,7 +1,11 @@
 
-# build a dataset of passages for sampling
+# local equivalent of build_dataset_flow (which writes to S3); writes to data/processed/
 build-dataset n="10000":
-    uv run python scripts/build_dataset.py --n {{n}}
+    uv run python -c "from knowledge_graph.operations.build_dataset import build_dataset_locally; build_dataset_locally(n={{n}})"
+
+# build a dataset filtered to a specific corpus type, written locally to data/processed/
+build-dataset-corpus corpus n="10000":
+    uv run python -c "from knowledge_graph.operations.build_dataset import build_dataset_locally; build_dataset_locally(n={{n}}, corpus_type='{{corpus}}')"
 
 # fetch metadata and labelled passages for a specific wikibase ID
 # Optionally ad a wikibase_config as a string, if omitted this will rely on env variables instead:
@@ -78,9 +82,15 @@ deploy-classifiers ids aws_env +OPTS="":
 label id string:
     uv run python scripts/label.py --wikibase-id {{id}} --input-string {{string}}
 
-# find instances of the concept in a set of passages for a specific wikibase ID
-predict id +OPTS="":
-    uv run python scripts/predict.py --wikibase-id {{id}} {{OPTS}}
+# just predict Q123 "climatepolicyradar/Q123/abc:v0" "climatepolicyradar/Q123/abc-labelled-passages:v0"
+# find instances of a concept in passages from a W&B artifact (runs the operation directly, no Prefect)
+predict id classifier_wandb_path labelled_passages_wandb_path:
+    uv run python -c "import asyncio; from knowledge_graph.operations.predict import run_prediction; asyncio.run(run_prediction(wikibase_id='{{id}}', classifier_wandb_path='{{classifier_wandb_path}}', labelled_passages_wandb_path='{{labelled_passages_wandb_path}}'))"
+
+# just predict-documents Q123 "climatepolicyradar/Q123/abc:v0" "CCLW.executive.1.1 CCLW.executive.2.2"
+# find concept instances in passages for Snowflake document IDs (uses local ~/.snowflake/config.toml)
+predict-documents id classifier_wandb_path document_ids:
+    uv run python -c "import asyncio; from knowledge_graph.operations.predict import load_passages_from_snowflake, run_prediction; passages = load_passages_from_snowflake('{{document_ids}}'.split()); asyncio.run(run_prediction(wikibase_id='{{id}}', classifier_wandb_path='{{classifier_wandb_path}}', input_passages=passages))"
 
 # sample a set of passages from the dataset for a specific wikibase ID
 sample id:
@@ -102,7 +112,10 @@ generate-report wikibase-ids:
 visualise-labels id:
     uv run python scripts/visualise_labels.py --wikibase-id {{id}}
 
-analyse-classifier id: (get-concept id) (train id) (predict id) (evaluate id)
+# NOTE: no prediction step - the `predict` recipe needs a classifier + passages
+# artifact path, which aren't available from just an `id` here. Run `just predict`
+# (or `just predict-documents`) separately if you need it.
+analyse-classifier id: (get-concept id) (train id) (evaluate id)
 
 # Run inference over documents in a pipeline bucket
 infer +OPTS="":
