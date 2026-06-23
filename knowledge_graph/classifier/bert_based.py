@@ -437,7 +437,7 @@ class BertBasedClassifier(
         """
         Fine tune the base model using the labelled passages of the supplied concept.
 
-        The model is fine-tuned usg several techniques for faster and more stable
+        The model is fine-tuned using several techniques for faster and more stable
         training:
 
         - We use a pre-trained model as the base model. By default, we use the
