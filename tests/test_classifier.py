@@ -692,3 +692,50 @@ def test_classifier_load_reinitializes_bert_based_classifier(tmp_path):
     assert loaded.pipeline == "fake_trained_pipeline"
     assert loaded.is_fitted is True
     assert loaded.prediction_threshold == 0.7
+
+
+def test_classifier_load_defaults_missing_max_length_to_512(tmp_path):
+    """Old pickles predate max_length and must load with the 512 inference default."""
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
+
+    original = BertBasedClassifier(
+        concept=concept,
+        model_name="test-model",
+        download_pretrained_model_on_init=False,
+    )
+    original.model = "fake_trained_model"  # type: ignore[assignment]
+
+    # Simulate a classifier pickled before the max_length attribute existed.
+    del original.__dict__["max_length"]
+
+    path = tmp_path / "old_bert_classifier.pkl"
+    with open(path, "wb") as f:
+        pickle.dump(original, f)
+
+    loaded = Classifier.load(path)
+
+    assert isinstance(loaded, BertBasedClassifier)
+    assert loaded.max_length == 512
+
+
+def test_classifier_load_preserves_new_max_length_default(tmp_path):
+    """Newly constructed classifiers keep the 1024 default across a load round-trip."""
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="test")
+
+    original = BertBasedClassifier(
+        concept=concept,
+        model_name="test-model",
+        download_pretrained_model_on_init=False,
+    )
+    original.model = "fake_trained_model"  # type: ignore[assignment]
+
+    assert original.max_length == 1024
+
+    path = tmp_path / "new_bert_classifier.pkl"
+    with open(path, "wb") as f:
+        pickle.dump(original, f)
+
+    loaded = Classifier.load(path)
+
+    assert isinstance(loaded, BertBasedClassifier)
+    assert loaded.max_length == 1024

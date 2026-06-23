@@ -23,6 +23,7 @@ from transformers import (
     pipeline,
     set_seed,
 )
+from transformers.data.data_collator import DataCollatorWithPadding
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
 from typing_extensions import Self
@@ -105,6 +106,7 @@ class BertBasedClassifier(
         model_name: str = "answerdotai/ModernBERT-base",
         download_pretrained_model_on_init: bool = True,
         unfreeze_layers: int = 0,
+        max_length: int | None = None,
     ):
         """
         Initialise a BERT classifier.
@@ -134,6 +136,15 @@ class BertBasedClassifier(
 
         if download_pretrained_model_on_init:
             self.download_model_and_tokenizer()
+
+        self.max_length = max_length or 1024
+
+    def __setstate__(self, state: dict):
+        """Ensure max_length is set when loading classifiers pickled before this attribute existed."""
+
+        if "max_length" not in state:
+            state["max_length"] = 512
+        self.__dict__.update(state)
 
     def _resolve_device(self) -> torch.device:
         """
@@ -341,7 +352,7 @@ class BertBasedClassifier(
             list(texts),
             padding=True,
             truncation=True,
-            max_length=512,
+            max_length=self.max_length,
             return_tensors="pt",
         ).to(self.device)
         logits = self.model(**inputs).logits
@@ -402,23 +413,15 @@ class BertBasedClassifier(
             else 0
             for passage in labelled_passages
         ]
-
-        # To optimise the speed of the matrix multiplications in our model, we pad all of
-        # the passages in each batch to have the same length. This effectively makes every
-        # passage in the batch the length of the LONGEST passage in the batch. We have a
-        # few verrrrry long passages in our dataset. Matching their length could create a
-        # huuuuuge token matrix, leading to memory issues, and breaking our
-        # training/inference runs!
-        # To mitigate this issue, we enforce a maximum length of 512 tokens for all
-        # passages in each batch - we drop any tokens we exceed this limit. Most of the
-        # passages in our dataset should be shorter than this limit, but it's worth
-        # keeping in mind that we WILL lose some information by truncating those longer
-        # passages. This is a trade-off we're willing to make, as the speed of the model's
-        # matrix multiplications is more important than the loss of a few tokens. We can
-        # also resolve some of this by using a more consistent chunking strategy, but
-        # that's out of the scope of this codebase.
+        """
+        To optimise the speed of the matrix multiplications in our model, we pad all of the passages in each batch to have the same length. This effectively makes every passage in the batch the length of the LONGEST passage in the batch. We have a few verrrrry long passages in our dataset. Matching their length could create a huuuuuge token matrix, leading to memory issues, and breaking our training/inference runs! To mitigate this issue, we enforce a maximum length of 1024 tokens for all passages in each batch - we drop any tokens we exceed this. Previously set to 512, but we now implement dynamic padding to more efficiently pad each batch to its longest passage at train time https://github.com/climatepolicyradar/knowledge-graph/pull/1152). Most of the passages in our dataset should be shorter than this limit, but it's worth keeping in mind that we WILL lose some information by truncating those longer passages. This is a trade-off we're willing to make, as the speed of the model's matrix multiplications is more important than the loss of a few tokens. We can also resolve some of this by using a more consistent chunking strategy, but that's out of the scope of this codebase.
+        """
         tokenized_inputs = self.tokenizer(
-            texts, padding=True, truncation=True, max_length=512, return_tensors=None
+            texts,
+            padding=False,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors=None,
         )
 
         return Dataset.from_dict({**tokenized_inputs, "labels": labels})
@@ -613,8 +616,8 @@ class BertBasedClassifier(
                 num_train_epochs=10,
                 # batch size scales with dataset size, to avoid batches or epochs that
                 # have too few batches which leads to unstable training
-                per_device_train_batch_size=min(64, max(16, len(train_dataset) // 10)),
-                per_device_eval_batch_size=64,
+                per_device_train_batch_size=min(32, max(8, len(train_dataset) // 10)),
+                per_device_eval_batch_size=32,
                 # gradient clipping for more stable updates
                 max_grad_norm=1.0,
                 learning_rate=2e-4 if self.unfreeze_layers > 0 else 5e-4,
@@ -638,6 +641,7 @@ class BertBasedClassifier(
                 # W&B-specific settings when enabled
                 run_name=f"{self.concept.id}_{self.name}" if enable_wandb else None,
                 log_level="info" if enable_wandb else "warning",
+                group_by_length=True,
             )
 
             trainer = WeightedTrainer(
@@ -652,6 +656,7 @@ class BertBasedClassifier(
                         early_stopping_patience=2, early_stopping_threshold=0
                     )
                 ],
+                data_collator=DataCollatorWithPadding(tokenizer=self.tokenizer),
             )
 
             logger.info("🚀 Starting training...")

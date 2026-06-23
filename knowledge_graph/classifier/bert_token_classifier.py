@@ -33,6 +33,7 @@ from transformers import (
     PreTrainedModel,
     PreTrainedTokenizer,
 )
+from transformers.data.data_collator import DataCollatorForTokenClassification
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
 from typing_extensions import Self
@@ -286,6 +287,7 @@ class BertTokenClassifier(
         model_name: str = "answerdotai/ModernBERT-base",
         download_pretrained_model_on_init: bool = True,
         unfreeze_layers: int = 2,
+        max_length: int | None = None,
     ):
         super().__init__(concept)
         self.model_name = model_name
@@ -300,6 +302,15 @@ class BertTokenClassifier(
 
         if download_pretrained_model_on_init:
             self.download_model_and_tokenizer()
+
+        self.max_length = max_length or 1024
+
+    def __setstate__(self, state: dict):
+        """Ensure max_length is set when loading classifiers pickled before this attribute existed."""
+
+        if "max_length" not in state:
+            state["max_length"] = 512
+        self.__dict__.update(state)
 
     def _resolve_device(self) -> torch.device:
         if torch.backends.mps.is_available():
@@ -429,9 +440,9 @@ class BertTokenClassifier(
 
         tokenized = self.tokenizer(
             texts,
-            padding=True,
+            padding=False,
             truncation=True,
-            max_length=512,
+            max_length=self.max_length,
             return_tensors=None,
             return_offsets_mapping=True,
         )
@@ -510,7 +521,7 @@ class BertTokenClassifier(
             list(texts),
             padding=True,
             truncation=True,
-            max_length=512,
+            max_length=self.max_length,
             return_tensors="pt",
             return_offsets_mapping=True,
         )
@@ -559,7 +570,7 @@ class BertTokenClassifier(
             list(texts),
             padding=True,
             truncation=True,
-            max_length=512,
+            max_length=self.max_length,
             return_tensors="pt",
             return_offsets_mapping=True,
         )
@@ -742,6 +753,7 @@ class BertTokenClassifier(
                 disable_tqdm=True,
                 run_name=(f"{self.concept.id}_{self.name}" if enable_wandb else None),
                 log_level="info" if enable_wandb else "warning",
+                group_by_length=True,
             )
 
             trainer = WeightedTokenTrainer(
@@ -756,6 +768,9 @@ class BertTokenClassifier(
                         early_stopping_patience=2, early_stopping_threshold=0
                     )
                 ],
+                data_collator=DataCollatorForTokenClassification(
+                    tokenizer=self.tokenizer
+                ),
             )
 
             logger.info("Starting training...")
