@@ -18,8 +18,8 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaSession
-from scripts.evaluate import evaluate_classifier
-from scripts.get_concept import get_concept_async
+from knowledge_graph.operations.evaluate import evaluate_classifier
+from knowledge_graph.operations.get_concept import get_concept_async
 
 console = Console()
 app = typer.Typer()

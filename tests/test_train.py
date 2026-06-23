@@ -132,7 +132,9 @@ async def test_run_training(
         patch(
             "wandb.Artifact", return_value=mock_artifact_instance
         ) as mock_artifact_class,
-        patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
+        patch(
+            "knowledge_graph.operations.get_concept.ArgillaSession"
+        ) as mock_argilla_session,
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
         patch("scripts.train.classifier_exists_in_wandb", return_value=False),
     ):
@@ -318,7 +320,9 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
             "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
         ),
         patch("wandb.Artifact") as mock_artifact_class,
-        patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
+        patch(
+            "knowledge_graph.operations.get_concept.ArgillaSession"
+        ) as mock_argilla_session,
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
         patch("scripts.train.classifier_exists_in_wandb", return_value=False),
     ):
@@ -399,7 +403,9 @@ async def test_whether_run_training_skips_classifier_when_it_already_exists_in_w
         patch("knowledge_graph.config.classifier_dir", mock_path),
         patch("scripts.train.validate_params"),
         patch("wandb.init"),
-        patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
+        patch(
+            "knowledge_graph.operations.get_concept.ArgillaSession"
+        ) as mock_argilla_session,
         patch("scripts.train.classifier_exists_in_wandb", return_value=True),
         patch("wandb.Artifact") as mock_artifact_class,
     ):
@@ -473,7 +479,9 @@ async def test_run_training_continues_when_openrouter_api_fails(
             "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
         ),
         patch("wandb.Artifact", return_value=mock_artifact_instance) as _,
-        patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
+        patch(
+            "knowledge_graph.operations.get_concept.ArgillaSession"
+        ) as mock_argilla_session,
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
         patch("scripts.train.classifier_exists_in_wandb", return_value=False),
         patch(
@@ -562,7 +570,9 @@ async def test_run_training_includes_pricing_when_openrouter_api_succeeds(
             "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
         ),
         patch("wandb.Artifact", return_value=mock_artifact_instance) as _,
-        patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
+        patch(
+            "knowledge_graph.operations.get_concept.ArgillaSession"
+        ) as mock_argilla_session,
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
         patch("scripts.train.classifier_exists_in_wandb", return_value=False),
         patch(
@@ -657,7 +667,9 @@ async def test_run_training_skips_pricing_for_non_openrouter_models(
             "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
         ),
         patch("wandb.Artifact", return_value=mock_artifact_instance) as _,
-        patch("scripts.get_concept.ArgillaSession") as mock_argilla_session,
+        patch(
+            "knowledge_graph.operations.get_concept.ArgillaSession"
+        ) as mock_argilla_session,
         patch("scripts.train.evaluate_classifier") as mock_evaluate,
         patch("scripts.train.classifier_exists_in_wandb", return_value=False),
         patch("scripts.train.get_openrouter_pricing") as mock_pricing_func,

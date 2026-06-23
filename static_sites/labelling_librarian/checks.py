@@ -11,8 +11,8 @@ from pydantic import BaseModel
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaSession
 from knowledge_graph.metrics import count_span_level_metrics
+from knowledge_graph.operations.evaluate import create_gold_standard_labelled_passages
 from knowledge_graph.span import Span
-from scripts.evaluate import create_gold_standard_labelled_passages
 
 DATASET_CACHE: dict[str, list[LabelledPassage]] = {}
 argilla_session = ArgillaSession()

@@ -16,7 +16,6 @@ from pydantic import BaseModel, Field
 from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
-import scripts.get_concept
 from flows.utils import get_flow_run_ui_url
 from knowledge_graph.classifier import (
     Classifier,
@@ -40,6 +39,8 @@ from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.openrouter_pricing import get_openrouter_pricing
+from knowledge_graph.operations.evaluate import evaluate_classifier
+from knowledge_graph.operations.get_concept import get_concept_async
 from knowledge_graph.utils import get_logger
 from knowledge_graph.version import Version
 from knowledge_graph.wandb_helpers import (
@@ -48,7 +49,6 @@ from knowledge_graph.wandb_helpers import (
 )
 from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 from scripts.classifier_metadata import ComputeEnvironment
-from scripts.evaluate import evaluate_classifier
 
 app = typer.Typer()
 
@@ -830,7 +830,7 @@ async def run_training(
     # Validate parameter dependencies
     validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
 
-    concept = await scripts.get_concept.get_concept_async(
+    concept = await get_concept_async(
         wikibase_id=wikibase_id,
         include_labels_from_subconcepts=True,
         include_recursive_has_subconcept=True,

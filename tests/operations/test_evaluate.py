@@ -8,8 +8,7 @@ from syrupy.assertion import SnapshotAssertion
 from knowledge_graph.config import wandb_model_artifact_filename
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
-from knowledge_graph.span import Span
-from scripts.evaluate import (
+from knowledge_graph.operations.evaluate import (
     build_metrics_path,
     calculate_performance_metrics,
     calculate_std_by_equity_strata,
@@ -24,6 +23,7 @@ from scripts.evaluate import (
     print_metrics,
     save_metrics,
 )
+from knowledge_graph.span import Span
 
 
 def test_print_metrics(capsys, metrics_df: pd.DataFrame):
@@ -57,7 +57,7 @@ def test_save_metrics(tmp_path, metrics_df: pd.DataFrame):
     wikibase_id = WikibaseID("Q123")
 
     # Temporarily override metrics_dir
-    import scripts.evaluate as evaluate
+    import knowledge_graph.operations.evaluate as evaluate
 
     original_metrics_dir = evaluate.metrics_dir
     evaluate.metrics_dir = tmp_path
@@ -78,12 +78,12 @@ def test_save_metrics(tmp_path, metrics_df: pd.DataFrame):
 
 @pytest.fixture
 def mock_classifier():
-    with patch("scripts.evaluate.Classifier") as mock:
+    with patch("knowledge_graph.operations.evaluate.Classifier") as mock:
         yield mock
 
 
 def test_load_classifier_local(mock_classifier, tmp_path):
-    with patch("scripts.evaluate.classifier_dir", tmp_path):
+    with patch("knowledge_graph.operations.evaluate.classifier_dir", tmp_path):
         wikibase_id = WikibaseID("Q123")
         classifier_path = tmp_path / wikibase_id
         classifier_path.mkdir(parents=True)
@@ -98,7 +98,7 @@ def test_load_classifier_local(mock_classifier, tmp_path):
 
 
 def test_load_classifier_local_not_found(mock_classifier, tmp_path):
-    with patch("scripts.evaluate.classifier_dir", tmp_path):
+    with patch("knowledge_graph.operations.evaluate.classifier_dir", tmp_path):
         wikibase_id = WikibaseID("Q999")
         # Don't create any files - this should trigger the FileNotFoundError path
 
@@ -161,7 +161,7 @@ def test_group_passages_by_equity_strata_logs_warning_when_equity_column_missing
         LabelledPassage(text="passage 2", spans=[], metadata={"other_field": "value2"}),
     ]
 
-    with caplog.at_level("WARNING", logger="scripts.evaluate"):
+    with caplog.at_level("WARNING", logger="knowledge_graph.operations.evaluate"):
         result = group_passages_by_equity_strata(
             human_labelled_passages=human_passages,
             model_labelled_passages=model_passages,
@@ -233,7 +233,9 @@ def test_count_annotations_sums_spans_across_passages(concept):
 def test_evaluate_classifier_returns_metrics_dataframe(concept):
     mock_classifier = Mock()
 
-    with patch("scripts.evaluate.label_passages_with_classifier") as mock_label:
+    with patch(
+        "knowledge_graph.operations.evaluate.label_passages_with_classifier"
+    ) as mock_label:
         mock_label.side_effect = lambda clf, passages, **kwargs: list(passages)
 
         df, model_passages, cm = evaluate_classifier(
@@ -250,7 +252,9 @@ def test_evaluate_classifier_returns_metrics_dataframe(concept):
 def test_evaluate_classifier_with_empty_labelled_passages():
     mock_classifier = Mock()
 
-    with patch("scripts.evaluate.label_passages_with_classifier") as mock_label:
+    with patch(
+        "knowledge_graph.operations.evaluate.label_passages_with_classifier"
+    ) as mock_label:
         mock_label.return_value = []
 
         df, model_passages, cm = evaluate_classifier(
