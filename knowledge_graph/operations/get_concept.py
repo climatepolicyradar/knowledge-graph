@@ -2,13 +2,10 @@
 Get-concept operation: reusable, Prefect-free domain logic.
 
 Fetches a concept's metadata from Wikibase and its labelled passages from Argilla, saves
-the concept to disk, and returns it. This module knows nothing about Prefect or Typer; it
-is imported directly by `knowledge_graph.classifier.autollm` (so it must live at/below
-`knowledge_graph` to avoid an import cycle) and wrapped by the `scripts/get_concept.py`
-CLI for terminal use via `just get-concept`.
-"""
+the concept to disk, and returns it; also loads a previously-saved concept from disk.
 
-from typing import Optional
+See `knowledge_graph/operations/README.md` for the conventions shared across operations.
+"""
 
 import typer
 from pydantic import SecretStr
@@ -27,12 +24,24 @@ from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 console = Console()
 
 
+def load_concept_local(wikibase_id: WikibaseID) -> Concept:
+    """Load a concept from local storage by its Wikibase ID."""
+    try:
+        return Concept.load(concept_dir / f"{wikibase_id}.json")
+    except FileNotFoundError as e:
+        raise typer.BadParameter(
+            f"Data for {wikibase_id} not found. \n"
+            "If you haven't already, you should run:\n"
+            f"  just get-concept {wikibase_id}\n"
+        ) from e
+
+
 async def get_concept_async(
     wikibase_id: WikibaseID,
     include_recursive_has_subconcept: bool = True,
     include_labels_from_subconcepts: bool = True,
-    wikibase_config: Optional[WikibaseConfig] = None,
-    argilla_config: Optional[ArgillaConfig] = None,
+    wikibase_config: WikibaseConfig | None = None,
+    argilla_config: ArgillaConfig | None = None,
 ) -> Concept:
     """Async function to get concept and labelled passages."""
     console.log("Connecting to Wikibase...")
@@ -94,7 +103,7 @@ async def get_concept_async(
     return concept
 
 
-def parse_wikibase_config(value) -> Optional[WikibaseConfig]:
+def parse_wikibase_config(value) -> WikibaseConfig | None:
     url, username, password = value.split()
     return WikibaseConfig(
         url=url,

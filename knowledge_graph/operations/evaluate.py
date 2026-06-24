@@ -3,20 +3,16 @@ Evaluate operation: reusable, Prefect-free domain logic.
 
 Loads a classifier and a concept's gold-standard labelled passages, runs the classifier
 over them, and computes passage- and span-level performance metrics (grouped by equity
-strata) plus optional W&B charts and tables. This module knows nothing about Prefect or
-the CLI; `evaluate_classifier`, `create_gold_standard_labelled_passages` and
-`create_validation_predictions_dataframe` are imported directly by
-`knowledge_graph.classifier.autollm` (so this must live at/below `knowledge_graph` to
-avoid an import cycle), and the `scripts/evaluate.py` CLI wraps these for terminal use via
-`just evaluate`.
+strata) plus optional W&B charts and tables.
+
+See `knowledge_graph/operations/README.md` for the conventions shared across operations.
 """
 
-import logging
 import os
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import pandas as pd
 import typer
@@ -33,10 +29,8 @@ from sklearn.metrics import (
 from wandb.wandb_run import Run
 
 from knowledge_graph.classifier import Classifier
-from knowledge_graph.concept import Concept
 from knowledge_graph.config import (
     classifier_dir,
-    concept_dir,
     equity_columns,
     metrics_dir,
 )
@@ -49,22 +43,10 @@ from knowledge_graph.metrics import (
     count_span_level_metrics,
 )
 from knowledge_graph.span import Span, group_overlapping_spans
+from knowledge_graph.utils import get_logger
 
 console = Console()
-logger = logging.getLogger(__name__)
-
-
-def load_concept(wikibase_id: WikibaseID) -> Concept:
-    """Load a concept from local storage by its Wikibase ID."""
-    try:
-        concept = Concept.load(concept_dir / f"{wikibase_id}.json")
-        return concept
-    except FileNotFoundError as e:
-        raise typer.BadParameter(
-            f"Data for {wikibase_id} not found. \n"
-            "If you haven't already, you should run:\n"
-            f"  just get-concept {wikibase_id}\n"
-        ) from e
+logger = get_logger(__name__)
 
 
 def load_classifier_local(wikibase_id: WikibaseID) -> Classifier:
@@ -444,7 +426,7 @@ def log_validation_set_predictions_to_wandb(
 def evaluate_classifier(
     classifier: Classifier,
     labelled_passages: list[LabelledPassage],
-    wandb_run: Optional[Run] = None,
+    wandb_run: Run | None = None,
     batch_size: int = 16,
 ) -> tuple[pd.DataFrame, list[LabelledPassage], ConfusionMatrix]:
     """
