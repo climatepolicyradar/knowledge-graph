@@ -3,11 +3,12 @@
 import json
 import logging
 from collections.abc import Generator, Sequence
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import prefect
 import prefect.exceptions
 import prefect.logging
+import typer
 from pydantic import BaseModel, ValidationError
 from rich.logging import RichHandler
 
@@ -41,6 +42,32 @@ def get_logger(name: str = "knowledge_graph") -> logging.Logger | LoggingAdapter
 
 
 T = TypeVar("T")
+
+
+def parse_kwargs_from_strings(key_value_strings: list[str] | None) -> dict[str, Any]:
+    """Parse key=value strings into dicts that can be used as kwargs."""
+    if not key_value_strings:
+        return {}
+
+    kwargs = {}
+    for kv in key_value_strings:
+        if "=" not in kv:
+            raise typer.BadParameter(
+                f"Invalid format for kwarg: '{kv}'. Expected key=value format."
+            )
+
+        key, value = kv.split("=", 1)
+
+        # Try to parse as int, then bool, then string
+        try:
+            kwargs[key] = int(value)
+        except ValueError:
+            if value.lower() in ("true", "false"):
+                kwargs[key] = value.lower() == "true"
+            else:
+                kwargs[key] = value
+
+    return kwargs
 
 
 def iterate_batch(

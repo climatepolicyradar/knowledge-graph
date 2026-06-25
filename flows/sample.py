@@ -11,8 +11,8 @@ from flows.build_dataset import COMBINED_S3_KEY, SAMPLED_S3_KEY
 from flows.config import Config
 from knowledge_graph.cloud import AwsEnv, get_async_session, get_aws_ssm_param
 from knowledge_graph.identifiers import WikibaseID
-from scripts.sample import run_sampling
-from scripts.train import parse_kwargs_from_strings
+from knowledge_graph.operations.sample import run_sampling
+from knowledge_graph.utils import parse_kwargs_from_strings
 
 
 @task
@@ -179,7 +179,7 @@ async def sample(
     """
     Evenly sample passages for concepts from a dataset stored in S3.
 
-    Wraps scripts.sample.run_sampling, handling S3 dataset loading and
+    Wraps knowledge_graph.operations.sample.run_sampling, handling S3 dataset loading and
     credential setup from AWS SSM.
 
     Returns the W&B artifact path (e.g. 'climatepolicyradar/Q123/labelled-passages:v3')

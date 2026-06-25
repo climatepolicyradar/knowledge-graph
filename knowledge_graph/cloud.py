@@ -19,6 +19,9 @@ from knowledge_graph.identifiers import WikibaseID
 PROJECT_NAME = "knowledge-graph"
 SPEC_DIR = Path("flows") / "classifier_specs"
 
+# Metadata describing a classifier's compute requirements (e.g. {"gpu": True}).
+type ComputeEnvironment = dict[str, str | int | bool]
+
 
 # Version 1 classifier spec, to be cleaned up and replaced
 # with model from `flows/classifier_specs/spec_interface.py`

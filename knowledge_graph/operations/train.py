@@ -1,0 +1,694 @@
+"""
+Train operation: reusable, Prefect-free domain logic.
+
+Fetches a concept, builds a classifier, trains it, and optionally evaluates it, tracks
+the run in Weights & Biases and uploads the model artifact to S3. This module knows
+nothing about Prefect; it is imported directly by the training flows and CLI wrappers.
+"""
+
+import os
+import random
+import re
+from contextlib import nullcontext
+from pathlib import Path
+from typing import Any, overload
+
+import torch
+import typer
+import wandb
+from pydantic import BaseModel, Field
+from wandb.errors.errors import CommError
+from wandb.sdk.wandb_run import Run
+
+from knowledge_graph.classifier import (
+    Classifier,
+    ClassifierFactory,
+    GPUBoundClassifier,
+    ModelPath,
+    get_local_classifier_path,
+)
+from knowledge_graph.classifier.bert_based import BertBasedClassifier
+from knowledge_graph.cloud import (
+    AwsEnv,
+    ComputeEnvironment,
+    Namespace,
+    get_aws_ssm_param,
+    get_s3_client,
+    is_logged_in,
+)
+from knowledge_graph.config import WANDB_ENTITY, wandb_model_artifact_filename
+from knowledge_graph.custom_classifier_config import CustomClassifierConfig
+from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.labelling import ArgillaConfig
+from knowledge_graph.openrouter_pricing import get_openrouter_pricing
+from knowledge_graph.operations.evaluate import evaluate_classifier
+from knowledge_graph.operations.get_concept import get_concept_async
+from knowledge_graph.utils import get_logger
+from knowledge_graph.version import Version
+from knowledge_graph.wandb_helpers import (
+    load_labelled_passages_from_wandb,
+    log_labelled_passages_artifact_to_wandb_run,
+)
+from knowledge_graph.wikibase import WikibaseConfig
+
+
+# --wikibase-id given, --from-yaml-config not used  ->  no config returned
+@overload
+def resolve_config_inputs(
+    wikibase_id: WikibaseID, from_yaml_config: None
+) -> tuple[WikibaseID, None]: ...
+
+
+# --from-yaml-config given, --wikibase-id not used  ->  a config is returned
+@overload
+def resolve_config_inputs(
+    wikibase_id: None, from_yaml_config: Path
+) -> tuple[WikibaseID, CustomClassifierConfig]: ...
+
+
+# main() hands in two *optional* values, which matches neither strict overload above
+@overload
+def resolve_config_inputs(
+    wikibase_id: WikibaseID | None, from_yaml_config: Path | None
+) -> tuple[WikibaseID, CustomClassifierConfig | None]: ...
+
+
+def resolve_config_inputs(
+    wikibase_id: WikibaseID | None,
+    from_yaml_config: Path | None,
+) -> tuple[WikibaseID, CustomClassifierConfig | None]:
+    """Enforce --wikibase-id OR --from-yaml-config and load the config when given."""
+    if from_yaml_config is not None and wikibase_id is not None:
+        raise typer.BadParameter("Pass --wikibase-id OR --from-yaml-config, not both.")
+    if from_yaml_config is not None:
+        cfg = CustomClassifierConfig.from_yaml(from_yaml_config)
+        return cfg.wikibase_id, cfg
+    if wikibase_id is None:
+        raise typer.BadParameter("Provide --wikibase-id or --from-yaml-config.")
+    return wikibase_id, None
+
+
+def validate_params(track_and_upload: bool, aws_env: AwsEnv) -> None:
+    """Validate parameter dependencies."""
+
+    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
+    if track_and_upload and (not is_logged_in(aws_env, use_aws_profiles)):
+        raise typer.BadParameter(
+            f"you're not logged into {aws_env.value}. "
+            f"Do `aws sso login --profile {aws_env.value}`"
+        )
+
+
+def deduplicate_training_data(
+    training_data: list[LabelledPassage],
+    evaluation_data: list[LabelledPassage],
+) -> list[LabelledPassage]:
+    """Remove passages from training data that appear in evaluation data."""
+    logger = get_logger()
+
+    eval_texts = {passage.text for passage in evaluation_data}
+
+    logger.info(f"📊 Starting with {len(training_data)} passages for training")
+
+    filtered = [p for p in training_data if p.text not in eval_texts]
+
+    removed_count = len(training_data) - len(filtered)
+    logger.info(
+        f"🔍 Removed {removed_count} duplicate passages, training with {len(filtered)} passages"
+    )
+
+    return filtered
+
+
+def limit_and_balance_training_samples(
+    training_data: list[LabelledPassage],
+    max_samples: int,
+) -> list[LabelledPassage]:
+    """
+    Limit the number of training samples, aiming for a balanced set.
+
+    If a perfect split isn't possible, take all available from the smaller group and
+    the remainder from the larger group.
+
+    :param training_data: The list of labelled passages to limit.
+    :type training_data: list[LabelledPassage]
+    :param max_samples: Maximum number of samples to keep in total.
+    :type max_samples: int
+    :return: A (mostly) balanced subset of the training data.
+    :rtype: list[LabelledPassage]
+    """
+    logger = get_logger()
+
+    positive_passages = [p for p in training_data if p.spans]
+    negative_passages = [p for p in training_data if not p.spans]
+
+    logger.info(
+        f"📊 Starting with {len(positive_passages)} positive and "
+        f"{len(negative_passages)} negative passages"
+    )
+
+    half = max_samples // 2
+    # Take up to half from each group, or as many as you can
+    pos_count = min(len(positive_passages), half)
+    neg_count = min(len(negative_passages), half)
+
+    # Fill up with remainder from the group that still has samples left
+    remainder = max_samples - (pos_count + neg_count)
+    if remainder > 0:
+        if pos_count < len(positive_passages):
+            extra = min(remainder, len(positive_passages) - pos_count)
+            pos_count += extra
+            remainder -= extra
+        if remainder > 0 and neg_count < len(negative_passages):
+            extra = min(remainder, len(negative_passages) - neg_count)
+            neg_count += extra
+
+    limited_positive = positive_passages[:pos_count]
+    limited_negative = negative_passages[:neg_count]
+
+    logger.info(
+        f"✂️  Limited to {len(limited_positive)} positive and "
+        f"{len(limited_negative)} negative passages "
+        f"({len(limited_positive) + len(limited_negative)} total)"
+    )
+
+    limited_dataset = limited_positive + limited_negative
+    random.shuffle(limited_dataset)
+    return limited_dataset
+
+
+def move_model_to_cpu(classifier: Classifier) -> None:
+    """
+    Move a model which uses torch to CPU.
+
+    No-op if the classifier is not a `BertBasedClassifier`, or the model is not on CPU.
+    This needs to be done before the model is saved, otherwise an MPS device will not be
+    able to load a classifier stored on CUDA and vice-versa.
+    """
+
+    if isinstance(classifier, BertBasedClassifier) or hasattr(
+        classifier, "move_model_to_device"
+    ):
+        classifier.move_model_to_device(torch.device("cpu"))  # type: ignore[attr-defined]
+        get_logger().info("Moved model to CPU")
+
+
+class StorageUpload(BaseModel):
+    """Represents the storage configuration for model artifacts in S3."""
+
+    target_path: str = Field(
+        ...,
+        description="The target path in S3 where the model artifact will be stored.",
+    )
+    next_version: str = Field(
+        ...,
+        description="The next version used for this artifact.",
+    )
+    aws_env: AwsEnv = Field(
+        ...,
+        description="The AWS environment associated with this storage configuration.",
+    )
+
+
+class StorageLink(BaseModel):
+    """Represents the storage configuration for model artifacts in S3."""
+
+    bucket: str = Field(
+        ...,
+        description="The name of the S3 bucket where the model artifact is stored.",
+    )
+    key: str = Field(
+        ...,
+        description="The S3 key (path) where the model artifact is located within the bucket.",
+    )
+    aws_env: AwsEnv = Field(
+        ...,
+        description="The AWS environment associated with this storage configuration.",
+    )
+
+
+def create_and_link_model_artifact(
+    run: Run,
+    classifier: Classifier,
+    storage_link: StorageLink,
+) -> wandb.Artifact:
+    """
+    Links a model artifact, stored in S3, to a Weights & Biases run.
+
+    :param run: The W&B run object.
+    :type run: Run
+    :param classifier: The classifier object.
+    :type classifier: Classifier
+    :param storage_link: The storage location configuration.
+    :type storage_link: StorageLink
+    :return: The created W&B artifact.
+    :rtype: wandb.Artifact
+    """
+
+    metadata: dict[str, Any] = {
+        "aws_env": storage_link.aws_env.name,
+        "classifier_name": classifier.name,
+        "concept_id": classifier.concept.id,
+        "concept_wikibase_revision": classifier.concept.wikibase_revision,
+    }
+    if isinstance(classifier, GPUBoundClassifier):
+        get_logger().info("Adding GPU requirement to metadata")
+        compute_environment: ComputeEnvironment = {"gpu": True}
+        metadata["compute_environment"] = compute_environment
+
+    artifact = wandb.Artifact(
+        name=classifier.id,
+        type="model",
+        metadata=metadata,
+    )
+    uri = os.path.join(
+        "s3://",
+        storage_link.bucket,
+        storage_link.key,
+    )
+    artifact.add_reference(uri=uri, checksum=True)
+
+    # Log the artifact to W&B, creating it within a W&B project
+    artifact = run.log_artifact(artifact, aliases=[])
+    artifact = artifact.wait()
+
+    return artifact
+
+
+def classifier_exists_in_wandb(
+    namespace: Namespace,
+    target_path: ModelPath,
+) -> bool:
+    """
+    Check whether a classifier artifact already exists in W&B.
+
+    :param namespace: The W&B configuration containing project and entity.
+    :param target_path: The path to the classifier in W&B.
+    :return: True if the artifact exists, False otherwise.
+    """
+    try:
+        api = wandb.Api()
+        api.artifact(f"{namespace.entity}/{target_path}:latest")
+        return True
+    except CommError as e:
+        error_message = str(e)
+        # Check if the error is because the artifact doesn't exist
+        # Error format: "artifact membership '...' not found in '{entity}/{wikibase_id}'"
+        pattern = rf"artifact membership '.*?' not found in '{namespace.entity}/{target_path.wikibase_id}'"
+        if re.search(pattern, error_message):
+            return False
+        # Re-raise if it's a different error (e.g., network issue)
+        raise
+
+
+def get_next_version(
+    namespace: Namespace,
+    target_path: ModelPath,
+    classifier: Classifier,
+) -> str:
+    """
+    Retrieves the next version number for a given classifier.
+
+    :param namespace: The W&B configuration containing project and entity.
+    :type namespace: WandBConfig
+    :param target_path: The path to the classifier in W&B.
+    :type target_path: ModelPath
+    :param classifier: The classifier object.
+    :type classifier: Classifier
+    :return: The next version string.
+    :rtype: str
+    """
+    try:
+        api = wandb.Api()
+        artifact = api.artifact(f"{namespace.entity}/{target_path}:latest")
+        next_version = Version(artifact._version).increment()  # type: ignore[reportArgumentType]
+    except CommError as e:
+        error_message = str(e)
+        wikibase_id = classifier.concept.wikibase_id
+        pattern = rf"artifact membership '.*?' not found in '{namespace.entity}/{wikibase_id}'"
+        if re.search(pattern, error_message):
+            get_logger().info(
+                f"No previous wandb version found, '{target_path}' will be at v0"
+            )
+            next_version = Version("v0")
+        else:
+            raise
+
+    return str(next_version)
+
+
+def upload_model_artifact(
+    classifier: Classifier,
+    classifier_path: Path,
+    storage_upload: StorageUpload,
+    s3_client: Any,
+) -> tuple[str, str]:
+    """
+    Uploads a model artifact to S3.
+
+    :param classifier: The classifier object.
+    :type classifier: Classifier
+    :param classifier_path: The local path to the classifier file.
+    :type classifier_path: Path
+    :param storage_upload: The configuration for uploading the artifact.
+    :type storage_upload: StorageUpload
+    :param s3_client: The S3 client used for uploading.
+    :type s3_client: Any
+    :return: The bucket name and the key of the uploaded artifact.
+    :rtype: tuple[str, str]
+    """
+    bucket = f"cpr-{storage_upload.aws_env.value}-models"
+
+    key = os.path.join(
+        storage_upload.target_path,
+        storage_upload.next_version,
+        wandb_model_artifact_filename,
+    )
+
+    get_logger().info(f"Uploading {classifier.name} to {key} in bucket {bucket}")
+
+    s3_client.upload_file(
+        classifier_path,
+        bucket,
+        key,
+        ExtraArgs={"ContentType": "application/octet-stream"},
+        Callback=lambda bytes_transferred: None,
+    )
+
+    get_logger().info(f"Uploaded {classifier.name} to {key} in bucket {bucket}")
+
+    return bucket, key
+
+
+async def train_classifier(
+    classifier: Classifier,
+    wikibase_id: WikibaseID,
+    track_and_upload: bool,
+    aws_env: AwsEnv,
+    s3_client: Any | None = None,
+    evaluate: bool = True,
+    extra_wandb_config: dict[str, Any] | None = None,
+    train_validation_data: list[LabelledPassage] | None = None,
+    max_training_samples: int | None = None,
+    force: bool = True,
+    seed: int | None = None,
+) -> "Classifier":
+    """Train a classifier and optionally track the run, uploading the model."""
+    logger = get_logger()
+
+    extra_wandb_config = extra_wandb_config or {}
+
+    project = wikibase_id
+    namespace = Namespace(project=project, entity=WANDB_ENTITY)
+    job_type = "train_model"
+
+    # Validate parameter dependencies
+    validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
+
+    # Check whether the classifier already exists in W&B, unless the user wants to force re-training
+    if track_and_upload and not force:
+        target_path = ModelPath(
+            wikibase_id=namespace.project, classifier_id=classifier.id
+        )
+        if classifier_exists_in_wandb(namespace=namespace, target_path=target_path):
+            # If the classifier already exists, just log and return the classifier without
+            # running the redundant training/uploading process
+            logger.info(
+                f"Classifier {classifier.id} already exists in W&B. Skipping training."
+            )
+            return classifier
+
+    wandb_config = {
+        "classifier_type": classifier.name,
+        "concept_id": classifier.concept.id,
+    }
+    wandb_config |= extra_wandb_config
+
+    if hasattr(classifier, "model_name") and classifier.model_name.startswith(  # type: ignore
+        "openrouter:"
+    ):
+        pricing = await get_openrouter_pricing(classifier.model_name)  # type: ignore
+        if pricing:
+            wandb_config["prompt_price_usd"] = pricing.prompt_price
+            wandb_config["completion_price_usd"] = pricing.completion_price
+
+    with (
+        wandb.init(
+            entity=namespace.entity,
+            project=namespace.project,
+            job_type=job_type,
+            config=wandb_config,
+        )
+        if track_and_upload
+        else nullcontext()
+    ) as run:
+        # Determine training data and deduplicate against evaluation set
+        training_data = (
+            train_validation_data if train_validation_data is not None else []
+        )
+        if max_training_samples is not None:
+            training_data = limit_and_balance_training_samples(
+                training_data, max_training_samples
+            )
+
+        if training_data and wandb_config.get("training_data_wandb_path") and run:
+            unprocessed_training_data_artifact_path = wandb_config[
+                "training_data_wandb_path"
+            ]
+            run.use_artifact(unprocessed_training_data_artifact_path)
+
+        # Remove any passages from training that appear in evaluation set
+        evaluation_data = classifier.concept.labelled_passages
+        if training_data:
+            deduplicated_training_data = deduplicate_training_data(
+                training_data=training_data,
+                evaluation_data=evaluation_data,
+            )
+
+            train_num_positives = len(
+                [p for p in deduplicated_training_data if p.spans]
+            )
+            train_num_negatives = len(deduplicated_training_data) - train_num_positives
+            logger.info(
+                f"Training data has length {len(deduplicated_training_data)} with {train_num_positives} positive and {train_num_negatives} negative examples after deduplication."
+            )
+
+            if track_and_upload and run and deduplicated_training_data:
+                logger.info("📄 Creating artifact for deduplicated training data")
+                log_labelled_passages_artifact_to_wandb_run(
+                    labelled_passages=deduplicated_training_data,
+                    run=run,
+                    concept=classifier.concept,
+                    classifier=classifier,
+                    artifact_name="training-data",
+                )
+                logger.info("✅ Training data artifact uploaded successfully")
+        else:
+            deduplicated_training_data = []
+
+        fit_kwargs: dict[str, Any] = {}
+        if seed is not None:
+            fit_kwargs["seed"] = seed
+        classifier.fit(
+            labelled_passages=deduplicated_training_data,
+            enable_wandb=track_and_upload,
+            **fit_kwargs,
+        )
+
+        # Log the final prompt to W&B. Useful for AutoLLMClassifier, which
+        # optimises the prompt during fit, meaning the final prompt differs from the
+        # input prompt stored in the run config.
+        if track_and_upload and run:
+            system_prompt = getattr(classifier, "system_prompt", None)
+            if system_prompt is not None:
+                run.summary["final_system_prompt"] = system_prompt
+            prompt_template = getattr(classifier, "system_prompt_template", None)
+            labelling_guidelines = getattr(
+                prompt_template, "labelling_guidelines", None
+            )
+            if labelling_guidelines is not None:
+                run.summary["final_labelling_guidelines"] = labelling_guidelines
+
+        move_model_to_cpu(classifier)
+
+        target_path = ModelPath(
+            wikibase_id=namespace.project, classifier_id=classifier.id
+        )
+        # Lookup the next version (aka the new version) before saving, even if we're
+        # not uploading or tracking, so the classifier has the correct version
+        # Note that as we use the id and the id changes whenever the model changes,
+        # the version would almost always be v0 in practice.
+        next_version = get_next_version(
+            namespace=namespace,
+            target_path=target_path,
+            classifier=classifier,
+        )
+
+        logger.info(f"Using next version {next_version}")
+
+        # Set this _before_ the model is saved to disk
+        classifier.version = Version(next_version)
+
+        # Save the classifier to a file locally
+        classifier_path = get_local_classifier_path(
+            target_path=target_path,
+            version=next_version,
+        )
+        classifier_path.parent.mkdir(parents=True, exist_ok=True)
+        classifier.save(classifier_path)
+        logger.info(f"Saved {classifier} to {classifier_path}")
+
+        if track_and_upload:
+            region_name = "eu-west-1"
+            # When running in prefect the client is instantiated earlier
+            if not s3_client:
+                # Set this, so W&B knows where to look for AWS credentials profile
+                os.environ["AWS_PROFILE"] = aws_env
+                s3_client = get_s3_client(aws_env, region_name)
+
+            storage_upload = StorageUpload(
+                target_path=str(target_path),
+                next_version=next_version,
+                aws_env=aws_env,
+            )
+
+            bucket, key = upload_model_artifact(
+                classifier,
+                classifier_path,
+                storage_upload,
+                s3_client=s3_client,
+            )
+
+            storage_link = StorageLink(
+                bucket=bucket,
+                key=key,
+                aws_env=aws_env,
+            )
+
+            _ = create_and_link_model_artifact(
+                run,  # type: ignore
+                classifier,
+                storage_link,
+            )
+
+        if evaluate:
+            metrics_df, model_labelled_passages, _ = evaluate_classifier(
+                classifier=classifier,
+                labelled_passages=classifier.concept.labelled_passages,
+                wandb_run=run,
+                batch_size=50,
+            )
+
+            if track_and_upload and run:
+                logger.info("📄 Creating labelled passages artifact")
+                log_labelled_passages_artifact_to_wandb_run(
+                    labelled_passages=model_labelled_passages,
+                    run=run,
+                    concept=classifier.concept,
+                    classifier=classifier,
+                )
+                logger.info("✅ Labelled passages uploaded successfully")
+
+    return classifier
+
+
+async def run_training(
+    wikibase_id: WikibaseID,
+    track_and_upload: bool,
+    aws_env: AwsEnv,
+    wikibase_config: WikibaseConfig | None = None,
+    argilla_config: ArgillaConfig | None = None,
+    s3_client: Any | None = None,
+    evaluate: bool = True,
+    classifier_type: str | None = None,
+    classifier_kwargs: dict[str, Any] | None = None,
+    concept_overrides: dict[str, Any] | None = None,
+    training_data_wandb_path: str | None = None,
+    limit_training_samples: int | None = None,
+    force: bool = True,
+    seed: int | None = None,
+) -> Classifier:
+    """
+    Get a concept and create a classifier, then train the classifier.
+
+    Optionally evaluate, track in W&B and upload the model to S3.
+    """
+    logger = get_logger()
+
+    # Validate parameter dependencies
+    validate_params(track_and_upload=track_and_upload, aws_env=aws_env)
+
+    concept = await get_concept_async(
+        wikibase_id=wikibase_id,
+        include_labels_from_subconcepts=True,
+        include_recursive_has_subconcept=True,
+        wikibase_config=wikibase_config,
+        argilla_config=argilla_config,
+    )
+
+    if concept_overrides:
+        logger.info(f"🔧 Applying custom concept properties: {concept_overrides}")
+        for key, value in concept_overrides.items():
+            if hasattr(concept, key):
+                setattr(concept, key, value)
+                logger.info(f"  ✓ Set concept.{key} = {value}")
+            else:
+                logger.warning(f"  ⚠️  Warning: concept has no attribute '{key}'")
+
+    # Fetch labelled passages from W&B if specified
+    labelled_passages = None
+    if training_data_wandb_path:
+        logger.info(
+            f"📥 Fetching training data from W&B artifact path: {training_data_wandb_path}"
+        )
+        labelled_passages = load_labelled_passages_from_wandb(
+            wandb_path=training_data_wandb_path
+        )
+        logger.info(f"✅ Loaded {len(labelled_passages)} labelled passages from W&B")
+
+    classifier = ClassifierFactory.create(
+        concept=concept,
+        classifier_type=classifier_type,
+        classifier_kwargs=classifier_kwargs or {},
+    )
+
+    # For local LLMCLassifier runs, remote runs fetches via flows/train/py
+    model_name = getattr(classifier, "model_name", None)
+    if isinstance(model_name, str) and model_name.startswith("openrouter:"):
+        logger.info("Fetching OpenRouter API key from SSM")
+        os.environ["OPENROUTER_API_KEY"] = get_aws_ssm_param(
+            "/OpenRouter/KGApiKey", aws_env=aws_env
+        )
+
+    extra_wandb_config: dict[str, object] = {
+        "experimental_model_type": classifier_type is not None,
+        "experimental_concept": concept_overrides is not None
+        and len(concept_overrides) > 0,
+        "classifier_kwargs": classifier_kwargs,
+        "concept_overrides": concept_overrides,
+    }
+    if training_data_wandb_path:
+        extra_wandb_config["training_data_wandb_path"] = training_data_wandb_path
+    if limit_training_samples is not None:
+        extra_wandb_config["limit_training_samples"] = limit_training_samples
+    if seed is not None:
+        extra_wandb_config["seed"] = seed
+    if hasattr(classifier, "model_name"):
+        wandb_classifier_kwargs: dict[str, object] = dict(classifier_kwargs or {})
+        wandb_classifier_kwargs["model_name"] = getattr(classifier, "model_name")
+        extra_wandb_config["classifier_kwargs"] = wandb_classifier_kwargs
+
+    return await train_classifier(
+        classifier=classifier,
+        wikibase_id=wikibase_id,
+        track_and_upload=track_and_upload,
+        aws_env=aws_env,
+        s3_client=s3_client,
+        evaluate=evaluate,
+        extra_wandb_config=extra_wandb_config,
+        train_validation_data=labelled_passages,
+        max_training_samples=limit_training_samples,
+        force=force,
+        seed=seed,
+    )

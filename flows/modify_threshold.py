@@ -17,13 +17,13 @@ from knowledge_graph.classifier.classifier import (
 from knowledge_graph.cloud import AwsEnv, Namespace, get_s3_client
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.wandb_helpers import load_classifier_from_wandb
-from scripts.train import (
+from knowledge_graph.operations.train import (
     StorageUpload,
     get_next_version,
     move_model_to_cpu,
     upload_model_artifact,
 )
+from knowledge_graph.wandb_helpers import load_classifier_from_wandb
 
 JOB_TYPE = "modify_threshold"
 
