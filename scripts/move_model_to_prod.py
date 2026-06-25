@@ -30,12 +30,12 @@ from knowledge_graph.cloud import (
 )
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.wandb_helpers import load_classifier_from_wandb
-from scripts.train import (
+from knowledge_graph.operations.train import (
     StorageUpload,
     get_next_version,
     upload_model_artifact,
 )
+from knowledge_graph.wandb_helpers import load_classifier_from_wandb
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)

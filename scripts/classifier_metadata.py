@@ -10,7 +10,7 @@ from rich.console import Console
 
 from flows.classifier_specs.spec_interface import DontRunOnEnum, load_classifier_specs
 from knowledge_graph.classifier import ModelPath
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, ComputeEnvironment
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.version import get_latest_model_version
@@ -21,8 +21,6 @@ log.setLevel(logging.INFO)
 
 REGISTRY_NAME = "model"
 JOB_TYPE = "configure_model"
-
-type ComputeEnvironment = dict[str, str | int | bool]
 
 
 app = typer.Typer()

@@ -41,9 +41,9 @@ from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
+from knowledge_graph.operations.train import run_training
 from knowledge_graph.utils import get_logger, serialise_pydantic_list_as_jsonl
 from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
-from scripts.train import run_training
 
 aws_region = os.getenv("AWS_REGION", "eu-west-1")
 aws_profile = (

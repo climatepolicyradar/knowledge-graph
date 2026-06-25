@@ -6,22 +6,21 @@ import pytest
 from wandb.errors.errors import CommError
 
 from knowledge_graph.classifier.targets import TargetClassifier
-from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.cloud import AwsEnv, Namespace
 from knowledge_graph.config import wandb_model_artifact_filename
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
-from knowledge_graph.span import Span
-from scripts.train import (
-    Namespace,
+from knowledge_graph.operations.train import (
     StorageLink,
     StorageUpload,
     create_and_link_model_artifact,
     deduplicate_training_data,
     get_next_version,
-    limit_training_samples,
+    limit_and_balance_training_samples,
     run_training,
     upload_model_artifact,
 )
+from knowledge_graph.span import Span
 
 
 @pytest.mark.parametrize(
@@ -124,7 +123,7 @@ async def test_run_training(
             return_value=mock_classifier,
         ),
         patch("knowledge_graph.config.classifier_dir", mock_path),
-        patch("scripts.train.validate_params"),
+        patch("knowledge_graph.operations.train.validate_params"),
         patch("wandb.init"),
         patch(
             "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
@@ -135,8 +134,11 @@ async def test_run_training(
         patch(
             "knowledge_graph.operations.get_concept.ArgillaSession"
         ) as mock_argilla_session,
-        patch("scripts.train.evaluate_classifier") as mock_evaluate,
-        patch("scripts.train.classifier_exists_in_wandb", return_value=False),
+        patch("knowledge_graph.operations.train.evaluate_classifier") as mock_evaluate,
+        patch(
+            "knowledge_graph.operations.train.classifier_exists_in_wandb",
+            return_value=False,
+        ),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
@@ -314,7 +316,7 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
             return_value=mock_classifier,
         ),
         patch("knowledge_graph.config.classifier_dir", mock_path),
-        patch("scripts.train.validate_params"),
+        patch("knowledge_graph.operations.train.validate_params"),
         patch("wandb.init", return_value=mock_run),
         patch(
             "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
@@ -323,8 +325,11 @@ async def test_run_training_uploads_labelled_passages_when_evaluate_is_true(
         patch(
             "knowledge_graph.operations.get_concept.ArgillaSession"
         ) as mock_argilla_session,
-        patch("scripts.train.evaluate_classifier") as mock_evaluate,
-        patch("scripts.train.classifier_exists_in_wandb", return_value=False),
+        patch("knowledge_graph.operations.train.evaluate_classifier") as mock_evaluate,
+        patch(
+            "knowledge_graph.operations.train.classifier_exists_in_wandb",
+            return_value=False,
+        ),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
@@ -401,12 +406,15 @@ async def test_whether_run_training_skips_classifier_when_it_already_exists_in_w
             return_value=mock_classifier,
         ),
         patch("knowledge_graph.config.classifier_dir", mock_path),
-        patch("scripts.train.validate_params"),
+        patch("knowledge_graph.operations.train.validate_params"),
         patch("wandb.init"),
         patch(
             "knowledge_graph.operations.get_concept.ArgillaSession"
         ) as mock_argilla_session,
-        patch("scripts.train.classifier_exists_in_wandb", return_value=True),
+        patch(
+            "knowledge_graph.operations.train.classifier_exists_in_wandb",
+            return_value=True,
+        ),
         patch("wandb.Artifact") as mock_artifact_class,
     ):
         mock_argilla_instance = Mock()
@@ -473,7 +481,7 @@ async def test_run_training_continues_when_openrouter_api_fails(
             return_value=mock_classifier,
         ),
         patch("knowledge_graph.config.classifier_dir", mock_path),
-        patch("scripts.train.validate_params"),
+        patch("knowledge_graph.operations.train.validate_params"),
         patch("wandb.init", return_value=mock_run),
         patch(
             "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
@@ -482,12 +490,18 @@ async def test_run_training_continues_when_openrouter_api_fails(
         patch(
             "knowledge_graph.operations.get_concept.ArgillaSession"
         ) as mock_argilla_session,
-        patch("scripts.train.evaluate_classifier") as mock_evaluate,
-        patch("scripts.train.classifier_exists_in_wandb", return_value=False),
+        patch("knowledge_graph.operations.train.evaluate_classifier") as mock_evaluate,
         patch(
-            "scripts.train.get_openrouter_pricing", return_value=None
+            "knowledge_graph.operations.train.classifier_exists_in_wandb",
+            return_value=False,
+        ),
+        patch(
+            "knowledge_graph.operations.train.get_openrouter_pricing", return_value=None
         ) as mock_pricing,
-        patch("scripts.train.get_aws_ssm_param", return_value="test-openrouter-key"),
+        patch(
+            "knowledge_graph.operations.train.get_aws_ssm_param",
+            return_value="test-openrouter-key",
+        ),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
@@ -564,7 +578,7 @@ async def test_run_training_includes_pricing_when_openrouter_api_succeeds(
             return_value=mock_classifier,
         ),
         patch("knowledge_graph.config.classifier_dir", mock_path),
-        patch("scripts.train.validate_params"),
+        patch("knowledge_graph.operations.train.validate_params"),
         patch("wandb.init", return_value=mock_run) as mock_wandb_init,
         patch(
             "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
@@ -573,12 +587,19 @@ async def test_run_training_includes_pricing_when_openrouter_api_succeeds(
         patch(
             "knowledge_graph.operations.get_concept.ArgillaSession"
         ) as mock_argilla_session,
-        patch("scripts.train.evaluate_classifier") as mock_evaluate,
-        patch("scripts.train.classifier_exists_in_wandb", return_value=False),
+        patch("knowledge_graph.operations.train.evaluate_classifier") as mock_evaluate,
         patch(
-            "scripts.train.get_openrouter_pricing", return_value=mock_pricing_data
+            "knowledge_graph.operations.train.classifier_exists_in_wandb",
+            return_value=False,
+        ),
+        patch(
+            "knowledge_graph.operations.train.get_openrouter_pricing",
+            return_value=mock_pricing_data,
         ) as mock_pricing_func,
-        patch("scripts.train.get_aws_ssm_param", return_value="test-openrouter-key"),
+        patch(
+            "knowledge_graph.operations.train.get_aws_ssm_param",
+            return_value="test-openrouter-key",
+        ),
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
@@ -661,7 +682,7 @@ async def test_run_training_skips_pricing_for_non_openrouter_models(
             return_value=mock_classifier,
         ),
         patch("knowledge_graph.config.classifier_dir", mock_path),
-        patch("scripts.train.validate_params"),
+        patch("knowledge_graph.operations.train.validate_params"),
         patch("wandb.init", return_value=mock_run) as mock_wandb_init,
         patch(
             "wandb.Api", return_value=Mock(artifact=Mock(return_value=mock_artifact))
@@ -670,9 +691,14 @@ async def test_run_training_skips_pricing_for_non_openrouter_models(
         patch(
             "knowledge_graph.operations.get_concept.ArgillaSession"
         ) as mock_argilla_session,
-        patch("scripts.train.evaluate_classifier") as mock_evaluate,
-        patch("scripts.train.classifier_exists_in_wandb", return_value=False),
-        patch("scripts.train.get_openrouter_pricing") as mock_pricing_func,
+        patch("knowledge_graph.operations.train.evaluate_classifier") as mock_evaluate,
+        patch(
+            "knowledge_graph.operations.train.classifier_exists_in_wandb",
+            return_value=False,
+        ),
+        patch(
+            "knowledge_graph.operations.train.get_openrouter_pricing"
+        ) as mock_pricing_func,
     ):
         mock_argilla_instance = Mock()
         mock_argilla_instance.get_labelled_passages.return_value = []
@@ -743,7 +769,7 @@ def test_limit_training_samples_output_never_exceeds_max():
     passages = [_positive_passage(f"pos {i}") for i in range(20)] + [
         _negative_passage(f"neg {i}") for i in range(20)
     ]
-    result = limit_training_samples(passages, max_samples=10)
+    result = limit_and_balance_training_samples(passages, max_samples=10)
     assert len(result) <= 10
 
 
@@ -751,7 +777,7 @@ def test_limit_training_samples_aims_for_balanced_split():
     passages = [_positive_passage(f"pos {i}") for i in range(20)] + [
         _negative_passage(f"neg {i}") for i in range(20)
     ]
-    result = limit_training_samples(passages, max_samples=10)
+    result = limit_and_balance_training_samples(passages, max_samples=10)
     positives = [p for p in result if p.spans]
     negatives = [p for p in result if not p.spans]
     assert len(positives) == 5
@@ -762,7 +788,7 @@ def test_limit_training_samples_fills_remainder_from_larger_class():
     passages = [_positive_passage(f"pos {i}") for i in range(2)] + [
         _negative_passage(f"neg {i}") for i in range(20)
     ]
-    result = limit_training_samples(passages, max_samples=10)
+    result = limit_and_balance_training_samples(passages, max_samples=10)
     positives = [p for p in result if p.spans]
     negatives = [p for p in result if not p.spans]
     assert len(positives) == 2
@@ -775,5 +801,5 @@ def test_limit_training_samples_returns_all_when_below_max():
         _negative_passage("neg 1"),
         _negative_passage("neg 2"),
     ]
-    result = limit_training_samples(passages, max_samples=10)
+    result = limit_and_balance_training_samples(passages, max_samples=10)
     assert len(result) == 3

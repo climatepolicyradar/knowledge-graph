@@ -5,7 +5,7 @@ import pytest
 
 from knowledge_graph.config import WANDB_ENTITY
 from knowledge_graph.identifiers import WikibaseID
-from scripts.sample import run_sampling
+from knowledge_graph.operations.sample import run_sampling
 
 CORPUS_TYPE_COL = "document_metadata.corpus_type_name"
 
@@ -47,14 +47,19 @@ def patched_sample(tmp_path):
     emb = _make_classifier("EmbeddingClassifier")
 
     with (
-        patch("scripts.sample.WikibaseSession", return_value=mock_session),
-        patch("scripts.sample.KeywordClassifier", return_value=kw),
-        patch("scripts.sample.EmbeddingClassifier", return_value=emb),
         patch(
-            "scripts.sample.create_balanced_sample",
+            "knowledge_graph.operations.sample.WikibaseSession",
+            return_value=mock_session,
+        ),
+        patch("knowledge_graph.operations.sample.KeywordClassifier", return_value=kw),
+        patch(
+            "knowledge_graph.operations.sample.EmbeddingClassifier", return_value=emb
+        ),
+        patch(
+            "knowledge_graph.operations.sample.create_balanced_sample",
             side_effect=lambda df, sample_size, on_columns: df.head(sample_size),
         ),
-        patch("scripts.sample.processed_data_dir", tmp_path),
+        patch("knowledge_graph.operations.sample.processed_data_dir", tmp_path),
     ):
         yield mock_concept, mock_session, kw, emb
 
@@ -193,7 +198,7 @@ def test_run_sampling_returns_wandb_artifact_path_when_track_and_upload_is_true(
     with (
         patch("wandb.init", return_value=mock_run),
         patch(
-            "scripts.sample.log_labelled_passages_artifact_to_wandb_run",
+            "knowledge_graph.operations.sample.log_labelled_passages_artifact_to_wandb_run",
             return_value=mock_artifact,
         ),
     ):

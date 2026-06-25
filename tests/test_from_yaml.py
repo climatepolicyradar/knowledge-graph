@@ -14,12 +14,12 @@ from knowledge_graph.custom_classifier_config import (
     LLMClassifierConfig,
 )
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.operations.train import resolve_config_inputs
 from scripts.custom_concept_training.validate import (
     check_wikibase_ids,
     validate_dir,
     validate_file,
 )
-from scripts.train import resolve_config_inputs
 
 CONFIG_DIR = Path(__file__).parents[1] / "scripts/custom_concept_training/configs"
 CONFIG_PATHS = sorted(CONFIG_DIR.glob("*.yaml"))

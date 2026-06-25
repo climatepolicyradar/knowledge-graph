@@ -12,9 +12,9 @@ from flows.config import Config
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaConfig
+from knowledge_graph.operations.train import run_training
 from knowledge_graph.utils import get_logger
 from knowledge_graph.wikibase import WikibaseConfig
-from scripts.train import run_training
 
 
 async def _set_up_training_environment(

@@ -20,8 +20,8 @@ from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.operations.evaluate import evaluate_classifier
 from knowledge_graph.operations.get_concept import get_concept_async
+from knowledge_graph.operations.train import deduplicate_training_data
 from knowledge_graph.wandb_helpers import load_labelled_passages_from_wandb
-from scripts.train import deduplicate_training_data
 
 console = Console()
 app = typer.Typer()

@@ -91,12 +91,11 @@ When migrating a remaining `scripts/` operation, follow this:
 | build_dataset | `run_build_dataset`, `build_dataset_locally` | `build_dataset_flow` → S3 (SSM creds) | `just build-dataset` / `build-dataset-corpus` → `build_dataset_locally`, writes to `data/processed/` |
 | predict | `run_prediction`, `load_passages_from_snowflake`, `deduplicate_labelled_passages` | `predict_adhoc` (deployed), `predict_document_passages` (deployed, on-demand) | `just predict` / `predict-documents` → calls the operation directly (no Prefect) |
 | infer | — not yet extracted; pure helpers (`document_passages`, `is_noop_document`, `_validate_spans`, …) still live in `flows/inference.py` | `inference` (+ batch variants) | `infer` — **deployment trigger only** (no local mode) |
+| train | `run_training`, `train_classifier` (+ W&B/S3 helpers) | `train` (deployed; `train-on-cpu` / `train-on-gpu` variants) | `just train` → `scripts/train.py` CLI wraps `run_training` and dispatches the remote deployment for `--compute remote-cpu/remote-gpu` |
+| sample | `run_sampling`, `CORPUS_TYPES` | `sample` → S3 (SSM creds) | `just sample` → `scripts/sample.py` CLI wraps `run_sampling`, loading the dataset from `data/processed/` |
 
 ### Known follow-ups
 
-- `sample` and `train` still live in `scripts/` and are imported by flows (`train` by
-  four flows) — this violates `flows/* -> scripts/*` and is the next migration: move
-  their logic into `knowledge_graph/operations/`.
 - `inference.py` has not been split yet — its per-document pure helpers
   (`document_passages`, `is_noop_document`, `_validate_spans`, …) still live in
   `flows/inference.py` alongside the orchestration. Extracting the pure helpers into
