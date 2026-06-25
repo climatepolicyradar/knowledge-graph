@@ -20,13 +20,10 @@ import os
 import random
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
-import boto3
 import numpy as np
 import pandas as pd
-import yaml
-from botocore.exceptions import ClientError
 from mypy_boto3_s3 import S3Client
 from prefect import flow, task
 from prefect.cache_policies import NO_CACHE
@@ -36,8 +33,14 @@ from pydantic import Field
 from sentence_transformers import SentenceTransformer
 
 from flows.config import Config
-from flows.train import _set_up_training_environment
-from knowledge_graph.cloud import AwsEnv
+from flows.train import _set_up_training_environment, load_wikibase_ids_from_config
+from knowledge_graph.cloud import (
+    AwsEnv,
+    get_aws_ssm_param,
+)
+from knowledge_graph.cloud import (
+    get_s3_client as cloud_get_s3_client,
+)
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
@@ -46,11 +49,6 @@ from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 from scripts.train import run_training
 
 aws_region = os.getenv("AWS_REGION", "eu-west-1")
-aws_profile = (
-    os.getenv("AWS_PROFILE")
-    if os.environ.get("USE_AWS_PROFILES", "false").lower() == "true"
-    else None
-)
 
 
 class LabelledPassageWithMarkup(LabelledPassage):
@@ -76,22 +74,7 @@ class LabelledPassageWithMarkup(LabelledPassage):
 
 def get_bucket_name_from_ssm() -> str:
     """Fetch bucket name from AWS Systems Manager Parameter Store."""
-    session = boto3.Session(
-        region_name=aws_region,
-        profile_name=aws_profile,
-    )
-    ssm_client = session.client("ssm")
-    try:
-        response = ssm_client.get_parameter(
-            Name="/vibe-checker/bucket-name", WithDecryption=False
-        )
-        return response["Parameter"]["Value"]
-    except ClientError as e:
-        raise ValueError(
-            f"Failed to retrieve bucket name from SSM: {str(e)}\n"
-            "Ensure the SSM parameter '/vibe-checker/bucket-name' exists "
-            "and the service has SSM read permissions"
-        ) from e
+    return get_aws_ssm_param("/vibe-checker/bucket-name", region_name=aws_region)
 
 
 logger = get_logger()
@@ -99,11 +82,8 @@ logger = get_logger()
 
 def get_s3_client() -> S3Client:
     """Get a configured S3 client."""
-    session = boto3.Session(
-        region_name=aws_region,
-        profile_name=aws_profile,
-    )
-    return session.client("s3")
+    aws_env = AwsEnv(os.environ["AWS_ENV"]) if "AWS_ENV" in os.environ else None
+    return cast(S3Client, cloud_get_s3_client(aws_env=aws_env, region_name=aws_region))
 
 
 def get_object_bytes_from_s3(s3_client: S3Client, key: str) -> bytes:
@@ -149,27 +129,6 @@ def load_passages_dataset(
     ]
     assert isinstance(dataset, pd.DataFrame)
     return dataset
-
-
-@task(retries=3, retry_delay_seconds=5)
-def load_wikibase_ids_from_config(
-    config_file_path: str = "vibe-checker/config.yml",
-) -> list[str]:
-    """Load concept IDs from the configuration file."""
-    try:
-        with open(config_file_path, "r", encoding="utf-8") as f:
-            config = yaml.safe_load(f)
-        # make sure the contents are a list of valid Wikibase IDs
-        wikibase_ids = [str(WikibaseID(id)) for id in config]
-    except yaml.YAMLError as e:
-        raise ValueError(
-            "The config file should be valid YAML containing a list of Wikibase IDs"
-        ) from e
-
-    if not wikibase_ids:
-        raise ValueError("No concepts found in the config")
-
-    return wikibase_ids
 
 
 @task(retries=3, retry_delay_seconds=5)
@@ -414,9 +373,11 @@ async def vibe_check_inference(
 
     if not wikibase_ids:
         logger.info("Loading wikibase IDs from config...")
-        wikibase_ids = load_wikibase_ids_from_config()
-
-    sorted_wikibase_ids = sorted([WikibaseID(id) for id in wikibase_ids])
+        sorted_wikibase_ids = sorted(
+            load_wikibase_ids_from_config("vibe-checker/config.yml")
+        )
+    else:
+        sorted_wikibase_ids = sorted([WikibaseID(id) for id in wikibase_ids])
 
     logger.info(f"Running inference for {len(sorted_wikibase_ids)} concept(s)...")
 
