@@ -53,6 +53,7 @@ from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import label_passages_with_classifier
+from knowledge_graph.operations.get_concept import get_concept_async
 from scripts.active_learning.plot_ensemble_metrics import (
     calculate_cumulative_f1_curve,
     create_plots,
@@ -66,7 +67,6 @@ from scripts.custom_concept_training.q32_train_llm import (
 from scripts.custom_concept_training.q32_train_llm import (
     MODEL_NAME as DEFAULT_MODEL_NAME,
 )
-from scripts.get_concept import get_concept_async
 
 console = Console()
 app = typer.Typer()

@@ -7,7 +7,6 @@ from typing import Annotated
 import typer
 from dotenv import load_dotenv
 
-import scripts.get_concept
 import scripts.promote
 import scripts.train
 from knowledge_graph.cloud import (

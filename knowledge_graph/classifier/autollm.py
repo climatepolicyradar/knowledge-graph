@@ -13,12 +13,12 @@ from knowledge_graph.classifier.large_language_model import (
     LLMClassifierPrompt,
 )
 from knowledge_graph.identifiers import WikibaseID
-from scripts.evaluate import (
+from knowledge_graph.operations.evaluate import (
     create_gold_standard_labelled_passages,
     create_validation_predictions_dataframe,
     evaluate_classifier,
 )
-from scripts.get_concept import get_concept_async
+from knowledge_graph.operations.get_concept import get_concept_async
 
 DEFAULT_META_PROMPT = """
 You are an expert prompt engineer helping to improve a text classification system.

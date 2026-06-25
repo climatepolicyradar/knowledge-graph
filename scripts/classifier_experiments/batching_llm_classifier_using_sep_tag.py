@@ -61,12 +61,12 @@ from rich.table import Table
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import concept_dir
 from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.operations.get_concept import get_concept_async
 from knowledge_graph.span import (
     Span,
     SpanXMLConceptFormattingError,
     jaccard_similarity_for_span_lists,
 )
-from scripts.get_concept import get_concept_async
 
 logger = logging.getLogger(__name__)
 console = Console()

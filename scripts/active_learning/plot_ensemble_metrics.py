@@ -21,8 +21,8 @@ from knowledge_graph.ensemble.metrics import (
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import label_passages_with_classifier
+from knowledge_graph.operations.get_concept import get_concept_async
 from knowledge_graph.wandb_helpers import load_classifier_from_wandb
-from scripts.get_concept import get_concept_async
 
 app = typer.Typer()
 console = Console()

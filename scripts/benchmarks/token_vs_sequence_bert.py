@@ -18,9 +18,9 @@ from knowledge_graph.classifier import BertBasedClassifier, BertTokenClassifier
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
+from knowledge_graph.operations.evaluate import evaluate_classifier
+from knowledge_graph.operations.get_concept import get_concept_async
 from knowledge_graph.wandb_helpers import load_labelled_passages_from_wandb
-from scripts.evaluate import evaluate_classifier
-from scripts.get_concept import get_concept_async
 from scripts.train import deduplicate_training_data
 
 console = Console()
