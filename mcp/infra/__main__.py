@@ -81,6 +81,9 @@ image = docker.Image(
         context=str(root_dir.resolve()),
         dockerfile=str(dockerfile_path),
         platform="linux/amd64",  # Specify platform for cross-platform builds
+        # Force the legacy builder. The provider's default BuildKit path produces a
+        # context tar that Docker Engine 29.x rejects ("archive/tar: invalid tar header").
+        builder_version=docker.BuilderVersion.BUILDER_V1,
     ),
     image_name=pulumi.Output.concat(repo.repository_url, ":", git_commit_hash),
     registry=docker.RegistryArgs(
