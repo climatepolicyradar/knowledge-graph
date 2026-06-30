@@ -76,6 +76,9 @@ argilla_data/
 # Wandb
 wandb/
 
+artifacts/
+experiments/
+
 # Vibe checker webapp and infra (not needed in Python container)
 vibe-checker/webapp/
 vibe-checker/infra/
