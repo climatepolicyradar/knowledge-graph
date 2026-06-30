@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Final, NamedTuple
 
@@ -1025,6 +1026,56 @@ class WikibaseSession:
                 related_concepts.append(resolved_id)
 
         return sorted(list(set(related_concepts)))
+
+    async def get_concept_ids_with_property_async(
+        self, property_id: str
+    ) -> list[WikibaseID]:
+        """Get the IDs of all concepts that have at least one statement for a property."""
+        if not re.fullmatch(r"P\d+", property_id):
+            raise ValueError(f"Invalid property ID: {property_id}")
+
+        client = await self._get_client()
+        sparql_query = f"""
+        PREFIX dp: <{self.sparql_property_prefix}>
+
+        SELECT DISTINCT ?entity WHERE {{
+          ?entity dp:{property_id} ?value.
+        }}
+        """
+
+        response = await client.get(
+            url=self.sparql_url,
+            params={
+                "query": sparql_query,
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            logger.error(
+                "❌ Invalid JSON response for SPARQL query on property %s: %s",
+                property_id,
+                response.text,
+            )
+            raise
+
+        concept_ids: list[WikibaseID] = []
+        bindings = data.get("results", {}).get("bindings", [])
+        for binding in bindings:
+            concept_uri = binding.get("entity", {}).get("value", "")
+            resolved_id = self._resolve_redirect(WikibaseID(concept_uri.split("/")[-1]))
+            if resolved_id not in concept_ids:
+                concept_ids.append(resolved_id)
+
+        return sorted(concept_ids)
+
+    @async_to_sync
+    async def get_concept_ids_with_property(self, property_id: str) -> list[WikibaseID]:
+        """Get the IDs of all concepts that have at least one statement for a property."""
+        return await self.get_concept_ids_with_property_async(property_id)
 
     async def close(self):
         """Close the async client"""
