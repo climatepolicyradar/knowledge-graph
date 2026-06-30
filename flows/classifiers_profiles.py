@@ -34,10 +34,8 @@ from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
 import flows.create_classifiers_specs_pr as create_classifiers_specs_pr
-import scripts.classifier_metadata
-import scripts.demote
-import scripts.promote
 from flows.boundary import get_vespa_search_adapter_from_aws_secrets
+from flows.classifier_metadata import update as update_classifier_metadata
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
     determine_spec_file_path,
@@ -49,6 +47,9 @@ from flows.compare_result_operation import (
     Promote,
     Update,
 )
+from flows.demote import run_demotion
+from flows.promote import run_promotion
+from flows.update_classifier_spec import refresh_all_available_classifiers
 from flows.utils import (
     JsonDict,
     S3Uri,
@@ -78,7 +79,6 @@ from knowledge_graph.result import (
 from knowledge_graph.utils import get_logger
 from knowledge_graph.version import Version, get_latest_model_version
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
-from scripts.update_classifier_spec import refresh_all_available_classifiers
 
 VESPA_MAX_TIMEOUT_M: timedelta = timedelta(minutes=5)
 VESPA_CONNECTION_POOL_SIZE: int = 5
@@ -286,7 +286,7 @@ def promote_classifier_profile(
     if not upload_to_wandb:
         logger.info("Dry run, not uploading to W&B.")
     else:
-        scripts.promote.main(
+        run_promotion(
             wikibase_id=wikibase_id,
             classifier_id=classifier_id,
             aws_env=aws_env,
@@ -317,7 +317,7 @@ def demote_classifier_profile(
     if not upload_to_wandb:
         logger.info("Dry run, not uploading to W&B.")
     else:
-        scripts.demote.main(
+        run_demotion(
             wikibase_id=wikibase_id,
             wandb_registry_version=wandb_registry_version,
             aws_env=aws_env,
@@ -347,7 +347,7 @@ def update_classifier_profile(
     if not upload_to_wandb:
         logger.info("Dry run, not uploading to W&B.")
     else:
-        scripts.classifier_metadata.update(
+        update_classifier_metadata(
             wikibase_id=wikibase_id,
             classifier_id=classifier_id,
             add_classifiers_profiles=[

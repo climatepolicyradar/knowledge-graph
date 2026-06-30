@@ -1,3 +1,4 @@
+import asyncio
 from typing import Optional
 
 import typer
@@ -110,8 +111,6 @@ def main(
 ):
     # Set to None if empty as Typer reads it as a list
     documents_or_default = documents or None  # type: ignore
-    # Set to None if empty as Typer reads it as a list
-
     classifiers_or_default: list[ClassifierSpec] | None = classifiers or None  # type: ignore
     console.log(f"Selected to run on: {classifiers=} & {documents=}")
 
@@ -119,7 +118,6 @@ def main(
         f"{inference.name}/{generate_deployment_name(inference.name, aws_env)}"  # pyright: ignore[reportFunctionMemberAccess]
     )
     console.log(f"Starting run for deployment: {deployment_name}")
-    import asyncio
 
     flow_run_coroutine = _trigger_deployment(
         deployment_name, classifiers_or_default, documents_or_default

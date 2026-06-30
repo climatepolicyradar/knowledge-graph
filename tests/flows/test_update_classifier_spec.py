@@ -5,12 +5,12 @@ from unittest.mock import Mock, patch
 import pytest
 
 from flows.classifier_specs.spec_interface import ClassifierSpec
-from knowledge_graph.cloud import AwsEnv
-from knowledge_graph.identifiers import WikibaseID
-from scripts.update_classifier_spec import (
+from flows.update_classifier_spec import (
     refresh_all_available_classifiers,
     sort_specs,
 )
+from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.identifiers import WikibaseID
 
 
 @pytest.fixture

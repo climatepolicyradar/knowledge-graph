@@ -80,7 +80,7 @@ def test_main(
     monkeypatch.setattr("wandb.Api", lambda: api_mock)
     monkeypatch.setattr("wandb.init", init_mock)
 
-    with patch("scripts.demote.is_logged_in", return_value=logged_in):
+    with patch("flows.demote.is_logged_in", return_value=logged_in):
         if expected_exception:
             with pytest.raises(expected_exception):
                 main(

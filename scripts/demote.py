@@ -1,37 +1,18 @@
-"""A script for model demotion."""
+"""
+CLI wrapper for model demotion.
 
-import os
+The reusable logic lives in `flows.demote.run_demotion`; this module only adds the Typer
+command used by `just demote` and the `demote` console script.
+"""
+
 from typing import Annotated, Optional
 
 import typer
-import wandb
 
-from knowledge_graph.cloud import (
-    AwsEnv,
-    is_logged_in,
-    parse_aws_env,
-    throw_not_logged_in,
-)
-from knowledge_graph.config import WANDB_ENTITY
+from flows.demote import run_demotion
+from knowledge_graph.cloud import AwsEnv, parse_aws_env
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.utils import get_logger
-from knowledge_graph.version import Version, get_latest_model_version
-
-log = get_logger()
-
-WANDB_MODEL_ORG = "climatepolicyradar_UZODYJSN66HCQ"
-WANDB_MODEL_REGISTRY = "wandb-registry-model"
-JOB_TYPE = "demote_model"
-
-
-def validate_login(
-    aws_env: AwsEnv,
-    use_aws_profiles: bool,
-) -> None:
-    """Validate that the user is logged in to the necessary AWS environment."""
-    if not is_logged_in(aws_env, use_aws_profiles):
-        throw_not_logged_in(aws_env)
-
+from knowledge_graph.version import Version
 
 app = typer.Typer()
 
@@ -60,69 +41,15 @@ def main(
         ),
     ] = None,
 ):
-    """
-    Demote a model within an AWS environment.
-
-    This removes the environment alias from the specified model in the registry,
-    effectively making it no longer the primary version for that environment.
-    """
-    log.info("Starting model demotion process")
-
-    use_aws_profiles = os.environ.get("USE_AWS_PROFILES", "true").lower() == "true"
-
-    log.info("Validating AWS login...")
-    validate_login(aws_env, use_aws_profiles)
-
-    if not wandb_registry_version:
-        log.info(f"Getting latest model version for AWS environment {aws_env.name}...")
-        api = wandb.Api()
-
-        registry_filters = {"name": {"$regex": "model"}}
-        collection_filters = {"name": wikibase_id}
-        version_filters = {"tag": aws_env.name}
-
-        artifacts = (
-            api.registries(filter=registry_filters)
-            .collections(collection_filters)
-            .versions(filter=version_filters)
+    """Demote a model within an AWS environment."""
+    try:
+        run_demotion(
+            wikibase_id=wikibase_id,
+            aws_env=aws_env,
+            wandb_registry_version=wandb_registry_version,
         )
-        classifier_version = get_latest_model_version(artifacts, aws_env)
-        log.info(
-            f"Latest model version for AWS environment {aws_env.name} is {classifier_version}"
-        )
-    else:
-        log.info(
-            f"Demoting specific registry version {wandb_registry_version} for wikibase id {wikibase_id} with AWS environment {aws_env.name}..."
-        )
-        classifier_version = wandb_registry_version
-
-    log.info("Initialising Weights & Biases run...")
-    with wandb.init(entity=WANDB_ENTITY, project=wikibase_id, job_type=JOB_TYPE) as run:
-        target_path = f"{WANDB_MODEL_REGISTRY}/{wikibase_id}"
-
-        artifact_id = f"{target_path}:{classifier_version}"
-        log.info(f"Using model artifact: {artifact_id}...")
-        model: wandb.Artifact = run.use_artifact(artifact_id)
-
-        # validate tag exists
-        if model.tags is None or aws_env.name not in model.tags:
-            raise typer.BadParameter(
-                f"Model {artifact_id} does not contain tag: {aws_env.name}"
-            )
-        # validate model trained for this aws env
-        if model.metadata.get("aws_env") != aws_env.name:
-            raise typer.BadParameter(
-                f"Model {artifact_id} is not promoted in AWS environment {aws_env.name}"
-            )
-
-        # remove all classifiers profiles
-        model.metadata.pop("classifiers_profiles", None)
-
-        # remove aws env tag
-        model.tags.remove(aws_env.name)
-        model.save()
-
-        log.info(f"Model {artifact_id} demoted")
+    except ValueError as e:
+        raise typer.BadParameter(str(e))
 
 
 if __name__ == "__main__":
