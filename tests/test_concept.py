@@ -4,7 +4,7 @@ from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from knowledge_graph.concept import Concept
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import ClassifierID, StatementRank, WikibaseID
 from tests.common_strategies import concept_label_strategy, wikibase_id_strategy
 
 
@@ -56,6 +56,17 @@ def test_whether_concepts_produce_the_same_hash_regardless_of_alternative_label_
         wikibase_id=WikibaseID("Q123"),
     )
     assert hash(concept1) == hash(concept2)
+
+
+def test_whether_classifier_ids_do_not_affect_concept_id():
+    base = Concept(preferred_label="Test", wikibase_id=WikibaseID("Q123"))
+    with_classifiers = Concept(
+        preferred_label="Test",
+        wikibase_id=WikibaseID("Q123"),
+        classifier_ids=[(StatementRank.PREFERRED, ClassifierID("abcd2345"))],
+    )
+    assert base.id == with_classifiers.id
+    assert hash(base) == hash(with_classifiers)
 
 
 @given(

@@ -3,7 +3,6 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any, Final, NamedTuple
 
 import dotenv
@@ -28,7 +27,7 @@ from knowledge_graph.exceptions import (
     InvalidConceptError,
     RevisionNotFoundError,
 )
-from knowledge_graph.identifiers import ClassifierID, WikibaseID
+from knowledge_graph.identifiers import ClassifierID, StatementRank, WikibaseID
 from knowledge_graph.utils import get_logger
 
 logger = get_logger(__name__)
@@ -38,14 +37,6 @@ dotenv.load_dotenv()
 MAX_RETRIES = 5
 RETRY_INITIAL_WAIT = 1.0
 RETRY_MAX_WAIT = 60.0
-
-
-class StatementRank(Enum):
-    """Rank levels for statements on Wikibase items"""
-
-    PREFERRED = "preferred"
-    NORMAL = "normal"
-    DEPRECATED = "deprecated"
 
 
 class WikibaseAuth(BaseModel):
@@ -503,6 +494,12 @@ class WikibaseSession:
                         concept.negative_concepts.append(
                             self._resolve_redirect(value["id"])
                         )
+
+        concept.classifier_ids = self._parse_classifier_id_claims(
+            concept.wikibase_id,
+            claims.get(self.classifier_id_property_id, []),
+            raise_on_error=False,
+        )
 
     async def _incorporate_negative_concepts(self, concept: Concept) -> Concept:
         """
@@ -1295,28 +1292,21 @@ class WikibaseSession:
         """
         return await self.search_concepts_async(search_term, limit, timestamp)
 
-    async def get_classifier_ids_async(
+    def _parse_classifier_id_claims(
         self,
-        wikibase_id: WikibaseID,
+        wikibase_id: WikibaseID | None,
+        claims: list[dict],
+        raise_on_error: bool = True,
     ) -> list[tuple[StatementRank, ClassifierID]]:
-        """Get the classifier IDs and their ranks for a given Wikibase item"""
+        """
+        Parse classifier ID (P20) claims into validated (rank, classifier ID) tuples.
 
-        client = await self._get_client()
-        response = await client.get(
-            url=self.api_url,
-            params={
-                "action": "wbgetentities",
-                "ids": wikibase_id,
-                "format": "json",
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        claims = data["entities"][wikibase_id]["claims"].get(
-            self.classifier_id_property_id, []
-        )
-
+        :param wikibase_id: The item the claims belong to (for error messages)
+        :param claims: The list of P20 statements from the Wikibase API
+        :param raise_on_error: If True, raise a ValueError when any statement has an
+            invalid rank or classifier ID format. If False, log the invalid statement
+            and skip it, returning the valid ones.
+        """
         classifier_ids = []
         validation_errors = []
         for claim in claims:
@@ -1348,13 +1338,39 @@ class WikibaseSession:
                 logger.error(validation_message)
                 validation_errors.append(validation_message)
 
-        if validation_errors:
+        if validation_errors and raise_on_error:
             raise ValueError(
                 f"Validation error for Wikibase ID: {wikibase_id} \n"
                 + "\n".join(validation_errors)
             )
 
         return classifier_ids
+
+    async def get_classifier_ids_async(
+        self,
+        wikibase_id: WikibaseID,
+    ) -> list[tuple[StatementRank, ClassifierID]]:
+        """Get the classifier IDs and their ranks for a given Wikibase item"""
+
+        client = await self._get_client()
+        response = await client.get(
+            url=self.api_url,
+            params={
+                "action": "wbgetentities",
+                "ids": wikibase_id,
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        claims = data["entities"][wikibase_id]["claims"].get(
+            self.classifier_id_property_id, []
+        )
+
+        return self._parse_classifier_id_claims(
+            wikibase_id, claims, raise_on_error=True
+        )
 
     @async_to_sync
     async def get_classifier_ids(

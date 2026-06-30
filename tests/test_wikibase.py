@@ -5,7 +5,7 @@ import httpx
 import pytest
 
 from knowledge_graph.concept import Concept
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import ClassifierID, StatementRank, WikibaseID
 
 
 def test_wikibase____init__(MockedWikibaseSession, monkeypatch, mock_wikibase_url):
@@ -31,6 +31,64 @@ def test_wikibase__get_concept(MockedWikibaseSession):
     assert isinstance(concept, Concept)
     assert concept.wikibase_id == "Q10"
     assert concept.wikibase_revision == 12345
+    assert concept.classifier_ids == [
+        (StatementRank.PREFERRED, ClassifierID("abcd2345"))
+    ]
+
+
+def _classifier_id_claim(rank: str, value: str) -> dict:
+    """Build a Wikibase P20 (classifier ID) statement for tests."""
+    return {
+        "rank": rank,
+        "mainsnak": {
+            "snaktype": "value",
+            "property": "P20",
+            "datavalue": {"value": value, "type": "string"},
+        },
+    }
+
+
+def test_wikibase__parse_classifier_id_claims(MockedWikibaseSession):
+    wikibase = MockedWikibaseSession()
+
+    valid_claims = [
+        _classifier_id_claim("preferred", "abcd2345"),
+        _classifier_id_claim("deprecated", "wxyz6789"),
+    ]
+    assert wikibase._parse_classifier_id_claims(WikibaseID("Q10"), valid_claims) == [
+        (StatementRank.PREFERRED, ClassifierID("abcd2345")),
+        (StatementRank.DEPRECATED, ClassifierID("wxyz6789")),
+    ]
+
+    # An empty list of claims yields an empty result
+    assert wikibase._parse_classifier_id_claims(WikibaseID("Q10"), []) == []
+
+
+def test_wikibase__parse_classifier_id_claims__malformed_raises_when_strict(
+    MockedWikibaseSession,
+):
+    wikibase = MockedWikibaseSession()
+    bad_claims = [
+        _classifier_id_claim("preferred", "not-a-valid-id"),
+        _classifier_id_claim("normal", "abcd2345"),
+    ]
+    with pytest.raises(ValueError, match="Validation error"):
+        wikibase._parse_classifier_id_claims(
+            WikibaseID("Q10"), bad_claims, raise_on_error=True
+        )
+
+
+def test_wikibase__parse_classifier_id_claims__malformed_skipped_when_not_strict(
+    MockedWikibaseSession,
+):
+    wikibase = MockedWikibaseSession()
+    bad_claims = [
+        _classifier_id_claim("preferred", "not-a-valid-id"),
+        _classifier_id_claim("normal", "abcd2345"),
+    ]
+    assert wikibase._parse_classifier_id_claims(
+        WikibaseID("Q10"), bad_claims, raise_on_error=False
+    ) == [(StatementRank.NORMAL, ClassifierID("abcd2345"))]
 
 
 def test_wikibase__get_all_concept_ids(MockedWikibaseSession):
