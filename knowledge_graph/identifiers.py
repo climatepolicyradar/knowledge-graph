@@ -186,3 +186,11 @@ class ConceptID(Identifier):
 
     This is intended for typing clarity rather than extending the Identifier class.
     """
+
+
+class StatementRank(Enum):
+    """Rank levels for statements on Wikibase items"""
+
+    PREFERRED = "preferred"
+    NORMAL = "normal"
+    DEPRECATED = "deprecated"

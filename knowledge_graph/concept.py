@@ -6,7 +6,12 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-from knowledge_graph.identifiers import ConceptID, WikibaseID
+from knowledge_graph.identifiers import (
+    ClassifierID,
+    ConceptID,
+    StatementRank,
+    WikibaseID,
+)
 from knowledge_graph.labelled_passage import LabelledPassage
 
 if TYPE_CHECKING:
@@ -65,6 +70,13 @@ class Concept(BaseModel):
         default_factory=list,
         description=(
             "List of concept IDs for concepts this should not be confused with"
+        ),
+    )
+    classifier_ids: list[tuple[StatementRank, ClassifierID]] = Field(
+        default_factory=list,
+        description=(
+            "Classifier IDs associated with this concept (Wikibase property P20), "
+            "each paired with its Wikibase statement rank"
         ),
     )
     recursive_subconcept_of: Optional[list[WikibaseID]] = Field(
