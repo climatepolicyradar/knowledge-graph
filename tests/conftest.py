@@ -236,6 +236,19 @@ def mock_wikibase_revisions_json():
                         }
                     }
                 ],
+                "P20": [
+                    {
+                        "rank": "preferred",
+                        "mainsnak": {
+                            "snaktype": "value",
+                            "property": "P20",
+                            "datavalue": {
+                                "value": "abcd2345",
+                                "type": "string",
+                            },
+                        },
+                    }
+                ],
             },
         }
 
