@@ -7,40 +7,6 @@ build-dataset n="10000":
 build-dataset-corpus corpus n="10000":
     uv run python -c "from knowledge_graph.operations.build_dataset import build_dataset_locally; build_dataset_locally(n={{n}}, corpus_type='{{corpus}}')"
 
-# fetch metadata and labelled passages for a specific wikibase ID
-# Optionally ad a wikibase_config as a string, if omitted this will rely on env variables instead:
-# just get-concept <id> "<url> <username> <password>"
-get-concept id wikibase_config="":
-    uv run python scripts/get_concept.py --wikibase-id {{id}} \
-        {{if wikibase_config != "" { "--wikibase-config \"" + wikibase_config + "\"" } else { "" } }}
-
-# train a model for a specific wikibase ID
-train id +OPTS="":
-    uv run train --wikibase-id {{id}} {{OPTS}}
-
-# train multiple models and export their performance tables to CSV
-train-with-output-csv ids combined_name="" +OPTS="":
-    #!/bin/bash
-    set -e
-
-    # Train each model
-    for id in {{ids}}; do
-        echo "Training model for $id..."
-        uv run train --wikibase-id $id {{OPTS}}
-    done
-
-    # Fetch performance tables
-    echo "Fetching performance tables..."
-    if [ -n "{{combined_name}}" ]; then
-        uv run python scripts/fetch_performance_tables.py {{ids}} --combined-name {{combined_name}}
-    else
-        uv run python scripts/fetch_performance_tables.py {{ids}}
-    fi
-
-# evaluate a model for a specific wikibase ID
-evaluate id +OPTS="":
-    uv run evaluate --wikibase-id {{id}} {{OPTS}}
-
 # promote a model for a specific wikibase ID
 promote id +OPTS="":
     uv run promote --wikibase-id {{id}} {{OPTS}}
@@ -78,10 +44,6 @@ deploy-classifiers ids aws_env +OPTS="":
         --promote \
         {{OPTS}}
 
-# run a model for a specific wikibase ID on a supplied string
-label id string:
-    uv run python scripts/label.py --wikibase-id {{id}} --input-string {{string}}
-
 # just predict Q123 "climatepolicyradar/Q123/abc:v0" "climatepolicyradar/Q123/abc-labelled-passages:v0"
 # find instances of a concept in passages from a W&B artifact (runs the operation directly, no Prefect)
 predict id classifier_wandb_path labelled_passages_wandb_path:
@@ -91,31 +53,6 @@ predict id classifier_wandb_path labelled_passages_wandb_path:
 # find concept instances in passages for Snowflake document IDs (uses local ~/.snowflake/config.toml)
 predict-documents id classifier_wandb_path document_ids:
     uv run python -c "import asyncio; from knowledge_graph.operations.predict import load_passages_from_snowflake, run_prediction; passages = load_passages_from_snowflake('{{document_ids}}'.split()); asyncio.run(run_prediction(wikibase_id='{{id}}', classifier_wandb_path='{{classifier_wandb_path}}', input_passages=passages))"
-
-# sample a set of passages from the dataset for a specific wikibase ID
-sample id:
-    uv run python scripts/sample.py --wikibase-id {{id}}
-
-# sample a set of passages from the dataset for a specific corpus for a specific wikibase ID
-sample-corpus id corpus:
-    uv run python scripts/sample.py --wikibase-id {{id}} --corpus-type {{corpus}}
-
-# extend an existing dataset in argilla with additional passages for a specific wikibase ID
-extend-dataset id workspace:
-    uv run python scripts/argilla/extend_existing_dataset.py --wikibase-id {{id}} --workspace-name {{workspace}}
-
-# generate an HTML report of classifier performance
-generate-report wikibase-ids:
-    uv run python scripts/generate_report.py --wikibase-ids {{wikibase-ids}}
-
-# visualise IAA, model vs gold-standard agreement, and positive predictions on the full dataset
-visualise-labels id:
-    uv run python scripts/visualise_labels.py --wikibase-id {{id}}
-
-# NOTE: no prediction step - the `predict` recipe needs a classifier + passages
-# artifact path, which aren't available from just an `id` here. Run `just predict`
-# (or `just predict-documents`) separately if you need it.
-analyse-classifier id: (get-concept id) (train id) (evaluate id)
 
 # Run inference over documents in a pipeline bucket
 infer +OPTS="":
