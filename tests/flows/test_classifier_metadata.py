@@ -31,7 +31,7 @@ class MetadataTestCase:
 @pytest.fixture
 def mock_wandb_context():
     """Mock wandb.init context manager and artifact."""
-    with patch("scripts.classifier_metadata.wandb.init") as mock_init:
+    with patch("flows.classifier_metadata.wandb.init") as mock_init:
         # Mock the context manager
         mock_run = Mock()
         mock_init.return_value = nullcontext(mock_run)
@@ -46,7 +46,7 @@ def mock_wandb_context():
 @pytest.fixture
 def mock_wandb_api():
     """Mock wandb.Api and its artifacts method."""
-    with patch("scripts.classifier_metadata.wandb.Api") as mock_api_class:
+    with patch("flows.classifier_metadata.wandb.Api") as mock_api_class:
         mock_api = Mock()
         mock_api_class.return_value = mock_api
 

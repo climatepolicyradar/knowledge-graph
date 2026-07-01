@@ -132,7 +132,7 @@ def test_main(test_case, logged_in, expected_exception, monkeypatch):
     monkeypatch.setattr("wandb.Artifact", lambda **kwargs: artifact_mock)
     monkeypatch.setattr("os.environ.__setitem__", lambda *args: None)
 
-    with patch("scripts.promote.is_logged_in", return_value=logged_in):
+    with patch("flows.promote.is_logged_in", return_value=logged_in):
         if expected_exception:
             with pytest.raises(expected_exception):
                 main(**test_case)

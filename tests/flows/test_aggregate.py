@@ -37,13 +37,13 @@ from flows.aggregate import (
 )
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.config import Config
+from flows.update_classifier_spec import write_spec_file
 from flows.utils import DocumentStem, Fault, build_inference_result_s3_uri
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, ConceptID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.span import Span
-from scripts.update_classifier_spec import write_spec_file
 
 
 @pytest.fixture

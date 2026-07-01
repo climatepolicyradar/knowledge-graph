@@ -337,7 +337,7 @@ def test_promote_classifiers_profiles(mock_profile_mapping):
 
     # mock response to wandb scripts
     with (
-        patch("scripts.promote.main") as mock_promote,
+        patch("flows.classifiers_profiles.run_promotion") as mock_promote,
     ):
         promote_classifier_profile(
             wikibase_id=mock_profile_mapping.wikibase_id,
@@ -347,7 +347,7 @@ def test_promote_classifiers_profiles(mock_profile_mapping):
             upload_to_wandb=True,
         )
 
-        # Ensure scripts.promote.main was called with the correct arguments
+        # Ensure run_promotion was called with the correct arguments
         mock_promote.assert_called_once_with(
             wikibase_id=mock_profile_mapping.wikibase_id,
             classifier_id=mock_profile_mapping.classifier_id,
@@ -361,7 +361,7 @@ def test_promote_classifiers_profiles__dry_run(mock_profile_mapping):
 
     # mock response to wandb scripts
     with (
-        patch("scripts.promote.main") as mock_promote,
+        patch("flows.classifiers_profiles.run_promotion") as mock_promote,
     ):
         promote_classifier_profile(
             wikibase_id=mock_profile_mapping.wikibase_id,
@@ -380,7 +380,7 @@ def test_demote_classifiers_profiles(mock_specs):
 
     # mock response to wandb scripts
     with (
-        patch("scripts.demote.main") as mock_demote,
+        patch("flows.classifiers_profiles.run_demotion") as mock_demote,
     ):
         demote_classifier_profile(
             wikibase_id=mock_specs.wikibase_id,
@@ -390,7 +390,7 @@ def test_demote_classifiers_profiles(mock_specs):
             upload_to_wandb=True,
         )
 
-        # Ensure scripts.demote.main was called with the correct arguments
+        # Ensure run_demotion was called with the correct arguments
         mock_demote.assert_called_once_with(
             wikibase_id=mock_specs.wikibase_id,
             wandb_registry_version=mock_specs.wandb_registry_version,
@@ -403,7 +403,7 @@ def test_demote_classifiers_profiles__dry_run(mock_specs):
 
     # mock response to wandb scripts
     with (
-        patch("scripts.demote.main") as mock_demote,
+        patch("flows.classifiers_profiles.run_demotion") as mock_demote,
     ):
         demote_classifier_profile(
             wikibase_id=mock_specs.wikibase_id,
@@ -422,7 +422,7 @@ def test_update_classifier_profile(mock_specs, mock_profile_mapping):
 
     # mock response to wandb scripts
     with (
-        patch("scripts.classifier_metadata.update") as mock_update,
+        patch("flows.classifiers_profiles.update_classifier_metadata") as mock_update,
     ):
         update_classifier_profile(
             wikibase_id=mock_specs.wikibase_id,
@@ -433,7 +433,7 @@ def test_update_classifier_profile(mock_specs, mock_profile_mapping):
             upload_to_wandb=True,
         )
 
-        # Ensure scripts.classifier_metadata.update was called with the correct arguments
+        # Ensure update_classifier_metadata was called with the correct arguments
         mock_update.assert_called_once_with(
             wikibase_id=mock_specs.wikibase_id,
             classifier_id=mock_specs.classifier_id,
@@ -449,7 +449,7 @@ def test_update_classifier_profile__dry_run(mock_specs, mock_profile_mapping):
 
     # mock response to wandb scripts
     with (
-        patch("scripts.classifier_metadata.update") as mock_update,
+        patch("flows.classifiers_profiles.update_classifier_metadata") as mock_update,
     ):
         update_classifier_profile(
             wikibase_id=mock_specs.wikibase_id,
