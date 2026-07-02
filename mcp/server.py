@@ -1,5 +1,6 @@
 import logging
-from typing import Annotated
+from enum import Enum
+from typing import Annotated, Optional
 
 from fastmcp import Context, FastMCP
 from pydantic import BaseModel, Field
@@ -7,8 +8,33 @@ from rich.logging import RichHandler
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from knowledge_graph.classifiers_profiles import Profile
 from knowledge_graph.concept import Concept
 from knowledge_graph.wikibase import WikibaseID, WikibaseSession
+
+
+class ConceptProperty(str, Enum):
+    """Concept statement properties that can be filtered on."""
+
+    classifier_id = "classifier_id"
+    wikidata_id = "wikidata_id"
+    definition = "definition"
+    subconcept_of = "subconcept_of"
+    has_subconcept = "has_subconcept"
+    related_concept = "related_concept"
+    negative_concept = "negative_concept"
+
+
+# Maps each ConceptProperty to the WikibaseSession attribute holding its property ID
+_PROPERTY_ATTR: dict[ConceptProperty, str] = {
+    ConceptProperty.classifier_id: "classifier_id_property_id",
+    ConceptProperty.wikidata_id: "wikidata_id_property_id",
+    ConceptProperty.definition: "definition_property_id",
+    ConceptProperty.subconcept_of: "subconcept_of_property_id",
+    ConceptProperty.has_subconcept: "has_subconcept_property_id",
+    ConceptProperty.related_concept: "related_concept_property_id",
+    ConceptProperty.negative_concept: "negative_concept_property_id",
+}
 
 
 # Define response models for automatic schema generation
@@ -348,3 +374,172 @@ async def list_help_pages(ctx: Context = None) -> HelpPagesListResult:
     except Exception as e:
         await handle_wikibase_error(e, "Failed to retrieve help pages", ctx)
         return HelpPagesListResult(page_titles=[], total_count=0)
+
+
+class ConceptSummary(BaseModel):
+    """A lightweight concept reference."""
+
+    wikibase_id: WikibaseID = Field(description="The Wikibase ID for the concept")
+    preferred_label: str = Field(description="The concept's preferred label")
+
+
+class ConceptsWithPropertyResult(BaseModel):
+    """Concepts that have at least one statement for a given property."""
+
+    property: str = Field(description="The concept property that was filtered on")
+    concepts: list[ConceptSummary] = Field(description="The matching concepts")
+    total_count: int = Field(description="Number of matching concepts")
+
+
+class ConceptClassifierInfo(BaseModel):
+    """A classifier associated with a concept."""
+
+    classifier_id: str = Field(description="The classifier ID")
+    profile: str = Field(description="One of: primary, experimental, retired")
+
+
+class ConceptWithClassifiers(BaseModel):
+    """A concept together with its associated classifiers."""
+
+    wikibase_id: WikibaseID = Field(description="The Wikibase ID for the concept")
+    preferred_label: str = Field(description="The concept's preferred label")
+    classifiers: list[ConceptClassifierInfo] = Field(
+        description="The classifiers associated with this concept"
+    )
+
+
+class ConceptsWithClassifiersResult(BaseModel):
+    """Concepts that have at least one associated classifier."""
+
+    concepts: list[ConceptWithClassifiers] = Field(
+        description="Concepts with their associated classifiers"
+    )
+    total_count: int = Field(description="Number of concepts with classifiers")
+
+
+@mcp.tool
+async def list_concepts_with_property(
+    property: Annotated[
+        ConceptProperty,
+        Field(description="The concept property to filter on"),
+    ],
+    ctx: Context = None,
+) -> ConceptsWithPropertyResult:
+    """
+    List all concepts that have at least one statement for a given property.
+
+    This answers questions like "which concepts have a classifier?" or "which
+    concepts are linked to Wikidata?". Supported properties are:
+
+    - classifier_id: the concept has one or more associated classifiers
+    - wikidata_id: the concept is linked to a Wikidata item
+    - definition: the concept has a definition
+    - subconcept_of / has_subconcept / related_concept / negative_concept:
+      the concept participates in the corresponding relationship
+
+    To additionally see the classifier IDs and their profiles, use
+    list_concepts_with_classifiers instead.
+    """
+
+    if ctx:
+        await ctx.info(f"Listing concepts with property '{property.value}'")
+
+    try:
+        wikibase = WikibaseSession()
+        property_id = getattr(wikibase, _PROPERTY_ATTR[property])
+        concept_ids = await wikibase.get_concept_ids_with_property_async(property_id)
+
+        concepts = (
+            await wikibase.get_concepts_async(wikibase_ids=concept_ids)
+            if concept_ids
+            else []
+        )
+
+        summaries = [
+            ConceptSummary(
+                wikibase_id=concept.wikibase_id,
+                preferred_label=concept.preferred_label,
+            )
+            for concept in concepts
+            if concept.wikibase_id is not None
+        ]
+
+        return ConceptsWithPropertyResult(
+            property=property.value,
+            concepts=summaries,
+            total_count=len(summaries),
+        )
+    except Exception as e:
+        await handle_wikibase_error(
+            e, f"Failed to list concepts with property '{property.value}'", ctx
+        )
+        return ConceptsWithPropertyResult(
+            property=property.value, concepts=[], total_count=0
+        )
+
+
+@mcp.tool
+async def list_concepts_with_classifiers(
+    profile: Annotated[
+        Optional[Profile],
+        Field(
+            description=(
+                "Only return classifiers with this profile (primary, experimental, "
+                "or retired). If omitted, all classifiers are returned."
+            )
+        ),
+    ] = None,
+    ctx: Context = None,
+) -> ConceptsWithClassifiersResult:
+    """
+    List all concepts that have at least one associated classifier.
+
+    Each returned concept includes its classifier IDs and the profile of each
+    classifier. A classifier's profile is derived from its Wikibase statement rank:
+    primary (preferred rank), experimental (normal rank), or retired (deprecated
+    rank). Optionally filter to a single profile.
+    """
+
+    if ctx:
+        msg = "Listing concepts with classifiers"
+        if profile:
+            msg += f" (profile: {profile.value})"
+        await ctx.info(msg)
+
+    try:
+        wikibase = WikibaseSession()
+        concept_ids = await wikibase.get_concept_ids_with_property_async(
+            wikibase.classifier_id_property_id
+        )
+
+        concepts = (
+            await wikibase.get_concepts_async(wikibase_ids=concept_ids)
+            if concept_ids
+            else []
+        )
+
+        results: list[ConceptWithClassifiers] = []
+        for concept in concepts:
+            if concept.wikibase_id is None:
+                continue
+
+            if classifiers := [
+                ConceptClassifierInfo(
+                    classifier_id=str(classifier_id),
+                    profile=str(Profile.generate(rank)),
+                )
+                for rank, classifier_id in concept.classifier_ids
+                if profile is None or Profile.generate(rank) == profile
+            ]:
+                results.append(
+                    ConceptWithClassifiers(
+                        wikibase_id=concept.wikibase_id,
+                        preferred_label=concept.preferred_label,
+                        classifiers=classifiers,
+                    )
+                )
+
+        return ConceptsWithClassifiersResult(concepts=results, total_count=len(results))
+    except Exception as e:
+        await handle_wikibase_error(e, "Failed to list concepts with classifiers", ctx)
+        return ConceptsWithClassifiersResult(concepts=[], total_count=0)

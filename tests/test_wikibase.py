@@ -1,5 +1,5 @@
 import logging
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -144,6 +144,48 @@ async def test_get_concepts_async__logs_warning_on_retry(MockedWikibaseSession, 
             await wikibase.get_concepts_async()
 
     assert any("Retrying" in r.message for r in caplog.records)
+
+
+def test_get_concept_ids_with_property__invalid_property_raises(MockedWikibaseSession):
+    wikibase = MockedWikibaseSession()
+    with pytest.raises(ValueError, match="Invalid property ID"):
+        wikibase.get_concept_ids_with_property("not-a-property")
+
+
+@pytest.mark.asyncio
+async def test_get_concept_ids_with_property__parses_dedupes_and_sorts(
+    MockedWikibaseSession,
+):
+    wikibase = MockedWikibaseSession()
+    entity_prefix = wikibase.sparql_entity_prefix
+    sparql_json = {
+        "head": {"vars": ["entity"]},
+        "results": {
+            "bindings": [
+                {"entity": {"type": "uri", "value": f"{entity_prefix}Q58"}},
+                {"entity": {"type": "uri", "value": f"{entity_prefix}Q10"}},
+                # A duplicate, which should be collapsed
+                {"entity": {"type": "uri", "value": f"{entity_prefix}Q10"}},
+            ]
+        },
+    }
+
+    sparql_response = httpx.Response(
+        200,
+        json=sparql_json,
+        request=httpx.Request("GET", wikibase.sparql_url),
+    )
+    client = await wikibase._get_client()
+    with patch.object(
+        client, "get", new=AsyncMock(return_value=sparql_response)
+    ) as mock_get:
+        ids = await wikibase.get_concept_ids_with_property_async("P20")
+
+    # Deduplicated and sorted
+    assert ids == [WikibaseID("Q10"), WikibaseID("Q58")]
+    # The query targeted the SPARQL endpoint and filtered on the requested property
+    assert mock_get.call_args.kwargs["url"] == wikibase.sparql_url
+    assert "P20" in mock_get.call_args.kwargs["params"]["query"]
 
 
 @pytest.mark.skip(reason="Not implemented")
