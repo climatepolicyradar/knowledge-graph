@@ -130,3 +130,54 @@ async def test_vibe_check_inference(vibe_check_externals):
     assert results[0]["concept_id"] == WikibaseID("Q1")
     assert results[0]["n_passages"] == N_PASSAGES
     assert vibe_check_externals.push_to_s3.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_vibe_check_returns_failed_status_when_concept_not_found(
+    vibe_check_externals,
+):
+    vibe_check_externals.wikibase_session.get_concept_async = AsyncMock(
+        side_effect=ValueError("concept not found")
+    )
+
+    results = await vibe_check_inference(wikibase_ids=["Q1"])
+
+    assert len(results) == 1
+    assert results[0]["status"] == "failed"
+    assert "concept not found" in results[0]["error"]
+    # Nothing should be uploaded when the concept can't be loaded.
+    assert vibe_check_externals.push_to_s3.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_vibe_check_returns_failed_status_when_s3_upload_fails(
+    vibe_check_externals,
+):
+    vibe_check_externals.push_to_s3.side_effect = RuntimeError("s3 upload failed")
+
+    results = await vibe_check_inference(wikibase_ids=["Q1"])
+
+    assert len(results) == 1
+    assert results[0]["status"] == "failed"
+    assert "s3 upload failed" in results[0]["error"]
+
+
+@pytest.mark.asyncio
+async def test_vibe_check_isolates_failures_across_multiple_concepts(
+    vibe_check_externals,
+):
+    def _get_concept(wikibase_id):
+        if wikibase_id == WikibaseID("Q2"):
+            raise ValueError("Q2 not found")
+        return Concept(wikibase_id=wikibase_id, preferred_label="ok concept")
+
+    vibe_check_externals.wikibase_session.get_concept_async = AsyncMock(
+        side_effect=_get_concept
+    )
+
+    results = await vibe_check_inference(wikibase_ids=["Q1", "Q2"])
+
+    by_id = {r["concept_id"]: r for r in results}
+    assert by_id[WikibaseID("Q1")]["status"] == "success"
+    assert by_id[WikibaseID("Q2")]["status"] == "failed"
+    assert "Q2 not found" in by_id[WikibaseID("Q2")]["error"]
