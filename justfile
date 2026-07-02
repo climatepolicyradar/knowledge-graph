@@ -95,6 +95,10 @@ generate-static-site tool:
 serve-mcp:
     uv run fastmcp run mcp/server.py:mcp --transport http --host 0.0.0.0 --port 8000
 
+# Serve the W&B MCP locally
+serve-wandb-mcp:
+    uv run fastmcp run wandb-mcp/server.py:mcp --transport http --host 0.0.0.0 --port 8001
+
 # Intended use is deploying to sandbox / staging for local testing
 # Ensure that you have configured your .env and authenticated with aws & prefect
 deploy-flows-from-local:
