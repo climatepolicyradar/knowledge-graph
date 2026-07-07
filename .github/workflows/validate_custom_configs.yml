@@ -19,7 +19,7 @@ jobs:
     name: "Validate concept configs"
     steps:
       - name: Check out repository code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -32,7 +32,7 @@ jobs:
         run: pipx install rust-just
 
       - name: Install python or load from cache with dependencies
-        uses: actions/setup-python@v6.2.0
+        uses: actions/setup-python@v6.3.0
         with:
           python-version-file: pyproject.toml
 
