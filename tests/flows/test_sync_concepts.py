@@ -90,14 +90,14 @@ def test_concepts_to_dataframe__with_classifier_ids(mock_concepts):
     ClassifierID too, since the first element (StatementRank) is an Enum.
     """
     mock_concepts[0].classifier_ids = [
-        (StatementRank.PREFERRED, ClassifierID("abcd1234")),
+        (StatementRank.PREFERRED, ClassifierID("abcd2345")),
         (StatementRank.NORMAL, ClassifierID("wxyz9876")),
     ]
 
     df = concepts_to_dataframe(mock_concepts)
 
     assert df["classifier_ids"][0].to_list() == [
-        ["preferred", "abcd1234"],
+        ["preferred", "abcd2345"],
         ["normal", "wxyz9876"],
     ]
 
