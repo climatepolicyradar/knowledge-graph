@@ -52,12 +52,16 @@ def concepts_to_dataframe(concepts: list[Concept]) -> pl.DataFrame:
     Returns:
         pl.DataFrame: A DataFrame with all concepts, ready for Parquet write
     """
-    df = pl.DataFrame(
-        [
-            concept.model_dump(exclude={"labelled_passages"}, mode="python")
-            for concept in concepts
+    records = []
+    for concept in concepts:
+        record = concept.model_dump(exclude={"labelled_passages"}, mode="python")
+        record["classifier_ids"] = [
+            (rank.value, str(classifier_id))
+            for rank, classifier_id in concept.classifier_ids
         ]
-    )
+        records.append(record)
+
+    df = pl.DataFrame(records)
 
     # Cast Null columns to proper types for consistent schema Polars
     # infers Null type when all values are None, but we want explicit
