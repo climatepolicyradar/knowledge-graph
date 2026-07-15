@@ -54,7 +54,9 @@ def concepts_to_dataframe(concepts: list[Concept]) -> pl.DataFrame:
     """
     df = pl.DataFrame(
         [
-            concept.model_dump(exclude={"labelled_passages"}, mode="python")
+            concept.model_dump(
+                exclude={"labelled_passages", "classifier_ids"}, mode="python"
+            )
             for concept in concepts
         ]
     )
