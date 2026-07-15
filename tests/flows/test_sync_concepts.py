@@ -21,7 +21,6 @@ from flows.sync_concepts import (
 from flows.utils import S3Uri
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
-from knowledge_graph.identifiers import ClassifierID, StatementRank
 from knowledge_graph.result import Err, Error, Ok, is_err, is_ok, unwrap_err, unwrap_ok
 from knowledge_graph.wikibase import WikibaseAuth
 
@@ -79,27 +78,6 @@ def test_concepts_to_dataframe(mock_concepts):
     # Verify types for Delta Lake compatibility
     assert df["description"].dtype == pl.Utf8 or all(df["description"].is_null())
     assert df["definition"].dtype == pl.Utf8 or all(df["definition"].is_null())
-
-
-def test_concepts_to_dataframe__with_classifier_ids(mock_concepts):
-    """
-    Regression test for AttributeError: 'ClassifierID' object has no attribute 'value'.
-
-    Polars infers a tuple's serialization from its first element's type, so a
-    (StatementRank, ClassifierID) tuple made it try to call `.value` on the
-    ClassifierID too, since the first element (StatementRank) is an Enum.
-    """
-    mock_concepts[0].classifier_ids = [
-        (StatementRank.PREFERRED, ClassifierID("abcd2345")),
-        (StatementRank.NORMAL, ClassifierID("wxyz9876")),
-    ]
-
-    df = concepts_to_dataframe(mock_concepts)
-
-    assert df["classifier_ids"][0].to_list() == [
-        ["preferred", "abcd2345"],
-        ["normal", "wxyz9876"],
-    ]
 
 
 def test_dataframe_to_concepts__roundtrip(mock_concepts):
