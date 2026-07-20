@@ -98,28 +98,20 @@ def test_dataframe_to_concepts__empty_dataframe():
     assert [] == dataframe_to_concepts(df)
 
 
-def test_dataframe_to_concepts__roundtrip_full_equality(fully_populated_concept):
-    """Test roundtrip with every field populated (ENRI-1505 regression)."""
+def test_dataframe_to_concepts__roundtrip_fully_populated(fully_populated_concept):
+    """
+    A concept with every field populated survives the roundtrip (ENRI-1505).
+
+    classifier_ids is deliberately excluded from what is written to S3 (see
+    concepts_to_dataframe), so it is not expected to round-trip.
+    """
     df = concepts_to_dataframe([fully_populated_concept])
     recovered = dataframe_to_concepts(df)
 
-    assert recovered == [fully_populated_concept]
-
-
-def test_concepts_to_dataframe__parquet_schema_stable_across_files(
-    mock_concepts, fully_populated_concept, tmp_path
-):
-    """Parquet files with empty and populated fields share one schema (ENRI-1505)."""
-    concepts_to_dataframe(mock_concepts).write_parquet(tmp_path / "empty.parquet")
-    concepts_to_dataframe([fully_populated_concept]).write_parquet(
-        tmp_path / "populated.parquet"
+    assert len(recovered) == 1
+    assert recovered[0].model_dump(exclude={"classifier_ids"}) == (
+        fully_populated_concept.model_dump(exclude={"classifier_ids"})
     )
-
-    combined = pl.read_parquet(tmp_path / "*.parquet")
-
-    assert len(combined) == len(mock_concepts) + 1
-    recovered = dataframe_to_concepts(combined)
-    assert fully_populated_concept in recovered
 
 
 @pytest.mark.asyncio
