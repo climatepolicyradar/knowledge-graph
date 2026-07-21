@@ -14,22 +14,12 @@ from typing import Any, Callable, Dict, Optional
 
 import boto3
 import wandb
-from cpr_sdk.models.search import ClassifiersProfile as VespaClassifiersProfile
-from cpr_sdk.models.search import ClassifiersProfiles as VespaClassifiersProfiles
-from cpr_sdk.models.search import (
-    ConceptV2DocumentFilter,
-    SearchParameters,
-)
-from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
-from cpr_sdk.search_adaptors import VespaSearchAdapter
 from prefect import flow
 from prefect.artifacts import acreate_table_artifact
 from prefect.context import FlowRunContext, get_run_context
 from prefect.events import Event, emit_event
 from prefect.settings import PREFECT_UI_URL
 from pydantic import AnyHttpUrl, SecretStr
-from vespa.application import VespaAsync
-from vespa.io import VespaResponse
 
 import flows.create_classifiers_specs_pr as create_classifiers_specs_pr
 from flows.classifier_metadata import update as update_classifier_metadata
@@ -48,7 +38,6 @@ from flows.demote import run_demotion
 from flows.promote import run_promotion
 from flows.update_classifier_spec import refresh_all_available_classifiers
 from flows.utils import (
-    JsonDict,
     S3Uri,
     SlackNotify,
     get_run_name,
@@ -62,7 +51,7 @@ from knowledge_graph.classifiers_profiles import (
 )
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.concept import Concept
-from knowledge_graph.identifiers import ClassifierID, Identifier, WikibaseID
+from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.result import (
     Err,
     Error,
@@ -996,200 +985,6 @@ async def _post_errors_thread(
         logger.error(f"failed to post {error_type} thread: {format_error(e)}")
 
 
-def create_vespa_profile_mappings(
-    classifier_specs: list[ClassifierSpec],
-) -> list[VespaClassifiersProfile.Mapping]:
-    """Create VespaClassifiersProfile.Mapping objects from classifier specs."""
-
-    mappings = []
-    errors = []
-    for spec in classifier_specs:
-        try:
-            mappings.append(
-                VespaClassifiersProfile.Mapping(
-                    concept_id=str(spec.concept_id),
-                    concept_wikibase_id=VespaWikibaseId(str(spec.wikibase_id)),
-                    classifier_id=str(spec.classifier_id),
-                )
-            )
-
-        except Exception as e:
-            errors.append(
-                f"Failed to create mapping for {spec.wikibase_id}: {format_error(e)}"
-            )
-
-    if errors:
-        raise ValueError(f"Errors creating VespaClassifiersProfile.Mapping: {errors}")
-
-    return mappings
-
-
-def create_vespa_classifiers_profile(
-    name: Profile,
-    mappings: list[VespaClassifiersProfile.Mapping],
-) -> VespaClassifiersProfile:
-    """Create VespaClassifiersProfile object from mappings."""
-    try:
-        id = Identifier.generate(name.value, mappings)
-        vespa_profile = VespaClassifiersProfile(
-            id=str(id),
-            name=name.value,
-            mappings=mappings,
-            multi=(name == Profile.RETIRED),
-            response_raw={},
-        )
-        return vespa_profile
-
-    except Exception as e:
-        raise ValueError(
-            f"Failed to create VespaClassifiersProfile for {name.value} with mappings {mappings}: {format_error(e)}"
-        )
-
-
-async def update_vespa_with_classifiers_profiles(
-    classifier_specs: list[ClassifierSpec],
-    vespa_connection_pool: VespaAsync,
-    upload_to_vespa: bool = True,
-) -> list[Result[None, Error]]:
-    """
-    Update Vespa with the latest classifiers profiles from classifier specs
-
-    Returns a list of Result indicating success or failure for syncing to vespa
-
-    ClassifierSpec are used instead of ClassifiersProfileMapping to include
-    all unchanged classifiers as well as those that have been promoted/demoted/updated.
-    ClassifiersProfileMapping also doesn't include concept_id which is required for Vespa mappings.
-    """
-    logger = get_logger()
-    results: list[Result[None, Error]] = []
-
-    logger.info(
-        f"Processing {len(classifier_specs)} classifier specs for Vespa update."
-    )
-
-    try:
-        # create VespaClassifiersProfiles.Mappings from classifier specs split by classifier profiles: primary, experimental, retired
-        vespa_classifiers_profile = {}
-        for profile in [Profile.PRIMARY, Profile.EXPERIMENTAL, Profile.RETIRED]:
-            profile_mappings = create_vespa_profile_mappings(
-                [
-                    spec
-                    for spec in classifier_specs
-                    if spec.classifiers_profile == profile.value
-                ],
-            )
-
-            logger.info(
-                f"Created VespaClassifiersProfile.Mapping object for {profile.value}, with {len(profile_mappings)} mappings"
-            )
-
-            # convert to VespaClassifiersProfile
-            # skip creating VespaClassifiersProfile if no mappings
-            if len(profile_mappings) == 0:
-                logger.info(
-                    f"No mappings for profile {profile.value}, skipping VespaClassifiersProfile creation."
-                )
-                continue
-
-            vespa_classifiers_profile[profile.value] = create_vespa_classifiers_profile(
-                profile, profile_mappings
-            )
-
-            logger.info(f"Created VespaClassifiersProfile object for {profile.value}")
-
-        # create VespaClassifiersProfiles from VespaClassifiersProfile objects
-        # create mappings dynamically using vespa_classifiers_profile
-        mappings = {}
-        for profile_name, profile in vespa_classifiers_profile.items():
-            mappings[profile_name] = f"{profile.name}.{profile.id}"
-
-        vespa_classifiers_profiles = VespaClassifiersProfiles(
-            id="default",
-            mappings=mappings,
-            response_raw={},
-        )
-
-    except Exception as e:
-        results.append(
-            log_and_return_error(
-                logger,
-                msg=f"Error creating VespaClassifiersProfile(s) objects: {format_error(e)}",
-                metadata={},
-            )
-        )
-        return results
-
-    # sync to vespa
-    if not upload_to_vespa:
-        logger.info("Upload to Vespa is not enabled. Skipping upload step.")
-        results.append(Ok(None))
-    else:
-        logger.info("Syncing classifiers profiles to Vespa...")
-        # sync VespaClassifiersProfile to vespa
-        for profile_name, profile in vespa_classifiers_profile.items():
-            fields = JsonDict(profile.model_dump(mode="json", exclude={"response_raw"}))
-            doc_id = f"{profile.name}.{profile.id}"
-
-            response: VespaResponse = await vespa_connection_pool.update_data(
-                schema="classifiers_profile",
-                namespace="doc_search",
-                data_id=doc_id,
-                create=True,  # create document if it doesn't exist
-                fields=fields,
-            )
-
-            if not response.is_successful():
-                results.append(
-                    log_and_return_error(
-                        logger,
-                        msg=f"Error syncing VespaClassifiersProfile {profile_name} to Vespa",
-                        metadata={
-                            "response": response.get_json(),
-                            "classifiers_profile": profile_name,
-                        },
-                    )
-                )
-                return results
-
-            logger.info(
-                f"Synced VespaClassifiersProfile {profile_name} to Vespa with {len(profile.mappings)} mappings for doc id {doc_id}"
-            )
-
-        # sync VespaClassifiersProfiles to Vespa with default ID
-        fields = JsonDict(
-            vespa_classifiers_profiles.model_dump(
-                mode="json", exclude={"response_raw", "id"}
-            )
-        )
-        doc_id = "default"
-
-        response: VespaResponse = await vespa_connection_pool.update_data(
-            schema="classifiers_profiles",
-            namespace="doc_search",
-            data_id=doc_id,
-            create=True,  # create document if it doesn't exist
-            fields=fields,
-        )
-
-        if not response.is_successful():
-            results.append(
-                log_and_return_error(
-                    logger,
-                    msg="Error syncing VespaClassifiersProfiles to Vespa",
-                    metadata={"response": response.get_json(), "fields": fields},
-                )
-            )
-            return results
-
-        logger.info(
-            f"Synced VespaClassifiersProfiles to doc id {doc_id}, with mappings: {vespa_classifiers_profiles.mappings} and fields {fields}"
-        )
-
-        results.append(Ok(None))
-
-    return results
-
-
 def emit_finished(
     promotions: list[Promote],
     updates: list[Update],
@@ -1244,97 +1039,6 @@ def emit_finished(
                     "event": event,
                     "resource": resource,
                     "payload": payload,
-                    "exception": format_error(e),
-                },
-            )
-        )
-
-
-def maybe_allow_retiring(
-    op: Promote | Update,
-    vespa_search_adapter: VespaSearchAdapter,
-    wandb_results: list[Result[Dict, Error]],
-) -> tuple[
-    bool,
-    list[Result[Dict, Error]],
-]:
-    """If the operation is for a retiring profile, check for some results in Vespa."""
-    logger = get_logger()
-
-    if op.classifiers_profile_mapping.classifiers_profile != Profile.RETIRED:
-        return True, wandb_results
-
-    match concept_present_in_vespa(
-        wikibase_id=op.classifiers_profile_mapping.wikibase_id,
-        classifier_id=op.classifiers_profile_mapping.classifier_id,
-        vespa_search_adapter=vespa_search_adapter,
-    ):
-        case Ok(True):
-            logger.info(
-                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has results in Vespa, and can be retired"
-            )
-            return True, wandb_results
-        case Ok(False):
-            logger.info(
-                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has no results in Vespa, and can't be retired"
-            )
-            wandb_results.append(
-                Err(
-                    Error(
-                        msg="no results found in Vespa, so can't retire",
-                        metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
-                    )
-                )
-            )
-            return False, wandb_results
-        case Err(e):
-            logger.info(
-                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} failed to be checked for in Vespa: {str(e)}"
-            )
-            e.msg = e.msg + ". Failed to check for results in Vespa, so can't retire"
-            wandb_results.append(Err(e))
-            return False, wandb_results
-
-    wandb_results.append(
-        Err(
-            Error(
-                msg="failed to check for concept being present in Vespa",
-                metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
-            )
-        )
-    )
-    return False, wandb_results
-
-
-def concept_present_in_vespa(
-    wikibase_id: WikibaseID,
-    classifier_id: ClassifierID,
-    vespa_search_adapter: VespaSearchAdapter,
-) -> Result[bool, Error]:
-    """Check if a Concept<>Classifier has some results in Vespa."""
-    try:
-        response = vespa_search_adapter.search(
-            SearchParameters(
-                concept_v2_document_filters=[
-                    ConceptV2DocumentFilter(
-                        concept_wikibase_id=wikibase_id,
-                        classifier_id=classifier_id,
-                    )
-                ],
-                documents_only=True,
-                # Use the presence of 1 as proof that data is there
-                limit=1,
-            )
-        )
-
-        return Ok(len(response.results) > 0)
-    except Exception as e:
-        return Err(
-            Error(
-                msg="failed to search Vespa for results",
-                metadata={
-                    "concept_wikibase_id": wikibase_id,
-                    "classifier_id": classifier_id,
                     "exception": format_error(e),
                 },
             )
