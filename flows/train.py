@@ -9,6 +9,7 @@ import yaml
 from prefect import flow, task
 
 from flows.config import Config
+from flows.utils import SlackNotifyKnowledgeGraph
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaConfig
@@ -66,7 +67,10 @@ async def _set_up_training_environment(
     return config, wikibase_config, argilla_config, s3_client
 
 
-@flow()
+@flow(
+    on_failure=[SlackNotifyKnowledgeGraph.message],
+    on_crashed=[SlackNotifyKnowledgeGraph.message],
+)
 async def train_on_gpu(
     wikibase_id: WikibaseID,
     track_and_upload: bool = True,
@@ -102,7 +106,10 @@ async def train_on_gpu(
     )
 
 
-@flow()
+@flow(
+    on_failure=[SlackNotifyKnowledgeGraph.message],
+    on_crashed=[SlackNotifyKnowledgeGraph.message],
+)
 async def train_on_cpu(
     wikibase_id: WikibaseID,
     track_and_upload: bool = True,
@@ -175,7 +182,10 @@ def load_wikibase_ids_from_config(
     return wikibase_ids
 
 
-@flow()
+@flow(
+    on_failure=[SlackNotifyKnowledgeGraph.message],
+    on_crashed=[SlackNotifyKnowledgeGraph.message],
+)
 async def train_from_config(
     config_file_path: str,
     track_and_upload: bool = True,
