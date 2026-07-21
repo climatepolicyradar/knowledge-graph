@@ -5,7 +5,6 @@ from unittest.mock import ANY, AsyncMock, Mock, patch
 import pytest
 from cpr_sdk.models.search import ClassifiersProfile as VespaClassifiersProfile
 from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
-from cpr_sdk.search_adaptors import VespaSearchAdapter
 from pydantic import SecretStr
 
 from flows.classifier_specs.spec_interface import ClassifierSpec
@@ -1168,9 +1167,6 @@ async def test_send_classifiers_profile_slack_alert_success():
     wandb_errors = [
         Error(msg="WandB error", metadata={"wikibase_id": "Q3"}),
     ]
-    vespa_errors = [
-        Error(msg="Vespa error", metadata={"wikibase_id": "Q4"}),
-    ]
     successes = [
         {"wikibase_id": "Q5", "classifier_id": "abcd2345"},
         {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
@@ -1193,11 +1189,9 @@ async def test_send_classifiers_profile_slack_alert_success():
         await send_classifiers_profile_slack_alert(
             validation_errors=validation_errors,
             wandb_errors=wandb_errors,
-            vespa_errors=vespa_errors,
             successes=successes,
             aws_env=AwsEnv.production,
             upload_to_wandb=True,
-            upload_to_vespa=True,
             event=Mock(),
             cs_pr_results=pr_results,
             s3_result=s3_result,
@@ -1205,7 +1199,7 @@ async def test_send_classifiers_profile_slack_alert_success():
 
         mock_slack_client.chat_postMessage.assert_any_call(
             channel="alerts-platform-production",
-            text="Classifiers Profile Sync Summary: uploading to W&B uploading to Vespa",
+            text="Classifiers Profile Sync Summary: uploading to W&B",
             attachments=ANY,  # ignore content of attachments
         )
 
@@ -1224,12 +1218,6 @@ async def test_send_classifiers_profile_slack_alert_success():
         mock_slack_client.chat_postMessage.assert_any_call(
             channel="alerts-platform-production",
             thread_ts="12345",
-            text=f"Vespa Errors: {len(vespa_errors)} issues found",
-            blocks=ANY,
-        )
-        mock_slack_client.chat_postMessage.assert_any_call(
-            channel="alerts-platform-production",
-            thread_ts="12345",
             text="PR Errors: 1 issues found",
             blocks=ANY,
         )
@@ -1240,7 +1228,7 @@ async def test_send_classifiers_profile_slack_alert_success():
             blocks=ANY,
         )
         assert spy_post_errors_main.call_count == 2
-        assert spy_post_errors_thread.call_count == 5
+        assert spy_post_errors_thread.call_count == 4
 
 
 @pytest.mark.asyncio
@@ -1268,11 +1256,9 @@ async def test_send_classifiers_profile_slack_alert__slack_failure():
                 Error(msg="Validation error: test", metadata={"wikibase_id": "Q1"}),
             ],
             wandb_errors=[],
-            vespa_errors=[],
             successes=[],
             aws_env=AwsEnv.staging,
             upload_to_wandb=True,
-            upload_to_vespa=True,
             event=Mock(),
             cs_pr_results=Mock(),
             s3_result=Mock(),
@@ -1280,7 +1266,7 @@ async def test_send_classifiers_profile_slack_alert__slack_failure():
 
         mock_slack_client.chat_postMessage.assert_called_once_with(
             channel="alerts-concept-store",
-            text="Classifiers Profile Sync Summary: uploading to W&B uploading to Vespa",
+            text="Classifiers Profile Sync Summary: uploading to W&B",
             attachments=ANY,
         )
 
@@ -1304,11 +1290,6 @@ async def test_sync_classifiers_profiles(
     # mock wandb api key
     mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
     mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
-
-    # mock vespa search adaptor for calls to concept_present_in_vespa
-    mock_vespa_search_adapter = Mock(VespaSearchAdapter(instance_url="test-url"))
-    mock_vespa_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
-    mock_vespa_search_adapter.client.asyncio.return_value = AsyncMock()
 
     # mock create_and_merge_pr results as async function
     pr_number = 123
@@ -1383,10 +1364,6 @@ async def test_sync_classifiers_profiles(
             "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
         ) as mock_acreate_table_artifact,
         patch(
-            "flows.classifiers_profiles.update_vespa_with_classifiers_profiles",
-            wraps=update_vespa_with_classifiers_profiles,
-        ) as spy_update_vespa_with_classifiers_profiles,
-        patch(
             "flows.classifiers_profiles.export_classifier_specs_to_s3",
             mock_export_to_s3,
         ) as mock_export_classifier_specs_to_s3,
@@ -1394,7 +1371,6 @@ async def test_sync_classifiers_profiles(
         await sync_classifiers_profiles(
             wandb_api_key=mock_wandb_api_key,
             wikibase_auth=mock_wikibase_auth,
-            vespa_search_adapter=mock_vespa_search_adapter,
             github_token=Mock(SecretStr("mock-github-token")),
             upload_to_wandb=False,
             upload_to_vespa=False,
@@ -1416,12 +1392,8 @@ async def test_sync_classifiers_profiles(
         assert "updating" in action_calls
         assert "promoting" in action_calls
 
-        # check vespa search called once (1 update with retired profile)
-        mock_vespa_search_adapter.search.assert_called_once()
         # check create and merge pr called once
         mock_create_and_merge_pr.assert_called_once()
-        # check vespa called
-        spy_update_vespa_with_classifiers_profiles.assert_called_once()
         # check S3 export called
         mock_export_classifier_specs_to_s3.assert_called_once()
 
@@ -1429,7 +1401,7 @@ async def test_sync_classifiers_profiles(
         assert mock_slack_client.chat_postMessage.call_count == 2
         mock_slack_client.chat_postMessage.assert_any_call(
             channel="alerts-concept-store",  # validation errors only
-            text="Classifiers Profile Sync Summary: (dry run, not uploading to W&B) (dry run, not uploading to Vespa)",
+            text="Classifiers Profile Sync Summary: (dry run, not uploading to W&B)",
             attachments=ANY,
         )
 
@@ -1466,11 +1438,6 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
     # mock wandb api key
     mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
     mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
-
-    # mock vespa search adaptor for calls to concept_present_in_vespa
-    mock_vespa_search_adapter = Mock(VespaSearchAdapter(instance_url="test-url"))
-    mock_vespa_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
-    mock_vespa_search_adapter.client.asyncio.return_value = AsyncMock()
 
     # mock create_and_merge_pr results as async function with error
     mock_pr_results = Err(Error(msg="Error creating PR", metadata={}))
@@ -1540,10 +1507,6 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
             "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
         ) as mock_acreate_table_artifact,
         patch(
-            "flows.classifiers_profiles.update_vespa_with_classifiers_profiles",
-            wraps=update_vespa_with_classifiers_profiles,
-        ) as spy_update_vespa_with_classifiers_profiles,
-        patch(
             "flows.classifiers_profiles.export_classifier_specs_to_s3",
             mock_export_to_s3,
         ) as mock_export_classifier_specs_to_s3,
@@ -1554,7 +1517,6 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
             await sync_classifiers_profiles(
                 wandb_api_key=mock_wandb_api_key,
                 wikibase_auth=mock_wikibase_auth,
-                vespa_search_adapter=mock_vespa_search_adapter,
                 github_token=Mock(SecretStr("mock-github-token")),
                 upload_to_wandb=False,
                 upload_to_vespa=False,
@@ -1564,8 +1526,6 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
                 enable_slack_notifications=True,
             )
 
-        # vespa should not be called when create PR fails
-        spy_update_vespa_with_classifiers_profiles.assert_not_called()
         # check create and merge pr called once
         mock_create_and_merge_pr.assert_called_once()
         # check s3 sync not called
@@ -1604,11 +1564,6 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
     # mock wandb api key
     mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
     mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
-
-    # mock vespa search adaptor for calls to concept_present_in_vespa
-    mock_vespa_search_adapter = Mock(VespaSearchAdapter(instance_url="test-url"))
-    mock_vespa_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
-    mock_vespa_search_adapter.client.asyncio.return_value = AsyncMock()
 
     # mock create_and_merge_pr results as async function
     pr_number = 123
@@ -1679,10 +1634,6 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
             "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
         ) as mock_acreate_table_artifact,
         patch(
-            "flows.classifiers_profiles.update_vespa_with_classifiers_profiles",
-            wraps=update_vespa_with_classifiers_profiles,
-        ) as spy_update_vespa_with_classifiers_profiles,
-        patch(
             "flows.classifiers_profiles.export_classifier_specs_to_s3",
             mock_export_to_s3,
         ) as mock_export_classifier_specs_to_s3,
@@ -1693,7 +1644,6 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
             await sync_classifiers_profiles(
                 wandb_api_key=mock_wandb_api_key,
                 wikibase_auth=mock_wikibase_auth,
-                vespa_search_adapter=mock_vespa_search_adapter,
                 github_token=Mock(SecretStr("mock-github-token")),
                 upload_to_wandb=False,
                 upload_to_vespa=False,
@@ -1703,8 +1653,6 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
                 enable_slack_notifications=True,
             )
 
-        # vespa should not be called when create PR fails
-        spy_update_vespa_with_classifiers_profiles.assert_not_called()
         # check create and merge pr called once
         mock_create_and_merge_pr.assert_called_once()
         # check s3 sync called once
@@ -1728,134 +1676,6 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
 
 
 @pytest.mark.asyncio
-async def test_sync_classifiers_profiles__failure_updating_vespa(
-    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
-):
-    """
-    Test full sync_classifiers_profiles when no changes to classifier specs
-
-    Create and merge PR does not run and vespa fails
-    """
-
-    # mock wikibase session and return concepts and classifier ids from calls
-    mock_wikibase_session = AsyncMock()
-    mock_wikibase_session.get_concepts_async.return_value = mock_concepts
-    mock_wikibase_session.get_classifier_ids_async = AsyncMock(
-        side_effect=mock_classifier_ids
-    )
-
-    # mock wandb api key
-    mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
-    mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
-
-    # mock vespa search adaptor for calls to concept_present_in_vespa
-    mock_vespa_search_adapter = Mock(VespaSearchAdapter(instance_url="test-url"))
-    mock_vespa_search_adapter.search.return_value = Mock(results=[{"doc1": "data"}])
-    mock_vespa_search_adapter.client.asyncio.return_value = AsyncMock()
-
-    # mock create_and_merge_pr results
-    mock_create_and_merge_pr = AsyncMock(return_value=Ok(123))
-
-    # wandb validation mocks
-    mock_metadata = {"aws_env": "sandbox", "classifier_name": "ValidClassifier"}
-    mock_artifacts = [
-        Mock(version="v1", metadata=mock_metadata),
-        Mock(version="v2", metadata=mock_metadata),
-    ]
-    mock_api = Mock()
-    mock_api.return_value.artifacts.return_value = mock_artifacts
-
-    mock_artifact = Mock()
-    mock_artifact.metadata = mock_metadata
-    mock_artifact.logged_by.return_value.config = {}
-
-    mock_api.return_value.artifact.return_value = mock_artifact
-
-    mock_slack_client = AsyncMock()
-    mock_slack_client.chat_postMessage.return_value = {"ok": True, "ts": "12345"}
-
-    mock_vespa_results = [Err(Error(msg="Error creating Vespa Objects", metadata={}))]
-    mock_update_vespa = AsyncMock(return_value=mock_vespa_results)
-
-    # mock S3 export
-    mock_export_to_s3 = AsyncMock(
-        return_value=Ok("s3://bucket/key/classifier_specs.json")
-    )
-
-    with (
-        patch(
-            "flows.classifiers_profiles.WikibaseSession",
-            return_value=mock_wikibase_session,
-        ),
-        patch(
-            "flows.classifiers_profiles.load_classifier_specs",
-            return_value=[mock_specs],
-        ),
-        patch("wandb.login"),
-        patch("wandb.Api", return_value=mock_api.return_value),
-        patch("flows.classifiers_profiles.refresh_all_available_classifiers"),
-        patch(
-            "flows.classifiers_profiles.update_vespa_with_classifiers_profiles",
-            mock_update_vespa,
-        ),
-        patch(
-            "flows.classifiers_profiles.create_classifiers_specs_pr.create_and_merge_pr",
-            mock_create_and_merge_pr,
-        ),
-        patch(
-            "flows.classifiers_profiles.get_slack_client",
-            return_value=mock_slack_client,
-        ),
-        patch(
-            "flows.classifiers_profiles.acreate_table_artifact", new_callable=AsyncMock
-        ) as mock_acreate_table_artifact,
-        patch(
-            "flows.classifiers_profiles.export_classifier_specs_to_s3",
-            mock_export_to_s3,
-        ) as mock_export_classifier_specs_to_s3,
-    ):
-        with pytest.raises(
-            Exception,
-            match="Errors occurred while updating Vespa with classifiers profiles",
-        ):
-            await sync_classifiers_profiles(
-                wandb_api_key=mock_wandb_api_key,
-                wikibase_auth=mock_wikibase_auth,
-                vespa_search_adapter=mock_vespa_search_adapter,
-                github_token=Mock(SecretStr("mock-github-token")),
-                upload_to_wandb=False,
-                upload_to_vespa=False,
-                automerge_classifier_specs_pr=False,
-                auto_train=False,
-                debug_wikibase_validation=False,
-                enable_slack_notifications=True,
-            )
-
-        # vespa should be called once and return exception
-        mock_update_vespa.assert_called_once()
-        # check create and merge pr should not be called as no change to classifiers specs
-        mock_create_and_merge_pr.assert_not_called()
-        # check sync to s3 is not called as no change to classifiers specs
-        mock_export_classifier_specs_to_s3.assert_not_called()
-
-        # use artifact call args to check final results
-        mock_acreate_table_artifact.assert_called_once()
-        artifact_call_args = mock_acreate_table_artifact.call_args.kwargs
-        assert artifact_call_args["key"] == "classifiers-profiles-validation-sandbox"
-        assert (
-            len(artifact_call_args["table"]) == 2 + 3 + 1
-        )  # number rows: 2 successes + 3 validation errors + 1 vespa error
-        assert (
-            "**Classifiers Specs PR**: No PR created"
-            in artifact_call_args["description"]
-        )
-        assert (
-            "**Classifiers Specs S3 sync**: No s3 sync"
-            in artifact_call_args["description"]
-        )
-
-
-@pytest.mark.asyncio
 async def test_create_classifiers_profiles_artifact():
     validation_errors = [
         Error(msg="Validation error 1", metadata={"wikibase_id": "Q1"}),
@@ -1863,9 +1683,6 @@ async def test_create_classifiers_profiles_artifact():
     ]
     wandb_errors = [
         Error(msg="WandB error 1", metadata={"wikibase_id": "Q3"}),
-    ]
-    vespa_errors = [
-        Error(msg="Vespa error 1", metadata={"wikibase_id": "Q4"}),
     ]
     successes = [
         {"wikibase_id": "Q5", "classifier_id": "abcd2345"},
@@ -1890,7 +1707,6 @@ async def test_create_classifiers_profiles_artifact():
         await create_classifiers_profiles_artifact(
             validation_errors=validation_errors,
             wandb_errors=wandb_errors,
-            vespa_errors=vespa_errors,
             successes=successes,
             aws_env=aws_env,
             cs_pr_results=cs_pr_results,
@@ -1910,7 +1726,7 @@ async def test_create_classifiers_profiles_artifact():
         # Assert the table contains the correct number of rows
         assert len(table) == len(successes) + len(validation_errors) + len(
             wandb_errors
-        ) + len(vespa_errors)  # pr errors not added to table
+        )  # pr errors not added to table
 
         # Assert the description contains the PR number
         pr_error = unwrap_err(cs_pr_results)
@@ -1946,7 +1762,6 @@ async def test_create_classifiers_profiles_artifact__pr_error():
         await create_classifiers_profiles_artifact(
             validation_errors=validation_errors,
             wandb_errors=wandb_errors,
-            vespa_errors=vespa_errors,
             successes=successes,
             aws_env=aws_env,
             cs_pr_results=cs_pr_results,

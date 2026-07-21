@@ -6,7 +6,6 @@ Assumes that the classifier model has been trained in wandb
 
 import json
 import os
-import tempfile
 import textwrap
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -14,7 +13,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 import boto3
-import httpx
 import wandb
 from cpr_sdk.models.search import ClassifiersProfile as VespaClassifiersProfile
 from cpr_sdk.models.search import ClassifiersProfiles as VespaClassifiersProfiles
@@ -34,7 +32,6 @@ from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
 import flows.create_classifiers_specs_pr as create_classifiers_specs_pr
-from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.classifier_metadata import update as update_classifier_metadata
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
@@ -494,7 +491,6 @@ async def get_classifiers_profiles(
 async def create_classifiers_profiles_artifact(
     validation_errors: list[Error],
     wandb_errors: list[Error],
-    vespa_errors: list[Error],
     successes: list[Dict],
     aws_env: AwsEnv,
     cs_pr_results: Result[int | None, Error],
@@ -502,11 +498,10 @@ async def create_classifiers_profiles_artifact(
 ):
     """Create an artifact with a summary of the classifiers profiles validation checks"""
 
-    # vespa errors can be per vespa request or per concept and are excluded from total concepts count
     total_concepts = len(successes) + len(validation_errors) + len(wandb_errors)
     successful_concepts = len(successes)
 
-    all_failures = validation_errors + wandb_errors + vespa_errors
+    all_failures = validation_errors + wandb_errors
     failed_concepts = len(all_failures)
 
     pr_details = ""
@@ -557,7 +552,6 @@ async def create_classifiers_profiles_artifact(
 - **Failed Wikibase IDs**: {failed_concepts}
 - **W&B Errors**: {len(wandb_errors)}
 - **Validation Errors**: {len(validation_errors)}
-- **Vespa Errors**: {len(vespa_errors)}
 - **Classifiers Specs PR**: {pr_details}
 - **Classifiers Specs S3 sync**: {s3_sync_details}
 """
@@ -660,11 +654,9 @@ def summarise_spec_changes(
 async def send_classifiers_profile_slack_alert(
     validation_errors: list[Error],
     wandb_errors: list[Error],
-    vespa_errors: list[Error],
     successes: list[Dict],
     aws_env: AwsEnv,
     upload_to_wandb: bool,
-    upload_to_vespa: bool,
     event: Result[Event | None, Error],
     cs_pr_results: Result[int | None, Error],
     s3_result: Result[str | None, Error],
@@ -677,14 +669,13 @@ async def send_classifiers_profile_slack_alert(
     logger = get_logger()
     slack_client = await get_slack_client()
 
-    # vespa_errors can be per vespa request or per concept and are excluded from total concepts count
     total_concepts = len(successes) + len(validation_errors) + len(wandb_errors)
 
     event_errors = [unwrap_err(event)] if is_err(event) else []
     pr_errors = [unwrap_err(cs_pr_results)] if is_err(cs_pr_results) else []
     s3_errors = [unwrap_err(s3_result)] if is_err(s3_result) else []
 
-    other_errors = wandb_errors + vespa_errors + event_errors + pr_errors + s3_errors
+    other_errors = wandb_errors + event_errors + pr_errors + s3_errors
     try:
         if len(validation_errors) > 0:
             # validation errors sent to policy team channel
@@ -696,7 +687,6 @@ async def send_classifiers_profile_slack_alert(
                 total_concepts=total_concepts,
                 errors=len(validation_errors),
                 upload_to_wandb=upload_to_wandb,
-                upload_to_vespa=upload_to_vespa,
                 error_type="Data Quality Issues",
             )
 
@@ -737,7 +727,6 @@ async def send_classifiers_profile_slack_alert(
                 total_concepts=total_concepts,
                 errors=len(other_errors),
                 upload_to_wandb=upload_to_wandb,
-                upload_to_vespa=upload_to_vespa,
                 error_type="System Errors",
             )
 
@@ -760,14 +749,6 @@ async def send_classifiers_profile_slack_alert(
                         thread_ts=thread_ts,
                         errors=wandb_errors,
                         error_type="W&B Errors",
-                    )
-                if vespa_errors:
-                    await _post_errors_thread(
-                        slack_client=slack_client,
-                        channel=channel,
-                        thread_ts=thread_ts,
-                        errors=vespa_errors,
-                        error_type="Vespa Errors",
                     )
                 if event_errors:
                     await _post_errors_thread(
@@ -808,7 +789,6 @@ async def _post_errors_main(
     total_concepts: int,
     errors: int,
     upload_to_wandb: bool,
-    upload_to_vespa: bool,
     error_type: str,
 ):
     # Create summary blocks
@@ -851,10 +831,6 @@ async def _post_errors_main(
         header += " uploading to W&B"
     else:
         header += " (dry run, not uploading to W&B)"
-    if upload_to_vespa:
-        header += " uploading to Vespa"
-    else:
-        header += " (dry run, not uploading to Vespa)"
 
     return await slack_client.chat_postMessage(
         channel=channel,
@@ -1427,7 +1403,6 @@ async def sync_classifiers_profiles(
     wikibase_cache_path: Path | None = None,
     wikibase_cache_save_if_missing: bool = False,
     github_token: SecretStr | None = None,
-    vespa_search_adapter: VespaSearchAdapter | None = None,
     upload_to_wandb: bool = False,  # set to False for dry run by default
     upload_to_vespa: bool = True,
     automerge_classifier_specs_pr: bool = False,
@@ -1444,16 +1419,6 @@ async def sync_classifiers_profiles(
     # Pull it from the environment, as is our approach in Prefect, and
     # thus elsewhere, since this is run Prefect-first.
     aws_env = AwsEnv(os.environ["AWS_ENV"])
-
-    if not vespa_search_adapter:
-        logger.info("no Vespa search adapter provided, getting one from AWS secrets")
-        temp_dir = tempfile.TemporaryDirectory()
-        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-            cert_dir=temp_dir.name,
-            vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-            vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
-            aws_env=aws_env,
-        )
 
     logger.info(f"Wikibase Cache Path: {wikibase_cache_path}")
     if not wandb_api_key:
@@ -1570,14 +1535,6 @@ async def sync_classifiers_profiles(
                     promotions.append(a)
 
             case Update() as u:
-                allow_retiring_or_other_action, wandb_results = maybe_allow_retiring(
-                    u,
-                    vespa_search_adapter,
-                    wandb_results,
-                )
-                if not allow_retiring_or_other_action:
-                    continue
-
                 logger.info(
                     f"update called for {u.classifier_spec.wikibase_id}, {u.classifier_spec.classifier_id}, {u.classifier_spec.classifiers_profile} to {u.classifiers_profile_mapping.classifiers_profile}"
                 )
@@ -1685,35 +1642,13 @@ async def sync_classifiers_profiles(
         else:
             logger.info(f"exported classifier specs to {unwrap_ok(s3_result)}")
 
-    vespa_results = []
-
     if is_err(cs_pr_results) or is_err(s3_result):
-        logger.warning(
-            "Error creating and merging PR or syncing to s3, skipping Vespa updates"
-        )
-    else:
-        logger.info("Updating Vespa with classifiers profiles...")
-        # vespa will update every pipeline run if no PR errors
-        # the update will overwrite the doc if the field are unchanged
-        # or if there are changes to the fields but same doc_id
-        # or create a new document if a new doc_id is generated or it does not exist
-        async with vespa_search_adapter.client.asyncio(
-            connections=VESPA_CONNECTION_POOL_SIZE,
-            timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_M.total_seconds()),
-        ) as vespa_connection_pool:
-            vespa_results = await update_vespa_with_classifiers_profiles(
-                updated_classifier_specs, vespa_connection_pool, upload_to_vespa
-            )
+        logger.warning("Error creating and merging PR or syncing to s3")
 
-    vespa_errors = [unwrap_err(r) for r in vespa_results if isinstance(r, Err)]
-
-    # The default, assuming there were no Vespa successes
     event: Result[Event | None, Error] = Ok(None)
-    if any(map(is_ok, vespa_results)) and auto_train:
-        logger.info("found at least 1 Vespa success, emitting finished event")
+    if auto_train:
+        logger.info("Emitting finished event")
         event = emit_finished(
-            # This is a vague check, since all of the promotions may
-            # have failed in updating Vespa to reflect them.
             promotions=promotions,
             updates=updates,
             demotions=demotions,
@@ -1727,11 +1662,9 @@ async def sync_classifiers_profiles(
             await send_classifiers_profile_slack_alert(
                 validation_errors=validation_errors,
                 wandb_errors=wandb_errors,
-                vespa_errors=vespa_errors,
                 successes=successes,
                 aws_env=aws_env,
                 upload_to_wandb=upload_to_wandb,
-                upload_to_vespa=upload_to_vespa,
                 event=event,
                 cs_pr_results=cs_pr_results,
                 s3_result=s3_result,
@@ -1742,7 +1675,6 @@ async def sync_classifiers_profiles(
     await create_classifiers_profiles_artifact(
         validation_errors=validation_errors,
         wandb_errors=wandb_errors,
-        vespa_errors=vespa_errors,
         successes=successes,
         aws_env=aws_env,
         cs_pr_results=cs_pr_results,
@@ -1757,10 +1689,6 @@ async def sync_classifiers_profiles(
     if is_err(s3_result):
         raise Exception(
             f"Errors occurred while syncing classifiers specs to S3: {unwrap_err(s3_result)}"
-        )
-    if len(vespa_errors) > 0:
-        raise Exception(
-            f"Errors occurred while updating Vespa with classifiers profiles: {vespa_errors}"
         )
 
     logger.info("Successfully completed classifiers profiles sync")
