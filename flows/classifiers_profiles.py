@@ -1346,18 +1346,18 @@ async def sync_classifiers_profiles(
         else:
             logger.info(f"exported classifier specs to {unwrap_ok(s3_result)}")
 
+    event: Result[Event | None, Error] = Ok(None)
     if is_err(cs_pr_results) or is_err(s3_result):
         logger.warning("Error creating and merging PR or syncing to s3")
-
-    event: Result[Event | None, Error] = Ok(None)
-    if auto_train:
-        logger.info("Emitting finished event")
-        event = emit_finished(
-            promotions=promotions,
-            updates=updates,
-            demotions=demotions,
-            aws_env=aws_env,
-        )
+    else:
+        if auto_train:
+            logger.info("Emitting finished event")
+            event = emit_finished(
+                promotions=promotions,
+                updates=updates,
+                demotions=demotions,
+                aws_env=aws_env,
+            )
 
     if not enable_slack_notifications:
         logger.warning("Slack notifications are not enabled")
