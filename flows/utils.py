@@ -329,6 +329,26 @@ class SlackNotify:
                 return "🛑"
 
 
+class SlackNotifyKnowledgeGraph(SlackNotify):
+    """
+    Notify the knowledge-graph pipeline channel instead of alerts-platform.
+
+    Used by the build/predict/train flows so their alerts land in a
+    dedicated channel. Requires a Prefect `SlackWebhook` block, wrapping a
+    Slack incoming webhook that posts to `#alerts-knowledge-graph`,
+    registered in each Prefect workspace as
+    `slack-webhook-alerts-knowledge-graph-prefect-mvp-<env>`. The incoming
+    webhook posts to its pre-configured channel, so no bot invite is needed.
+
+    Unlike the per-environment `alerts-platform-<env>` channels, all
+    environments intentionally post to the single `#alerts-knowledge-graph`
+    channel; the per-env block name only selects the right webhook block.
+    """
+
+    slack_channel_name = "alerts-knowledge-graph"
+    slack_block_name = f"slack-webhook-{slack_channel_name}-prefect-mvp-{SlackNotify.environment.value}"
+
+
 class S3Uri:
     """A URI for an S3 object."""
 
