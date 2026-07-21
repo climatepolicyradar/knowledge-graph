@@ -1,15 +1,12 @@
 import json
 import os
-import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-import httpx
 import polars as pl
 from cpr_sdk.models.search import Concept as VespaConcept
 from cpr_sdk.models.search import WikibaseId as VespaWikibaseId
-from cpr_sdk.search_adaptors import VespaSearchAdapter
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
 from prefect.artifacts import acreate_table_artifact
@@ -20,7 +17,6 @@ from pydantic import AnyHttpUrl, SecretStr, ValidationError
 from vespa.application import VespaAsync
 from vespa.io import VespaResponse
 
-from flows.boundary import get_vespa_search_adapter_from_aws_secrets
 from flows.utils import (
     JsonDict,
     S3Uri,
@@ -880,28 +876,20 @@ async def _post_other_errors(
 async def sync_concepts(
     aws_env: AwsEnv | None = None,
     wikibase_auth: WikibaseAuth | None = None,
-    vespa_search_adapter: VespaSearchAdapter | None = None,
     wikibase_cache_path: Path | None = None,
     wikibase_cache_save_if_missing: bool = False,
     concepts_archive_path: Path | S3Uri | None = None,
 ):
     """
-    Sync new, or all, concepts' versions from Wikibase to Vespa.
+    Sync new, or all, concepts' versions from Wikibase to S3.
 
     The sync state is stored in data frames in S3. If there's no state
     so far, a new data frame is written, and all concepts are synced.
     If there is existing state, then only the new concepts or new
     versions of existing concepts are synced.
 
-    New versions are only written in the new data frame if they were
-    synced in Vespa. This way you can re-run the flow, without having
-    to modify the state, to try again.
-
     The side-effects are data frames in S3 and documents inserted ino
     Vespa.
-
-    If no Vespa search adapter is passed, then one is gotten from AWS
-    parameters.
 
     If no WikibaseAuth is passed, credentials are fetched from AWS SSM.
 
@@ -993,72 +981,22 @@ async def sync_concepts(
     if not len(new_versions):
         return
 
-    kg_concepts = dataframe_to_concepts(new_versions)
-
-    if not vespa_search_adapter:
-        temp_dir = tempfile.TemporaryDirectory()
-        vespa_search_adapter = get_vespa_search_adapter_from_aws_secrets(
-            cert_dir=temp_dir.name,
-            vespa_private_key_param_name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-            vespa_public_cert_param_name="VESPA_PUBLIC_CERT_FULL_ACCESS",
-            aws_env=aws_env,
-        )
-
-    # Update concepts in Vespa using a subflow
-    async with vespa_search_adapter.client.asyncio(
-        connections=5,
-        timeout=httpx.Timeout(VESPA_MAX_TIMEOUT_MS / 1_000),
-    ) as vespa_connection_pool:
-        results = await update_concepts_in_vespa(
-            kg_concepts=kg_concepts,
-            vespa_connection_pool=vespa_connection_pool,
-        )
-
-    successes = [r._value for r in results if isinstance(r, Ok)]
-
-    if failures := [r._error for r in results if isinstance(r, Err)]:
-        try:
-            await send_concept_validation_alert(
-                failures=failures,
-                total_concepts=len(results),
-                aws_env=aws_env,
-            )
-        except Exception as e:
-            logger.error(f"failed to send validation alert: {e}")
-
-    # Only write Parquet if we have successful syncs
     append_path: str | Path | None = None
-    if successes:
-        logger.info(f"successfully synced {len(successes)} concepts to Vespa")
 
-        # Convert successful concepts back to DataFrame
-        successful_df = concepts_to_dataframe(successes)
+    # Append new versions of concepts with timestamp-based filename
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    obj_name = f"concepts_{timestamp}.parquet"
 
-        # Append successful concepts with timestamp-based filename
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        obj_name = f"concepts_{timestamp}.parquet"
+    match concepts_archive_path:
+        case S3Uri():
+            append_path = f"{concepts_archive_path}/{obj_name}"
+        case Path():
+            append_path = concepts_archive_path / obj_name
 
-        match concepts_archive_path:
-            case S3Uri():
-                append_path = f"{concepts_archive_path}/{obj_name}"
-            case Path():
-                append_path = concepts_archive_path / obj_name
-
-        logger.info(f"appending {len(successes)} successful syncs to {append_path}")
-        successful_df.write_parquet(
-            append_path,
-            credential_provider=credential_provider,
-            storage_options=storage_options,
-        )
-        logger.info(f"successfully appended {len(successes)} rows to dataframe")
-    else:
-        logger.warning(
-            "no concepts successfully synced to Vespa, skipping Parquet write"
-        )
-
-    # Create artifact with results
-    await create_vespa_sync_summary_artifact(
-        results=results,
-        parquet_path=str(append_path) if append_path else None,
-        aws_env=aws_env,
+    logger.info(f"appending {len(new_versions)} new versions to {append_path}")
+    new_versions.write_parquet(
+        append_path,
+        credential_provider=credential_provider,
+        storage_options=storage_options,
     )
+    logger.info(f"successfully appended {len(new_versions)} rows to dataframe")
