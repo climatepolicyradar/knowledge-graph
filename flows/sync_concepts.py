@@ -61,19 +61,30 @@ def concepts_to_dataframe(concepts: list[Concept]) -> pl.DataFrame:
         ]
     )
 
-    # Cast Null columns to proper types for consistent schema Polars
-    # infers Null type when all values are None, but we want explicit
-    # types.
+    # Force explicit dtypes so empty/None columns don't infer as Null or
+    # List(Null), which differ from populated columns and break unioning the
+    # archive's Parquet files across runs.
     schema_casts = {
         "description": pl.Utf8,
         "definition": pl.Utf8,
+        "wikibase_id": pl.Utf8,
+        "wikibase_revision": pl.Int64,
+        "alternative_labels": pl.List(pl.Utf8),
+        "negative_labels": pl.List(pl.Utf8),
+        "subconcept_of": pl.List(pl.Utf8),
+        "has_subconcept": pl.List(pl.Utf8),
+        "related_concepts": pl.List(pl.Utf8),
+        "negative_concepts": pl.List(pl.Utf8),
         "recursive_subconcept_of": pl.List(pl.Utf8),
         "recursive_has_subconcept": pl.List(pl.Utf8),
     }
 
-    for col, dtype in schema_casts.items():
-        if col in df.columns and df[col].dtype == pl.Null:
-            df = df.with_columns(pl.col(col).cast(dtype))
+    if casts := [
+        pl.col(col).cast(dtype)
+        for col, dtype in schema_casts.items()
+        if col in df.columns and df[col].dtype != dtype
+    ]:
+        df = df.with_columns(casts)
 
     # Add sync timestamp to track when this version was synced
     df = df.with_columns(pl.lit(datetime.now(timezone.utc)).alias("synced_at"))
