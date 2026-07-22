@@ -20,6 +20,7 @@ from flows.utils import (
     ParameterisedFlow,
     S3Uri,
     SlackNotify,
+    SlackNotifyKnowledgeGraph,
     build_run_output_identifier,
     collect_unique_file_stems_under_prefix,
     file_name_from_path,
@@ -117,6 +118,28 @@ async def test_message(mock_prefect_slack_webhook, mock_flow, mock_flow_run):
 
     # Verify state message is included
     assert "message" in blocks[4]["text"]["text"]
+
+
+@pytest.mark.parametrize(
+    ("env", "expected_block_name"),
+    [
+        (AwsEnv.sandbox, "slack-webhook-alerts-knowledge-graph-prefect-mvp-sandbox"),
+        (AwsEnv.labs, "slack-webhook-alerts-knowledge-graph-prefect-mvp-labs"),
+        (AwsEnv.staging, "slack-webhook-alerts-knowledge-graph-prefect-mvp-staging"),
+        (AwsEnv.production, "slack-webhook-alerts-knowledge-graph-prefect-mvp-prod"),
+    ],
+)
+def test_slack_notify_knowledge_graph_block_name(env: AwsEnv, expected_block_name: str):
+    """The KG subclass posts to its own channel via a per-env webhook block."""
+    assert SlackNotifyKnowledgeGraph.slack_channel_name == "alerts-knowledge-graph"
+
+    with patch.object(SlackNotify, "environment", env):
+        block_name = (
+            f"slack-webhook-{SlackNotifyKnowledgeGraph.slack_channel_name}"
+            f"-prefect-mvp-{env.value}"
+        )
+
+    assert block_name == expected_block_name
 
 
 @pytest.mark.parametrize(

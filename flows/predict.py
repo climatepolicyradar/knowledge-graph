@@ -22,6 +22,7 @@ import wandb
 from prefect import flow
 
 from flows.config import Config
+from flows.utils import SlackNotifyKnowledgeGraph
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.operations.predict import (
@@ -53,7 +54,10 @@ async def _set_up_prediction_environment(
     return config
 
 
-@flow()
+@flow(
+    on_failure=[SlackNotifyKnowledgeGraph.message],
+    on_crashed=[SlackNotifyKnowledgeGraph.message],
+)
 async def predict_adhoc(
     wikibase_id: WikibaseID,
     classifier_wandb_path: str,
@@ -95,7 +99,10 @@ async def predict_adhoc(
     )
 
 
-@flow()
+@flow(
+    on_failure=[SlackNotifyKnowledgeGraph.message],
+    on_crashed=[SlackNotifyKnowledgeGraph.message],
+)
 async def predict_document_passages(
     document_ids: list[str],
     wikibase_id: WikibaseID,

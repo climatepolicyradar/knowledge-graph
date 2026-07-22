@@ -44,7 +44,12 @@ from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.config import wandb_model_artifact_filename
-from knowledge_graph.identifiers import Identifier, WikibaseID
+from knowledge_graph.identifiers import (
+    ClassifierID,
+    Identifier,
+    StatementRank,
+    WikibaseID,
+)
 from knowledge_graph.labelled_passage import LabelledPassage
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -715,6 +720,27 @@ def mock_concepts() -> Generator[list[Concept], None, None]:
             preferred_label="short-lived climate pollutant",
         ),
     ]
+
+
+@pytest.fixture
+def fully_populated_concept() -> Concept:
+    """A Concept with every collection field populated (ENRI-1505 regression)."""
+    return Concept(
+        wikibase_id=WikibaseID("Q40"),
+        wikibase_revision=42,
+        preferred_label="rising sea levels",
+        alternative_labels=["sea level rise"],
+        negative_labels=["falling sea levels"],
+        description="A short description of rising sea levels",
+        definition="A more exhaustive definition of rising sea levels",
+        subconcept_of=[WikibaseID("Q41")],
+        has_subconcept=[WikibaseID("Q42")],
+        related_concepts=[WikibaseID("Q43")],
+        negative_concepts=[WikibaseID("Q44")],
+        classifier_ids=[(StatementRank.PREFERRED, ClassifierID("abc23456"))],
+        recursive_subconcept_of=[WikibaseID("Q41"), WikibaseID("Q45")],
+        recursive_has_subconcept=[WikibaseID("Q42"), WikibaseID("Q46")],
+    )
 
 
 @pytest.fixture
