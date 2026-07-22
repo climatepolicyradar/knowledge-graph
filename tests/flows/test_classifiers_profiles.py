@@ -10,6 +10,7 @@ from flows.classifiers_profiles import (
     _post_errors_main,
     _post_errors_thread,
     compare_classifiers_profiles,
+    concept_has_results_in_S3,
     create_classifiers_profiles_artifact,
     demote_classifier_profile,
     emit_finished,
@@ -47,6 +48,7 @@ from knowledge_graph.result import (
 )
 from knowledge_graph.version import Version
 from knowledge_graph.wikibase import StatementRank, WikibaseAuth
+from tests.flows.conftest import load_fixture
 
 
 @pytest.fixture
@@ -736,6 +738,74 @@ def test_format_error():
 
 
 @pytest.mark.asyncio
+async def test_concept_present_in_S3__has_results(
+    mock_async_bucket, mock_s3_async_client
+):
+    wikibase_id = "Q218"
+    classifier_id = "q4xsgmjb"
+
+    fixture = load_fixture(
+        f"labelled_passages/{wikibase_id}/{classifier_id}/AF.document.002MMUCR.n0003.json"
+    )
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
+        Key=f"labelled_passages/{wikibase_id}/{classifier_id}/AF.document.002MMUCR.n0003.json",
+        Body=fixture,
+        ContentType="application/json",
+    )
+
+    result = concept_has_results_in_S3(
+        wikibase_id=WikibaseID(wikibase_id),
+        classifier_id=ClassifierID(classifier_id),
+        archive_path=S3Uri(mock_async_bucket, "labelled_passages"),
+    )
+
+    assert result == Ok(True)
+
+
+@pytest.mark.asyncio
+async def test_concept_present_in_S3__no_results(
+    mock_async_bucket, mock_s3_async_client
+):
+    #  Ensure labelled_passages exists
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
+        Key="labelled_passages/",
+        Body="test_concept",
+        ContentType="application/json",
+    )
+
+    result = concept_has_results_in_S3(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("aaaa2222"),
+        archive_path=S3Uri(mock_async_bucket, "labelled_passages"),
+    )
+
+    assert result == Ok(False)
+
+
+def test_concept_present_in_S3_error(mock_async_bucket):
+    mock_s3_client = Mock()
+    mock_s3_client.list_objects_v2.side_effect = Exception("S3 connection failed")
+
+    with patch("flows.classifiers_profiles.boto3.client", return_value=mock_s3_client):
+        result = concept_has_results_in_S3(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            archive_path=S3Uri(mock_async_bucket, "labelled_passages"),
+        )
+
+    assert (
+        isinstance(result, Err) and result._error.msg == "failed to find results in S3"
+    )
+    metadata = result._error.metadata
+    assert metadata
+    assert metadata["concept_wikibase_id"] == "Q123"
+    assert metadata["classifier_id"] == "aaaa2222"
+    assert "S3 connection failed" in metadata["exception"]
+
+
+@pytest.mark.asyncio
 async def test_read_concepts(mock_wikibase_auth, mock_concepts):
     mock_wikibase_session = AsyncMock()
     mock_wikibase_session.get_concepts_async.return_value = mock_concepts
@@ -972,7 +1042,6 @@ async def test_sync_classifiers_profiles(
             wikibase_auth=mock_wikibase_auth,
             github_token=Mock(SecretStr("mock-github-token")),
             upload_to_wandb=False,
-            upload_to_vespa=False,
             automerge_classifier_specs_pr=False,
             auto_train=False,
             debug_wikibase_validation=False,
@@ -1118,7 +1187,6 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
                 wikibase_auth=mock_wikibase_auth,
                 github_token=Mock(SecretStr("mock-github-token")),
                 upload_to_wandb=False,
-                upload_to_vespa=False,
                 automerge_classifier_specs_pr=False,
                 auto_train=False,
                 debug_wikibase_validation=False,
@@ -1245,7 +1313,6 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
                 wikibase_auth=mock_wikibase_auth,
                 github_token=Mock(SecretStr("mock-github-token")),
                 upload_to_wandb=False,
-                upload_to_vespa=False,
                 automerge_classifier_specs_pr=False,
                 auto_train=False,
                 debug_wikibase_validation=False,

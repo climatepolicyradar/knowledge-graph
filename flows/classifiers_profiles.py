@@ -1045,6 +1045,90 @@ def emit_finished(
         )
 
 
+# def maybe_allow_retiring(
+#     op: Promote | Update,
+#     vespa_search_adapter: VespaSearchAdapter,
+#     wandb_results: list[Result[Dict, Error]],
+# ) -> tuple[
+#     bool,
+#     list[Result[Dict, Error]],
+# ]:
+#     """If the operation is for a retiring profile, check for some results in Vespa."""
+#     logger = get_logger()
+
+#     if op.classifiers_profile_mapping.classifiers_profile != Profile.RETIRED:
+#         return True, wandb_results
+
+#     match concept_present_in_vespa(
+#         wikibase_id=op.classifiers_profile_mapping.wikibase_id,
+#         classifier_id=op.classifiers_profile_mapping.classifier_id,
+#         vespa_search_adapter=vespa_search_adapter,
+#     ):
+#         case Ok(True):
+#             logger.info(
+#                 f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has results in Vespa, and can be retired"
+#             )
+#             return True, wandb_results
+#         case Ok(False):
+#             logger.info(
+#                 f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has no results in Vespa, and can't be retired"
+#             )
+#             wandb_results.append(
+#                 Err(
+#                     Error(
+#                         msg="no results found in Vespa, so can't retire",
+#                         metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
+#                     )
+#                 )
+#             )
+#             return False, wandb_results
+#         case Err(e):
+#             logger.info(
+#                 f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} failed to be checked for in Vespa: {str(e)}"
+#             )
+#             e.msg = e.msg + ". Failed to check for results in Vespa, so can't retire"
+#             wandb_results.append(Err(e))
+#             return False, wandb_results
+
+#     wandb_results.append(
+#         Err(
+#             Error(
+#                 msg="failed to check for concept being present in Vespa",
+#                 metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
+#             )
+#         )
+#     )
+#     return False, wandb_results
+
+
+def concept_has_results_in_S3(
+    wikibase_id: WikibaseID,
+    classifier_id: ClassifierID,
+    archive_path: S3Uri,
+) -> Result[bool, Error]:
+    """Check if a Concept<>Classifier has some results in S3."""
+    try:
+        s3 = boto3.client("s3")
+        results = s3.list_objects_v2(
+            Bucket=archive_path.bucket,
+            Prefix=f"{wikibase_id}/{classifier_id}/",
+            MaxKeys=1,
+        )
+
+        return Ok(results.get("KeyCount", 0) > 0)
+    except Exception as e:
+        return Err(
+            Error(
+                msg="failed to find results in S3",
+                metadata={
+                    "concept_wikibase_id": wikibase_id,
+                    "classifier_id": classifier_id,
+                    "exception": format_error(e),
+                },
+            )
+        )
+
+
 async def export_classifier_specs_to_s3(
     classifier_specs: list[ClassifierSpec],
     classifier_specs_archive_path: S3Uri,
@@ -1108,7 +1192,6 @@ async def sync_classifiers_profiles(
     wikibase_cache_save_if_missing: bool = False,
     github_token: SecretStr | None = None,
     upload_to_wandb: bool = False,  # set to False for dry run by default
-    upload_to_vespa: bool = True,
     automerge_classifier_specs_pr: bool = False,
     auto_train: bool = False,
     debug_wikibase_validation: bool = False,
@@ -1163,11 +1246,6 @@ async def sync_classifiers_profiles(
     if not upload_to_wandb:
         logger.warning(
             f"`upload_to_wandb` is set to {upload_to_wandb}. Using dry run mode for W&B."
-        )
-
-    if not upload_to_vespa:
-        logger.warning(
-            f"`upload_to_vespa` is set to {upload_to_vespa}. Using dry run mode for Vespa."
         )
 
     if not automerge_classifier_specs_pr:
