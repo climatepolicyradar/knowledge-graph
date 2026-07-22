@@ -1141,7 +1141,7 @@ async def test_send_classifiers_profile_slack_alert__slack_failure():
 
 @pytest.mark.asyncio
 async def test_sync_classifiers_profiles(
-    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
+    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs, mock_s3_client
 ):
     """Test full sync_classifiers_profiles with success."""
 
@@ -1179,22 +1179,37 @@ async def test_sync_classifiers_profiles(
     mock_slack_client = AsyncMock()
     mock_slack_client.chat_postMessage.return_value = {"ok": True, "ts": "12345"}
 
+    wikibase_id = "Q123"
+    classifier_id_1 = "aaaa2222"
+    classifier_id_2 = "abcd3456"
     mock_updated_specs = [
         ClassifierSpec(
-            wikibase_id="Q123",
-            classifier_id="aaaa2222",
+            wikibase_id=wikibase_id,
+            classifier_id=classifier_id_1,
             classifiers_profile="primary",
             wandb_registry_version="v2",
             concept_id="mmmm5566",
         ),
         ClassifierSpec(
-            wikibase_id="Q123",
-            classifier_id="abcd3456",
+            wikibase_id=wikibase_id,
+            classifier_id=classifier_id_2,
             classifiers_profile="retired",
             wandb_registry_version="v20",
             concept_id="mmmm5555",
         ),
     ]
+
+    # mock related documents for mock concepts in S3
+    mock_s3_client.create_bucket(
+        Bucket="cpr-sandbox-data-pipeline-cache",
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    for classifier_id in [classifier_id_1, classifier_id_2]:
+        mock_s3_client.put_object(
+            Bucket="cpr-sandbox-data-pipeline-cache",
+            Key=f"labelled_passages/{wikibase_id}/{classifier_id}/AF.document.002MMUCR.n0003.json",
+            ContentType="application/json",
+        )
 
     # mock S3 export
     mock_export_to_s3 = AsyncMock(
@@ -1232,6 +1247,7 @@ async def test_sync_classifiers_profiles(
             "flows.classifiers_profiles.export_classifier_specs_to_s3",
             mock_export_to_s3,
         ) as mock_export_classifier_specs_to_s3,
+        patch("flows.classifiers_profiles.boto3.client", return_value=mock_s3_client),
     ):
         await sync_classifiers_profiles(
             wandb_api_key=mock_wandb_api_key,
