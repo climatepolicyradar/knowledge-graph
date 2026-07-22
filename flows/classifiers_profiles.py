@@ -1316,6 +1316,17 @@ async def sync_classifiers_profiles(
                     promotions.append(a)
 
             case Update() as u:
+                allow_retiring_or_other_action, wandb_results = maybe_allow_retiring(
+                    u,
+                    S3Uri(
+                        bucket=f"cpr-{aws_env.value}-data-pipeline-cache",
+                        key="labelled_passages",
+                    ),
+                    wandb_results,
+                )
+                if not allow_retiring_or_other_action:
+                    continue
+
                 logger.info(
                     f"update called for {u.classifier_spec.wikibase_id}, {u.classifier_spec.classifier_id}, {u.classifier_spec.classifiers_profile} to {u.classifiers_profile_mapping.classifiers_profile}"
                 )
