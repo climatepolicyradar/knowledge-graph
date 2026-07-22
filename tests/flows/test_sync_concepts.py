@@ -114,6 +114,61 @@ def test_dataframe_to_concepts__roundtrip_fully_populated(fully_populated_concep
     )
 
 
+def test_concepts_to_dataframe__output_columns_are_pinned(fully_populated_concept):
+    """
+    Guard against unhandled Concept schema changes (ENRI-1505).
+
+    The columns written to S3 are pinned here. If a field is added to Concept
+    it will show up as a new column (or, if it can't be serialised, break the
+    sync), and this test will fail - prompting a decision about whether the new
+    field should be persisted or added to the exclude set in
+    concepts_to_dataframe to keep the output schema consistent.
+    """
+    df = concepts_to_dataframe([fully_populated_concept])
+
+    # classifier_ids and labelled_passages are deliberately excluded; id is a
+    # computed field and synced_at is added by concepts_to_dataframe.
+    expected_columns = {
+        "id",
+        "preferred_label",
+        "alternative_labels",
+        "negative_labels",
+        "description",
+        "definition",
+        "wikibase_id",
+        "wikibase_revision",
+        "subconcept_of",
+        "has_subconcept",
+        "related_concepts",
+        "negative_concepts",
+        "recursive_subconcept_of",
+        "recursive_has_subconcept",
+        "synced_at",
+    }
+    assert set(df.columns) == expected_columns
+
+
+def test_concepts_to_dataframe__schema_stable_across_files(
+    mock_concepts, fully_populated_concept, tmp_path
+):
+    """
+    Empty and populated concepts must produce the same Parquet schema (ENRI-1505).
+
+    The flow scans the archive as a glob of Parquet files written by separate
+    runs. Without explicit dtypes an empty list field infers List(Null) while a
+    populated one infers List(String), so files from different runs cannot be
+    read together. Write both and read them back as one to prove they union.
+    """
+    concepts_to_dataframe(mock_concepts).write_parquet(tmp_path / "empty.parquet")
+    concepts_to_dataframe([fully_populated_concept]).write_parquet(
+        tmp_path / "populated.parquet"
+    )
+
+    combined = pl.read_parquet(tmp_path / "*.parquet")
+
+    assert len(combined) == len(mock_concepts) + 1
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "existing_count,expected_new",
