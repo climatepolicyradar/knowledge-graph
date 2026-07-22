@@ -1111,7 +1111,7 @@ def concept_has_results_in_S3(
         s3 = boto3.client("s3")
         results = s3.list_objects_v2(
             Bucket=archive_path.bucket,
-            Prefix=f"{wikibase_id}/{classifier_id}/",
+            Prefix=f"{archive_path.key}/{wikibase_id}/{classifier_id}/",
             MaxKeys=1,
         )
 
