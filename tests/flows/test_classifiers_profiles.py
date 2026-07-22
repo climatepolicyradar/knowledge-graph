@@ -18,6 +18,7 @@ from flows.classifiers_profiles import (
     format_error,
     get_classifiers_profiles,
     handle_classifier_profile_action,
+    maybe_allow_retiring,
     promote_classifier_profile,
     read_concepts,
     send_classifiers_profile_slack_alert,
@@ -803,6 +804,201 @@ def test_concept_present_in_S3_error(mock_async_bucket):
     assert metadata["concept_wikibase_id"] == "Q123"
     assert metadata["classifier_id"] == "aaaa2222"
     assert "S3 connection failed" in metadata["exception"]
+
+
+@pytest.mark.asyncio
+async def test_maybe_allow_retiring__retiring_profile_with_results(
+    mock_async_bucket, mock_s3_async_client
+):
+    """Test maybe_allow_retiring allows retiring when concept has results in S3."""
+    wikibase_id = "Q218"
+    classifier_id = "q4xsgmjb"
+
+    fixture = load_fixture(
+        f"labelled_passages/{wikibase_id}/{classifier_id}/AF.document.002MMUCR.n0003.json"
+    )
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
+        Key=f"labelled_passages/{wikibase_id}/{classifier_id}/AF.document.002MMUCR.n0003.json",
+        Body=fixture,
+        ContentType="application/json",
+    )
+
+    promote_op = Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID(wikibase_id),
+            classifier_id=ClassifierID(classifier_id),
+            classifiers_profile=Profile.RETIRED,
+        )
+    )
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        promote_op, S3Uri(mock_async_bucket, "labelled_passages"), wandb_results
+    )
+
+    assert allow
+    assert updated_results == []
+
+
+@pytest.mark.asyncio
+async def test_maybe_allow_retiring__retiring_profile_without_results(
+    mock_async_bucket, mock_s3_async_client
+):
+    """Test maybe_allow_retiring blocks retiring when concept has no results in S3."""
+    #  Ensure labelled_passages exists
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
+        Key="labelled_passages/",
+        Body="test_concept",
+        ContentType="application/json",
+    )
+
+    promote_op = Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        )
+    )
+
+    wandb_results = []
+
+    allow, updated_results = maybe_allow_retiring(
+        promote_op, S3Uri(mock_async_bucket, "labelled_passages"), wandb_results
+    )
+
+    assert not allow
+    assert updated_results == [
+        Err(
+            _error=Error(
+                msg="no results found in S3, so can't retire",
+                metadata={
+                    "wikibase_id": "Q123",
+                    "classifier_id": "aaaa2222",
+                    "classifiers_profile": "retired",
+                },
+            )
+        )
+    ]
+
+
+def test_maybe_allow_retiring__retiring_profile_S3_error(mock_async_bucket):
+    mock_s3_client = Mock()
+    mock_s3_client.list_objects_v2.side_effect = Exception("S3 connection failed")
+
+    update_op = Update(
+        classifier_spec=ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v1",
+        ),
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.RETIRED,
+        ),
+    )
+
+    wandb_results = []
+
+    with patch("flows.classifiers_profiles.boto3.client", return_value=mock_s3_client):
+        allow, updated_results = maybe_allow_retiring(
+            update_op, S3Uri(mock_async_bucket, "labelled_passages"), wandb_results
+        )
+
+    assert not allow
+    assert len(updated_results) == 1
+    err = updated_results[0]
+    assert (
+        isinstance(err, Err)
+        and err._error.msg
+        == "failed to find results in S3. Failed to check for results in S3, so can't retire"
+    )
+    metadata = err._error.metadata
+    assert metadata
+    assert metadata["concept_wikibase_id"] == "Q123"
+    assert metadata["classifier_id"] == "aaaa2222"
+    assert "S3 connection failed" in metadata["exception"]
+
+
+def test_maybe_allow_retiring__non_retiring_profile(mock_async_bucket):
+    """Test maybe_allow_retiring allows non-retiring operations without checks."""
+    promote_op = Promote(
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("aaaa2222"),
+            classifiers_profile=Profile.PRIMARY,
+        )
+    )
+
+    wandb_results = []
+
+    with (
+        patch(
+            "flows.classifiers_profiles.concept_has_results_in_S3",
+            wraps=concept_has_results_in_S3,
+        ) as spy_concept_has_results_in_S3,
+    ):
+        allow, updated_results = maybe_allow_retiring(
+            promote_op, mock_async_bucket, wandb_results
+        )
+
+    assert allow
+    assert updated_results == []
+    # Verify S3 check was not called
+    spy_concept_has_results_in_S3.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_maybe_allow_retiring__update_to_retired(
+    mock_async_bucket, mock_s3_async_client
+):
+    """Test maybe_allow_retiring checks S3 when updating to retired profile."""
+    wikibase_id = "Q218"
+    classifier_id = "q4xsgmjb"
+
+    fixture = load_fixture(
+        f"labelled_passages/{wikibase_id}/{classifier_id}/AF.document.002MMUCR.n0003.json"
+    )
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
+        Key=f"labelled_passages/{wikibase_id}/{classifier_id}/AF.document.002MMUCR.n0003.json",
+        Body=fixture,
+        ContentType="application/json",
+    )
+
+    update_op = Update(
+        classifier_spec=ClassifierSpec(
+            wikibase_id=wikibase_id,
+            classifier_id=classifier_id,
+            classifiers_profile="experimental",
+            wandb_registry_version="v1",
+        ),
+        classifiers_profile_mapping=ClassifiersProfileMapping(
+            wikibase_id=WikibaseID(wikibase_id),
+            classifier_id=ClassifierID(classifier_id),
+            classifiers_profile=Profile.RETIRED,
+        ),
+    )
+
+    wandb_results = []
+    with (
+        patch(
+            "flows.classifiers_profiles.concept_has_results_in_S3",
+            wraps=concept_has_results_in_S3,
+        ) as spy_concept_has_results_in_S3,
+    ):
+        allow, updated_results = maybe_allow_retiring(
+            update_op, S3Uri(mock_async_bucket, "labelled_passages"), wandb_results
+        )
+
+    assert allow
+    assert updated_results == []
+    # Verify S3 check was called
+    spy_concept_has_results_in_S3.assert_called_once()
 
 
 @pytest.mark.asyncio

@@ -1045,60 +1045,60 @@ def emit_finished(
         )
 
 
-# def maybe_allow_retiring(
-#     op: Promote | Update,
-#     vespa_search_adapter: VespaSearchAdapter,
-#     wandb_results: list[Result[Dict, Error]],
-# ) -> tuple[
-#     bool,
-#     list[Result[Dict, Error]],
-# ]:
-#     """If the operation is for a retiring profile, check for some results in Vespa."""
-#     logger = get_logger()
+def maybe_allow_retiring(
+    op: Promote | Update,
+    archive_path: S3Uri,
+    wandb_results: list[Result[Dict, Error]],
+) -> tuple[
+    bool,
+    list[Result[Dict, Error]],
+]:
+    """If the operation is for a retiring profile, check for some results in S3."""
+    logger = get_logger()
 
-#     if op.classifiers_profile_mapping.classifiers_profile != Profile.RETIRED:
-#         return True, wandb_results
+    if op.classifiers_profile_mapping.classifiers_profile != Profile.RETIRED:
+        return True, wandb_results
 
-#     match concept_present_in_vespa(
-#         wikibase_id=op.classifiers_profile_mapping.wikibase_id,
-#         classifier_id=op.classifiers_profile_mapping.classifier_id,
-#         vespa_search_adapter=vespa_search_adapter,
-#     ):
-#         case Ok(True):
-#             logger.info(
-#                 f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has results in Vespa, and can be retired"
-#             )
-#             return True, wandb_results
-#         case Ok(False):
-#             logger.info(
-#                 f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has no results in Vespa, and can't be retired"
-#             )
-#             wandb_results.append(
-#                 Err(
-#                     Error(
-#                         msg="no results found in Vespa, so can't retire",
-#                         metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
-#                     )
-#                 )
-#             )
-#             return False, wandb_results
-#         case Err(e):
-#             logger.info(
-#                 f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} failed to be checked for in Vespa: {str(e)}"
-#             )
-#             e.msg = e.msg + ". Failed to check for results in Vespa, so can't retire"
-#             wandb_results.append(Err(e))
-#             return False, wandb_results
+    match concept_has_results_in_S3(
+        wikibase_id=op.classifiers_profile_mapping.wikibase_id,
+        classifier_id=op.classifiers_profile_mapping.classifier_id,
+        archive_path=archive_path,
+    ):
+        case Ok(True):
+            logger.info(
+                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has results in Vespa, and can be retired"
+            )
+            return True, wandb_results
+        case Ok(False):
+            logger.info(
+                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has no results in Vespa, and can't be retired"
+            )
+            wandb_results.append(
+                Err(
+                    Error(
+                        msg="no results found in S3, so can't retire",
+                        metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
+                    )
+                )
+            )
+            return False, wandb_results
+        case Err(e):
+            logger.info(
+                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} failed to be checked for in Vespa: {str(e)}"
+            )
+            e.msg = e.msg + ". Failed to check for results in S3, so can't retire"
+            wandb_results.append(Err(e))
+            return False, wandb_results
 
-#     wandb_results.append(
-#         Err(
-#             Error(
-#                 msg="failed to check for concept being present in Vespa",
-#                 metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
-#             )
-#         )
-#     )
-#     return False, wandb_results
+    wandb_results.append(
+        Err(
+            Error(
+                msg="failed to check for concept having a result in S3",
+                metadata=op.classifiers_profile_mapping.model_dump(mode="json"),
+            )
+        )
+    )
+    return False, wandb_results
 
 
 def concept_has_results_in_S3(
@@ -1114,7 +1114,6 @@ def concept_has_results_in_S3(
             Prefix=f"{archive_path.key}/{wikibase_id}/{classifier_id}/",
             MaxKeys=1,
         )
-
         return Ok(results.get("KeyCount", 0) > 0)
     except Exception as e:
         return Err(
