@@ -1,0 +1,10 @@
+name: wandb-mcp
+description: an MCP read-only interface to Weights & Biases classifier data
+runtime:
+  name: python
+  options:
+    toolchain: uv
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-python
