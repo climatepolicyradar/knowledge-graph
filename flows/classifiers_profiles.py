@@ -1066,12 +1066,12 @@ def maybe_allow_retiring(
     ):
         case Ok(True):
             logger.info(
-                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has results in Vespa, and can be retired"
+                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has results in S3, and can be retired"
             )
             return True, wandb_results
         case Ok(False):
             logger.info(
-                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has no results in Vespa, and can't be retired"
+                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} has no results in S3, and can't be retired"
             )
             wandb_results.append(
                 Err(
@@ -1084,7 +1084,7 @@ def maybe_allow_retiring(
             return False, wandb_results
         case Err(e):
             logger.info(
-                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} failed to be checked for in Vespa: {str(e)}"
+                f"{op.classifiers_profile_mapping.wikibase_id}, {op.classifiers_profile_mapping.classifier_id} failed to be checked for in S3: {str(e)}"
             )
             e.msg = e.msg + ". Failed to check for results in S3, so can't retire"
             wandb_results.append(Err(e))
