@@ -1387,7 +1387,9 @@ async def sync_classifiers_profiles(
     # set as default value to indicate no PR created
     cs_pr_results: Result[int | None, Error] = Ok(None)
 
-    if classifier_specs == updated_classifier_specs:
+    classifier_specs_updated = classifier_specs != updated_classifier_specs
+
+    if not classifier_specs_updated:
         logger.info("No changes to classifier specs")
     else:
         logger.info(
@@ -1438,7 +1440,7 @@ async def sync_classifiers_profiles(
     if is_err(cs_pr_results) or is_err(s3_result):
         logger.warning("Error creating and merging PR or syncing to s3")
     else:
-        if auto_train:
+        if auto_train and classifier_specs_updated:
             logger.info("Emitting finished event")
             event = emit_finished(
                 promotions=promotions,

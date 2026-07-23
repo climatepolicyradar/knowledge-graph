@@ -1400,6 +1400,68 @@ async def test_sync_classifiers_profiles__success_emits_finished_event(
 
 
 @pytest.mark.asyncio
+async def test_sync_classifiers_profiles__does_not_emit_finished_event_when_no_changes_to_specs(
+    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
+):
+    """Test that sync_classifiers_profiles does not emit a finished event when auto-train is True but there are no classifier spec changes."""
+    # mock wikibase session and return concepts and classifier ids from calls
+    mock_wikibase_session = AsyncMock()
+    mock_wikibase_session.get_concepts_async.return_value = mock_concepts
+    mock_wikibase_session.get_classifier_ids_async = AsyncMock(
+        side_effect=mock_classifier_ids
+    )
+
+    # mock wandb api key
+    mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
+    mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
+
+    # wandb validation mocks
+    mock_metadata = {"aws_env": "sandbox", "classifier_name": "ValidClassifier"}
+    mock_artifacts = [
+        Mock(version="v1", metadata=mock_metadata),
+        Mock(version="v2", metadata=mock_metadata),
+    ]
+    mock_api = Mock()
+    mock_api.return_value.artifacts.return_value = mock_artifacts
+
+    mock_artifact = Mock()
+    mock_artifact.metadata = mock_metadata
+    mock_artifact.logged_by.return_value.config = {}
+
+    mock_api.return_value.artifact.return_value = mock_artifact
+
+    with (
+        patch(
+            "flows.classifiers_profiles.WikibaseSession",
+            return_value=mock_wikibase_session,
+        ),
+        patch(
+            "flows.classifiers_profiles.load_classifier_specs",
+            side_effect=[[mock_specs], [mock_specs]],
+        ),
+        patch("wandb.login"),
+        patch("wandb.Api", return_value=mock_api.return_value),
+        patch("flows.classifiers_profiles.refresh_all_available_classifiers"),
+        patch(
+            "flows.classifiers_profiles.emit_finished",
+            wraps=emit_finished,
+        ) as spy_emit_finished,
+    ):
+        await sync_classifiers_profiles(
+            wandb_api_key=mock_wandb_api_key,
+            wikibase_auth=mock_wikibase_auth,
+            github_token=Mock(SecretStr("mock-github-token")),
+            upload_to_wandb=False,
+            automerge_classifier_specs_pr=False,
+            auto_train=True,
+            debug_wikibase_validation=False,
+            enable_slack_notifications=True,
+        )
+
+        spy_emit_finished.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_sync_classifiers_profiles__failure_creating_pr(
     mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
 ):
