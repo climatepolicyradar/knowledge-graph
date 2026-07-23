@@ -114,6 +114,8 @@ def test_concepts_to_dataframe_fully_populated(fully_populated_concept):
         fully_populated_concept.recursive_has_subconcept
     ]
     assert df.schema["synced_at"] == pl.Datetime(time_unit="us", time_zone="UTC")
+    # classifier_ids field should be dropped during concepts_to_dataframe
+    assert "classifier_ids" not in df.columns
 
 
 def test_concepts_to_dataframe__output_columns_are_pinned(fully_populated_concept):
