@@ -1248,6 +1248,10 @@ async def test_sync_classifiers_profiles(
             mock_export_to_s3,
         ) as mock_export_classifier_specs_to_s3,
         patch("flows.classifiers_profiles.boto3.client", return_value=mock_s3_client),
+        patch(
+            "flows.classifiers_profiles.emit_finished",
+            wraps=emit_finished,
+        ) as spy_emit_finished,
     ):
         await sync_classifiers_profiles(
             wandb_api_key=mock_wandb_api_key,
@@ -1285,6 +1289,9 @@ async def test_sync_classifiers_profiles(
             attachments=ANY,
         )
 
+        # check event was not emitted sine auto_train is set to False
+        spy_emit_finished.assert_not_called()
+
         # use artifact call args to check final results
         mock_acreate_table_artifact.assert_called_once()
         artifact_call_args = mock_acreate_table_artifact.call_args.kwargs
@@ -1300,6 +1307,96 @@ async def test_sync_classifiers_profiles(
             "**Classifiers Specs S3 sync**: Classifier specs synced to s3: s3://bucket/key/classifier_specs.json"
             in artifact_call_args["description"]
         )
+
+
+@pytest.mark.asyncio
+async def test_sync_classifiers_profiles__success_emits_finished_event(
+    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
+):
+    """Test that the full sync_classifiers_profiles emits finished event when auto-train is True."""
+    # mock wikibase session and return concepts and classifier ids from calls
+    mock_wikibase_session = AsyncMock()
+    mock_wikibase_session.get_concepts_async.return_value = mock_concepts
+    mock_wikibase_session.get_classifier_ids_async = AsyncMock(
+        side_effect=mock_classifier_ids
+    )
+
+    # mock wandb api key
+    mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
+    mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
+
+    # mock create_and_merge_pr results as async function
+    pr_number = 123
+    mock_pr_results = Ok(pr_number)
+    mock_create_and_merge_pr = AsyncMock(return_value=mock_pr_results)
+
+    # wandb validation mocks
+    mock_metadata = {"aws_env": "sandbox", "classifier_name": "ValidClassifier"}
+    mock_artifacts = [
+        Mock(version="v1", metadata=mock_metadata),
+        Mock(version="v2", metadata=mock_metadata),
+    ]
+    mock_api = Mock()
+    mock_api.return_value.artifacts.return_value = mock_artifacts
+
+    mock_artifact = Mock()
+    mock_artifact.metadata = mock_metadata
+    mock_artifact.logged_by.return_value.config = {}
+
+    mock_api.return_value.artifact.return_value = mock_artifact
+
+    mock_updated_specs = [
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v2",
+            concept_id="mmmm5566",
+        )
+    ]
+
+    # mock S3 export
+    mock_export_to_s3 = AsyncMock(
+        return_value=Ok("s3://bucket/key/classifier_specs.json")
+    )
+
+    with (
+        patch(
+            "flows.classifiers_profiles.WikibaseSession",
+            return_value=mock_wikibase_session,
+        ),
+        patch(
+            "flows.classifiers_profiles.load_classifier_specs",
+            side_effect=[[mock_specs], mock_updated_specs],
+        ),
+        patch("wandb.login"),
+        patch("wandb.Api", return_value=mock_api.return_value),
+        patch("flows.classifiers_profiles.refresh_all_available_classifiers"),
+        patch(
+            "flows.classifiers_profiles.create_classifiers_specs_pr.create_and_merge_pr",
+            mock_create_and_merge_pr,
+        ),
+        patch(
+            "flows.classifiers_profiles.emit_finished",
+            wraps=emit_finished,
+        ) as spy_emit_finished,
+        patch(
+            "flows.classifiers_profiles.export_classifier_specs_to_s3",
+            mock_export_to_s3,
+        ),
+    ):
+        await sync_classifiers_profiles(
+            wandb_api_key=mock_wandb_api_key,
+            wikibase_auth=mock_wikibase_auth,
+            github_token=Mock(SecretStr("mock-github-token")),
+            upload_to_wandb=False,
+            automerge_classifier_specs_pr=False,
+            auto_train=True,
+            debug_wikibase_validation=False,
+            enable_slack_notifications=True,
+        )
+
+        spy_emit_finished.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -1428,6 +1525,102 @@ async def test_sync_classifiers_profiles__failure_creating_pr(
 
 
 @pytest.mark.asyncio
+async def test_sync_classifiers_profiles__failure_creating_pr_does_not_emit_finished_event(
+    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
+):
+    """Test full sync_classifiers_profiles does not emit a finished event when create/merge PR fails even if auto-train is True"""
+
+    # mock wikibase session and return concepts and classifier ids from calls
+    mock_wikibase_session = AsyncMock()
+    mock_wikibase_session.get_concepts_async.return_value = mock_concepts
+    mock_wikibase_session.get_classifier_ids_async = AsyncMock(
+        side_effect=mock_classifier_ids
+    )
+
+    # mock wandb api key
+    mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
+    mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
+
+    # mock create_and_merge_pr results as async function with error
+    mock_pr_results = Err(Error(msg="Error creating PR", metadata={}))
+    mock_create_and_merge_pr = AsyncMock(return_value=mock_pr_results)
+
+    # wandb validation mocks
+    mock_metadata = {"aws_env": "sandbox", "classifier_name": "ValidClassifier"}
+    mock_artifacts = [
+        Mock(version="v1", metadata=mock_metadata),
+        Mock(version="v2", metadata=mock_metadata),
+    ]
+    mock_api = Mock()
+    mock_api.return_value.artifacts.return_value = mock_artifacts
+
+    mock_artifact = Mock()
+    mock_artifact.metadata = mock_metadata
+    mock_artifact.logged_by.return_value.config = {}
+
+    mock_api.return_value.artifact.return_value = mock_artifact
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage.return_value = {"ok": True, "ts": "12345"}
+
+    mock_updated_specs = [
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v2",
+            concept_id="mmmm5566",
+        ),
+    ]
+
+    # mock S3 export
+    mock_export_to_s3 = AsyncMock(
+        return_value=Ok("s3://bucket/key/classifier_specs.json")
+    )
+
+    with (
+        patch(
+            "flows.classifiers_profiles.WikibaseSession",
+            return_value=mock_wikibase_session,
+        ),
+        patch(
+            "flows.classifiers_profiles.load_classifier_specs",
+            side_effect=[[mock_specs], mock_updated_specs],
+        ),
+        patch("wandb.login"),
+        patch("wandb.Api", return_value=mock_api.return_value),
+        patch("flows.classifiers_profiles.refresh_all_available_classifiers"),
+        patch(
+            "flows.classifiers_profiles.create_classifiers_specs_pr.create_and_merge_pr",
+            mock_create_and_merge_pr,
+        ),
+        patch(
+            "flows.classifiers_profiles.export_classifier_specs_to_s3",
+            mock_export_to_s3,
+        ),
+        patch(
+            "flows.classifiers_profiles.emit_finished",
+            wraps=emit_finished,
+        ) as spy_emit_finished,
+    ):
+        with pytest.raises(
+            Exception, match="Errors occurred while creating classifiers specs PR"
+        ):
+            await sync_classifiers_profiles(
+                wandb_api_key=mock_wandb_api_key,
+                wikibase_auth=mock_wikibase_auth,
+                github_token=Mock(SecretStr("mock-github-token")),
+                upload_to_wandb=False,
+                automerge_classifier_specs_pr=False,
+                auto_train=True,
+                debug_wikibase_validation=False,
+                enable_slack_notifications=True,
+            )
+
+        spy_emit_finished.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_sync_classifiers_profiles__failure_exporting_to_s3(
     mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
 ):
@@ -1551,6 +1744,103 @@ async def test_sync_classifiers_profiles__failure_exporting_to_s3(
             "**Classifiers Specs S3 sync**: Error syncing classifier specs to s3"
             in artifact_call_args["description"]
         )
+
+
+@pytest.mark.asyncio
+async def test_sync_classifiers_profiles__failure_exporting_to_s3_does_not_emit_finished_event(
+    mock_wikibase_auth, mock_concepts, mock_classifier_ids, mock_specs
+):
+    """Test full sync_classifiers_profiles does not emit a finished event if s3 export fails even if auto_train is True"""
+
+    # mock wikibase session and return concepts and classifier ids from calls
+    mock_wikibase_session = AsyncMock()
+    mock_wikibase_session.get_concepts_async.return_value = mock_concepts
+    mock_wikibase_session.get_classifier_ids_async = AsyncMock(
+        side_effect=mock_classifier_ids
+    )
+
+    # mock wandb api key
+    mock_wandb_api_key = Mock(SecretStr("mock-wandb-api-key"))
+    mock_wandb_api_key.get_secret_value.return_value = "mock-wandb-api-key"
+
+    # mock create_and_merge_pr results as async function
+    pr_number = 123
+    mock_pr_results = Ok(pr_number)
+    mock_create_and_merge_pr = AsyncMock(return_value=mock_pr_results)
+
+    # wandb validation mocks
+    mock_metadata = {"aws_env": "sandbox", "classifier_name": "ValidClassifier"}
+    mock_artifacts = [
+        Mock(version="v1", metadata=mock_metadata),
+        Mock(version="v2", metadata=mock_metadata),
+    ]
+    mock_api = Mock()
+    mock_api.return_value.artifacts.return_value = mock_artifacts
+
+    mock_artifact = Mock()
+    mock_artifact.metadata = mock_metadata
+    mock_artifact.logged_by.return_value.config = {}
+
+    mock_api.return_value.artifact.return_value = mock_artifact
+
+    mock_slack_client = AsyncMock()
+    mock_slack_client.chat_postMessage.return_value = {"ok": True, "ts": "12345"}
+
+    mock_updated_specs = [
+        ClassifierSpec(
+            wikibase_id="Q123",
+            classifier_id="aaaa2222",
+            classifiers_profile="primary",
+            wandb_registry_version="v2",
+            concept_id="mmmm5566",
+        )
+    ]
+
+    # mock S3 export
+    mock_export_to_s3 = AsyncMock(
+        return_value=Err(Error(msg="failed to export to s3", metadata={}))
+    )
+
+    with (
+        patch(
+            "flows.classifiers_profiles.WikibaseSession",
+            return_value=mock_wikibase_session,
+        ),
+        patch(
+            "flows.classifiers_profiles.load_classifier_specs",
+            side_effect=[[mock_specs], mock_updated_specs],
+        ),
+        patch("wandb.login"),
+        patch("wandb.Api", return_value=mock_api.return_value),
+        patch("flows.classifiers_profiles.refresh_all_available_classifiers"),
+        patch(
+            "flows.classifiers_profiles.create_classifiers_specs_pr.create_and_merge_pr",
+            mock_create_and_merge_pr,
+        ),
+        patch(
+            "flows.classifiers_profiles.export_classifier_specs_to_s3",
+            mock_export_to_s3,
+        ),
+        patch(
+            "flows.classifiers_profiles.emit_finished",
+            wraps=emit_finished,
+        ) as spy_emit_finished,
+    ):
+        with pytest.raises(
+            Exception, match="Errors occurred while syncing classifiers specs to S3"
+        ):
+            await sync_classifiers_profiles(
+                wandb_api_key=mock_wandb_api_key,
+                wikibase_auth=mock_wikibase_auth,
+                github_token=Mock(SecretStr("mock-github-token")),
+                upload_to_wandb=False,
+                automerge_classifier_specs_pr=False,
+                auto_train=True,
+                debug_wikibase_validation=False,
+                enable_slack_notifications=True,
+            )
+
+        spy_emit_finished.assert_not_called()
 
 
 @pytest.mark.asyncio
