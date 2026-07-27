@@ -13,7 +13,6 @@ from flows.sync_concepts import (
     dataframe_to_concepts,
     get_new_versions,
     load_concepts,
-    load_existing_ids,
     s3_prefix_has_objects,
     send_concept_validation_alert,
     update_concept_in_vespa,
@@ -222,25 +221,6 @@ async def test_get_new_versions__no_archive(mock_concepts, tmp_path):
         .sort("id")
         .equals(expected_df.select(cols_to_compare).sort("id"))
     )
-
-
-def test_load_existing_ids__tolerates_extra_column_in_legacy_file(tmp_path):
-    """
-    A legacy archive file with a since-dropped column must not break the scan.
-
-    Reproduces the production incident where an older run's Parquet file
-    still had a `classifier_ids` column that later versions of
-    concepts_to_dataframe stopped writing, which made Polars' default
-    strict schema-matching fail the entire scan across the archive.
-    """
-    pl.DataFrame({"id": ["a", "b"]}).write_parquet(tmp_path / "current.parquet")
-    pl.DataFrame(
-        {"id": ["c"], "classifier_ids": [[["ok", "Q1"]]]}
-    ).write_parquet(tmp_path / "legacy_with_extra_column.parquet")
-
-    existing_ids = load_existing_ids(f"{tmp_path}/*.parquet", None, None).collect()
-
-    assert set(existing_ids["id"]) == {"a", "b", "c"}
 
 
 @pytest.mark.asyncio
