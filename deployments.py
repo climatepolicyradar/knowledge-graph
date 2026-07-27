@@ -370,7 +370,7 @@ async def main() -> None:
 
     await create_deployment(
         flow=sync_concepts,
-        description="Upload concepts from Wikibase to Vespa",
+        description="Upload concepts from Wikibase to S3",
         concurrency_limit=ConcurrencyLimitConfig(
             limit=1,
             collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
