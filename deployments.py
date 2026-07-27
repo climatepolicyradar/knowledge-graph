@@ -407,7 +407,6 @@ async def main() -> None:
             AwsEnv.staging: JsonDict(
                 {
                     "upload_to_wandb": False,  # staging env should never update wandb
-                    "upload_to_vespa": True,
                     "automerge_classifier_specs_pr": True,
                     "auto_train": False,
                     "enable_slack_notifications": False,
@@ -416,7 +415,6 @@ async def main() -> None:
             AwsEnv.production: JsonDict(
                 {
                     "upload_to_wandb": True,
-                    "upload_to_vespa": True,
                     "automerge_classifier_specs_pr": True,
                     "auto_train": True,
                     "enable_slack_notifications": True,
