@@ -251,6 +251,32 @@ async def s3_prefix_has_objects(s3_uri: S3Uri, region: str, aws_env: AwsEnv) -> 
         return "Contents" in response and len(response["Contents"]) > 0
 
 
+def load_existing_ids(
+    parquet_pattern: str,
+    credential_provider: pl.CredentialProvider | None,
+    storage_options: dict[str, str] | None,
+) -> pl.LazyFrame:
+    """
+    Load concept IDs from the archive's Parquet files.
+
+    Only `id` is needed here, so schema drift between files written by
+    different versions of concepts_to_dataframe (e.g. a column that's since
+    been excluded, like classifier_ids) is tolerated rather than treated as
+    a fatal error.
+    """
+    return (
+        pl.scan_parquet(
+            parquet_pattern,
+            credential_provider=credential_provider,
+            storage_options=storage_options,
+            extra_columns="ignore",
+            missing_columns="insert",
+        )
+        .select("id")
+        .unique()
+    )
+
+
 @task(cache_policy=NONE)
 async def get_new_versions(
     current_df: pl.LazyFrame,
@@ -983,14 +1009,10 @@ async def sync_concepts(
     if archives_exist:
         logger.info("loading existing ID(s) from archive(s)")
         parquet_pattern = f"{concepts_archive_path}/*.parquet"
-        existing_ids = (
-            pl.scan_parquet(
-                parquet_pattern,
-                credential_provider=credential_provider,
-                storage_options=storage_options,
-            )
-            .select("id")
-            .unique()
+        existing_ids = load_existing_ids(
+            parquet_pattern,
+            credential_provider,
+            storage_options,
         )
 
     logger.info("getting new versions")
