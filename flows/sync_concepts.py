@@ -988,6 +988,12 @@ async def sync_concepts(
                 parquet_pattern,
                 credential_provider=credential_provider,
                 storage_options=storage_options,
+                # Only `id` is needed here, so tolerate schema drift between
+                # archive files written by different versions of
+                # concepts_to_dataframe (e.g. a column that's since been
+                # excluded, like classifier_ids) instead of failing the scan.
+                extra_columns="ignore",
+                missing_columns="insert",
             )
             .select("id")
             .unique()
