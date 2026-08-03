@@ -95,8 +95,8 @@ def run_build_dataset(
         d.METADATA_CORPUS_TYPE_NAME AS document_metadata_corpus_type_name,
         d.METADATA_GEOGRAPHIES AS document_metadata_geographies,
         d.PUBLISHED_DATE AS document_metadata_publication_ts
-    FROM PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS_V1 d
-    JOIN PRODUCTION.PUBLISHED.PASSAGES_V2 p
+    FROM PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS d
+    JOIN PRODUCTION.PUBLISHED.PASSAGES p
         ON d.DOCUMENT_ID = p.DOCUMENT_ID
     WHERE p.LANGUAGE = 'en'
       AND p.CONTENT IS NOT NULL
@@ -127,8 +127,8 @@ def run_build_dataset(
                     d.TRANSLATED
                 ORDER BY RANDOM()
             ) AS rn
-        FROM PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS_V1 d
-        JOIN PRODUCTION.PUBLISHED.PASSAGES_V2 p
+        FROM PRODUCTION.PUBLISHED.PIPELINE_DOCUMENTS d
+        JOIN PRODUCTION.PUBLISHED.PASSAGES p
             ON d.DOCUMENT_ID = p.DOCUMENT_ID
         WHERE p.LANGUAGE = 'en'
           AND p.CONTENT IS NOT NULL
