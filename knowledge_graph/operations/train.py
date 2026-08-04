@@ -274,6 +274,17 @@ def create_and_link_model_artifact(
     return artifact
 
 
+def _latest_artifact_path(namespace: Namespace, target_path: ModelPath) -> str:
+    """
+    Build the W&B path to the latest version of a classifier artifact.
+
+    :param namespace: The W&B configuration containing project and entity.
+    :param target_path: The path to the classifier in W&B.
+    :return: The fully qualified artifact path, e.g. 'my_entity/Q123/v4prnc54:latest'.
+    """
+    return f"{namespace.entity}/{target_path}:latest"
+
+
 def classifier_exists_in_wandb(
     namespace: Namespace,
     target_path: ModelPath,
@@ -287,7 +298,7 @@ def classifier_exists_in_wandb(
     """
 
     api = wandb.Api()
-    return api.artifact_exists(f"{namespace.entity}/{target_path}:latest")
+    return api.artifact_exists(_latest_artifact_path(namespace, target_path))
 
 
 def get_next_version(
@@ -309,7 +320,7 @@ def get_next_version(
     """
 
     api = wandb.Api()
-    artifact_path = f"{namespace.entity}/{target_path}:latest"
+    artifact_path = _latest_artifact_path(namespace, target_path)
 
     if api.artifact_exists(artifact_path):
         artifact = api.artifact(artifact_path)
