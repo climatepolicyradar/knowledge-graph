@@ -77,9 +77,6 @@ def get_bucket_name_from_ssm() -> str:
     return get_aws_ssm_param("/vibe-checker/bucket-name", region_name=aws_region)
 
 
-logger = get_logger()
-
-
 def get_s3_client() -> S3Client:
     """Get a configured S3 client."""
     aws_env = AwsEnv(os.environ["AWS_ENV"]) if "AWS_ENV" in os.environ else None
@@ -169,6 +166,7 @@ async def process_single_concept(
     This task is designed to be isolated - if it fails, it won't affect the other
     concept processing tasks.
     """
+    logger = get_logger()
     try:
         wikibase = WikibaseSession(
             username=wikibase_config.username,
@@ -366,6 +364,7 @@ async def vibe_check_inference(
     :param wikibase_ids: Optional list of Wikibase IDs to process. If not provided,
     the flow will load the default list from vibe-checker/config.yml.
     """
+    logger = get_logger()
     config = await Config.create()
     _, wikibase_config, argilla_config, s3_client = await _set_up_training_environment(
         config=config, aws_env=config.aws_env
