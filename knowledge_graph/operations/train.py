@@ -8,7 +8,6 @@ nothing about Prefect; it is imported directly by the training flows and CLI wra
 
 import os
 import random
-import re
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, overload
@@ -17,7 +16,6 @@ import torch
 import typer
 import wandb
 from pydantic import BaseModel, Field
-from wandb.errors.errors import CommError
 from wandb.sdk.wandb_run import Run
 
 from knowledge_graph.classifier import (
@@ -287,19 +285,9 @@ def classifier_exists_in_wandb(
     :param target_path: The path to the classifier in W&B.
     :return: True if the artifact exists, False otherwise.
     """
-    try:
-        api = wandb.Api()
-        api.artifact(f"{namespace.entity}/{target_path}:latest")
-        return True
-    except CommError as e:
-        error_message = str(e)
-        # Check if the error is because the artifact doesn't exist
-        # Error format: "artifact membership '...' not found in '{entity}/{wikibase_id}'"
-        pattern = rf"artifact membership '.*?' not found in '{namespace.entity}/{target_path.wikibase_id}'"
-        if re.search(pattern, error_message):
-            return False
-        # Re-raise if it's a different error (e.g., network issue)
-        raise
+
+    api = wandb.Api()
+    return api.artifact_exists(f"{namespace.entity}/{target_path}:latest")
 
 
 def get_next_version(
@@ -319,21 +307,18 @@ def get_next_version(
     :return: The next version string.
     :rtype: str
     """
-    try:
-        api = wandb.Api()
-        artifact = api.artifact(f"{namespace.entity}/{target_path}:latest")
+
+    api = wandb.Api()
+    artifact_path = f"{namespace.entity}/{target_path}:latest"
+
+    if api.artifact_exists(artifact_path):
+        artifact = api.artifact(artifact_path)
         next_version = Version(artifact._version).increment()  # type: ignore[reportArgumentType]
-    except CommError as e:
-        error_message = str(e)
-        wikibase_id = classifier.concept.wikibase_id
-        pattern = rf"artifact membership '.*?' not found in '{namespace.entity}/{wikibase_id}'"
-        if re.search(pattern, error_message):
-            get_logger().info(
-                f"No previous wandb version found, '{target_path}' will be at v0"
-            )
-            next_version = Version("v0")
-        else:
-            raise
+    else:
+        get_logger().info(
+            f"No previous wandb version found, '{target_path}' will be at v0"
+        )
+        next_version = Version("v0")
 
     return str(next_version)
 
