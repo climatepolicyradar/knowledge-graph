@@ -5,6 +5,7 @@ from unittest.mock import ANY, MagicMock, Mock, patch
 import pytest
 from wandb.errors.errors import CommError
 
+from knowledge_graph.classifier import ModelPath
 from knowledge_graph.classifier.targets import TargetClassifier
 from knowledge_graph.cloud import AwsEnv, Namespace
 from knowledge_graph.config import wandb_model_artifact_filename
@@ -13,6 +14,7 @@ from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.operations.train import (
     StorageLink,
     StorageUpload,
+    classifier_exists_in_wandb,
     create_and_link_model_artifact,
     deduplicate_training_data,
     get_next_version,
@@ -244,6 +246,7 @@ def test_create_and_link_model_artifact():
 def test_get_next_version_with_existing(mock_api):
     mock_artifact = Mock()
     mock_artifact._version = "v2"
+    mock_api.return_value.artifact_exists.return_value = True
     mock_api.return_value.artifact.return_value = mock_artifact
 
     namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
@@ -258,17 +261,74 @@ def test_get_next_version_with_existing(mock_api):
 
 @patch("wandb.Api")
 def test_get_next_version_with_default(mock_api):
+    """A concept with no existing artifact starts at v0."""
     namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
     mock_classifier = Mock()
     mock_classifier.concept.wikibase_id = "Q123"
 
-    mock_api.side_effect = CommError(
-        "artifact membership 'test_classifier:latest' not found in 'test_entity/Q123'"
-    )
+    # False covers both a missing artifact and a project that doesn't exist yet
+    mock_api.return_value.artifact_exists.return_value = False
+
     wandb_target_entity = f"{namespace.project}/{mock_classifier.id}"
     next_version = get_next_version(namespace, wandb_target_entity, mock_classifier)
 
     assert next_version == "v0"
+    # The artifact itself must not be fetched when it doesn't exist
+    mock_api.return_value.artifact.assert_not_called()
+
+
+@patch("wandb.Api")
+def test_get_next_version_propagates_transport_errors(mock_api):
+    """A network failure must not be mistaken for a missing artifact."""
+    namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
+    mock_classifier = Mock()
+    mock_classifier.concept.wikibase_id = "Q123"
+
+    mock_api.return_value.artifact_exists.side_effect = CommError("connection failed")
+
+    target_path = ModelPath(
+        wikibase_id=WikibaseID("Q123"), classifier_id=ClassifierID("v4prnc54")
+    )
+    with pytest.raises(CommError):
+        get_next_version(namespace, target_path, mock_classifier)
+
+
+@pytest.mark.parametrize("exists", [True, False])
+@patch("wandb.Api")
+def test_classifier_exists_in_wandb(mock_api, exists):
+    """
+    Existence is delegated to W&B rather than inferred from error messages.
+
+    `artifact_exists` reports False both when the artifact is missing and when the
+    project doesn't exist at all, which is the case for a never-before-trained concept.
+    """
+    mock_api.return_value.artifact_exists.return_value = exists
+
+    namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
+    target_path = ModelPath(
+        wikibase_id=WikibaseID("Q123"), classifier_id=ClassifierID("v4prnc54")
+    )
+
+    assert classifier_exists_in_wandb(namespace=namespace, target_path=target_path) is (
+        exists
+    )
+    mock_api.return_value.artifact_exists.assert_called_once_with(
+        "test_entity/Q123/v4prnc54:latest"
+    )
+
+
+@patch("wandb.Api")
+def test_classifier_exists_in_wandb_propagates_transport_errors(mock_api):
+    """A network failure must not be reported as a missing classifier."""
+    mock_api.return_value.artifact_exists.side_effect = CommError("connection failed")
+
+    namespace = Namespace(project=WikibaseID("Q123"), entity="test_entity")
+    target_path = ModelPath(
+        wikibase_id=WikibaseID("Q123"), classifier_id=ClassifierID("v4prnc54")
+    )
+
+    with pytest.raises(CommError):
+        classifier_exists_in_wandb(namespace=namespace, target_path=target_path)
 
 
 @pytest.mark.asyncio
