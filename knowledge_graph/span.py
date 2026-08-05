@@ -2,7 +2,7 @@ import re
 from collections import OrderedDict
 from datetime import datetime
 from difflib import SequenceMatcher
-from typing import Optional, Sequence
+from typing import Optional, Sequence, cast
 
 from pydantic import BaseModel, Field, computed_field, model_validator
 from typing_extensions import Self
@@ -145,6 +145,40 @@ class Span(BaseModel):
         if len(spans) == 0:
             raise ValueError("Cannot merge an empty list of spans")
 
+    @staticmethod
+    def _merge_labellers_and_timestamps(
+        spans: list["Span"],
+    ) -> tuple[list[str], list[datetime]]:
+        """
+        Combine the unique labellers of a set of spans, keeping them ordered.
+
+        Timestamps are only carried over if every labeller has one, since the two lists
+        must stay aligned. `timestamps` is optional on a Span, so a span can legitimately
+        have labellers and no timestamps.
+
+        :param list[Span] spans: The spans being merged
+        :return tuple[list[str], list[datetime]]: the merged labellers, and their
+            timestamps if all of them are known
+        """
+        labeller_to_timestamp: OrderedDict[str, datetime | None] = OrderedDict()
+
+        # Assume labellers and timestamps are ordered to match each other already.
+        for span in spans:
+            for i, labeller in enumerate(span.labellers):
+                # Prefer the first seen timestamp for each labeller
+                if labeller not in labeller_to_timestamp:
+                    labeller_to_timestamp[labeller] = (
+                        span.timestamps[i] if i < len(span.timestamps) else None
+                    )
+
+        labellers = list(labeller_to_timestamp.keys())
+        timestamps = list(labeller_to_timestamp.values())
+
+        if any(timestamp is None for timestamp in timestamps):
+            return labellers, []
+
+        return labellers, cast(list[datetime], timestamps)
+
     @classmethod
     def union(cls, spans: list["Span"]) -> "Span":
         """
@@ -162,24 +196,15 @@ class Span(BaseModel):
         if len(spans) == 1:
             return spans[0]
         else:
-            # Combine unique labellers and their timestamps
-            labeller_to_timestamp: OrderedDict[str, datetime] = OrderedDict()
-
-            # Assume labellers and timestamps are ordered to match
-            # each other already.
-            for span in spans:
-                for i, labeller in enumerate(span.labellers):
-                    # Prefer the first seen timestamp for each labeller
-                    if labeller not in labeller_to_timestamp:
-                        labeller_to_timestamp[labeller] = span.timestamps[i]
+            labellers, timestamps = cls._merge_labellers_and_timestamps(spans)
 
             return Span(
                 text=spans[0].text,
                 start_index=min(span.start_index for span in spans),
                 end_index=max(span.end_index for span in spans),
                 concept_id=spans[0].concept_id,
-                labellers=list(labeller_to_timestamp.keys()),
-                timestamps=list(labeller_to_timestamp.values()),
+                labellers=labellers,
+                timestamps=timestamps,
             )
 
     @classmethod
@@ -199,24 +224,15 @@ class Span(BaseModel):
         if len(spans) == 1:
             return spans[0]
         else:
-            # Combine unique labellers and their timestamps
-            labeller_to_timestamp: OrderedDict[str, datetime] = OrderedDict()
-
-            # Assume labellers and timestamps are ordered to match
-            # each other already.
-            for span in spans:
-                for i, labeller in enumerate(span.labellers):
-                    # Prefer the first seen timestamp for each labeller
-                    if labeller not in labeller_to_timestamp:
-                        labeller_to_timestamp[labeller] = span.timestamps[i]
+            labellers, timestamps = cls._merge_labellers_and_timestamps(spans)
 
             return Span(
                 text=spans[0].text,
                 start_index=max(span.start_index for span in spans),
                 end_index=min(span.end_index for span in spans),
                 concept_id=spans[0].concept_id,
-                labellers=list(labeller_to_timestamp.keys()),
-                timestamps=list(labeller_to_timestamp.values()),
+                labellers=labellers,
+                timestamps=timestamps,
             )
 
     def overlaps(self, other: "Span") -> bool:
