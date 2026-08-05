@@ -543,6 +543,59 @@ def test_span_union_with_duplicate_labellers():
     assert merged_span.timestamps[0] == time1
 
 
+def test_span_union_with_unpopulated_timestamps():
+    """`timestamps` is optional, so union must not assume it's aligned with labellers."""
+
+    span_a = Span(
+        text="This is test text",
+        start_index=0,
+        end_index=4,
+        concept_id=WikibaseID("Q123"),
+        labellers=["alice"],
+    )
+
+    span_b = Span(
+        text="This is test text",
+        start_index=2,
+        end_index=6,
+        concept_id=WikibaseID("Q123"),
+        labellers=["bob"],
+    )
+
+    merged_span = Span.union(spans=[span_a, span_b])
+
+    assert merged_span.labellers == ["alice", "bob"]
+    # Timestamps are dropped rather than partially filled, so they stay aligned
+    assert merged_span.timestamps == []
+
+
+def test_span_union_drops_timestamps_when_only_some_are_known():
+    """A half-populated timestamp list can't stay aligned, so it's dropped entirely."""
+    from datetime import datetime, timezone
+
+    span_with_timestamp = Span(
+        text="This is test text",
+        start_index=0,
+        end_index=4,
+        concept_id=WikibaseID("Q123"),
+        labellers=["alice"],
+        timestamps=[datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)],
+    )
+
+    span_without_timestamp = Span(
+        text="This is test text",
+        start_index=2,
+        end_index=6,
+        concept_id=WikibaseID("Q123"),
+        labellers=["bob"],
+    )
+
+    merged_span = Span.union(spans=[span_with_timestamp, span_without_timestamp])
+
+    assert merged_span.labellers == ["alice", "bob"]
+    assert merged_span.timestamps == []
+
+
 def test_span_intersection_preserves_timestamps():
     from datetime import datetime, timezone
 

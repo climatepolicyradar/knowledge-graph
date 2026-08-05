@@ -129,7 +129,6 @@ def count_span_level_metrics(
                     break
             if not found:
                 cm.false_negatives += 1
-                break
 
         for predicted_span in predicted_passage.spans:
             found = False
@@ -139,7 +138,6 @@ def count_span_level_metrics(
                     break
             if not found:
                 cm.false_positives += 1
-                break
 
     return cm
 
