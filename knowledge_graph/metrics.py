@@ -36,6 +36,28 @@ class ConfusionMatrix:
         except ZeroDivisionError:
             return 0
 
+    def negative_predictive_value(self) -> float:
+        """
+        The precision of a negative label.
+
+        https://en.wikipedia.org/wiki/Positive_and_negative_predictive_values
+        """
+        try:
+            return self.true_negatives / (self.true_negatives + self.false_negatives)
+        except ZeroDivisionError:
+            return 0
+
+    def specificity(self) -> float:
+        """
+        The recall of the negative class.
+
+        https://en.wikipedia.org/wiki/Sensitivity_and_specificity
+        """
+        try:
+            return self.true_negatives / (self.true_negatives + self.false_positives)
+        except ZeroDivisionError:
+            return 0
+
     def accuracy(self) -> float:
         """https://en.wikipedia.org/wiki/Accuracy_and_precision"""
         try:

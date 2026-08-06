@@ -1,6 +1,9 @@
+import pytest
+
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.metrics import (
+    ConfusionMatrix,
     count_passage_level_metrics,
     count_span_level_metrics,
 )
@@ -85,3 +88,26 @@ def test_whether_passage_level_metrics_count_passages_not_spans():
     assert cm.true_positives == 1
     assert cm.false_positives == 1
     assert cm.support() == 2
+
+
+def test_whether_the_negative_class_metrics_mirror_the_positive_ones():
+    """NPV and specificity are precision and recall read off the negative class."""
+    cm = ConfusionMatrix(
+        true_positives=4, false_positives=2, true_negatives=10, false_negatives=4
+    )
+
+    assert cm.negative_predictive_value() == pytest.approx(10 / 14)
+    assert cm.specificity() == pytest.approx(10 / 12)
+
+
+def test_whether_the_negative_class_metrics_survive_an_empty_denominator():
+    """
+    Nothing predicted negative and nothing gold-negative, so neither rate is defined.
+
+    They return 0 rather than raising, matching `precision`/`recall` — callers that need
+    to tell "undefined" from "scored zero" have to check the counts themselves.
+    """
+    cm = ConfusionMatrix(true_positives=3, false_positives=0)
+
+    assert cm.negative_predictive_value() == 0
+    assert cm.specificity() == 0
