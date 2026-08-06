@@ -82,6 +82,8 @@ async def topic_pipeline(
     indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
     indexer_max_vespa_connections: PositiveInt = DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
     enable_v2_concepts: bool | None = None,
+    # Feature Flags
+    run_vespa_indexing: bool = True,
 ) -> None:
     """
     KG topic pipeline.
@@ -106,6 +108,7 @@ async def topic_pipeline(
         indexer_document_passages_concurrency_limit: Max concurrent passage indexers.
         indexer_max_vespa_connections: Maximum Vespa connections for indexing.
         enable_v2_concepts: Whether to index them into Vespa or not. If set to boolean value will be inferred.
+        run_vespa_indexing: Feature flag. When False, skip the indexing stage entirely.
 
     Returns:
         None
@@ -222,7 +225,7 @@ async def topic_pipeline(
                 f"unexpected result {type(aggregation_result_raw)}, {aggregation_result_raw}"
             )
 
-    if aggregation_run_output_identifier is not None:
+    if aggregation_run_output_identifier is not None and run_vespa_indexing:
         logger.info("Attempting indexing with successful aggregation results.")
         indexing_run: State = await index(
             run_output_identifier=aggregation_run_output_identifier,
