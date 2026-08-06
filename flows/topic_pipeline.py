@@ -225,23 +225,6 @@ async def topic_pipeline(
                 f"unexpected result {type(aggregation_result_raw)}, {aggregation_result_raw}"
             )
 
-    if aggregation_run_output_identifier is not None and run_vespa_indexing:
-        logger.info("Attempting indexing with successful aggregation results.")
-        indexing_run: State = await index(
-            run_output_identifier=aggregation_run_output_identifier,
-            config=config,
-            batch_size=indexing_batch_size,
-            indexer_concurrency_limit=indexer_concurrency_limit,
-            indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
-            indexer_max_vespa_connections=indexer_max_vespa_connections,
-            enable_v2_concepts=enable_v2_concepts,
-            return_state=True,
-        )
-        indexing_result_raw = await indexing_run.result(raise_on_failure=False)
-        logger.info("indexing completed")
-        if isinstance(indexing_result_raw, Exception):
-            raise indexing_result_raw
-
     await create_topic_pipeline_summary_artifact(
         config=config,
         successful_document_stems=successful_document_stems,
