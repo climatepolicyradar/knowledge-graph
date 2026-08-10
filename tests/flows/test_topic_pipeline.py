@@ -3,14 +3,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from prefect.artifacts import Artifact
-from prefect.client.schemas.objects import State, StateType
 from prefect.exceptions import FailedRun
 from prefect.states import Completed, Failed
 
 from flows.aggregate import (
-    DEFAULT_N_BATCHES,
-    DEFAULT_N_DOCUMENTS_IN_BATCH,
-    AggregateResult,
     RunOutputIdentifier,
 )
 from flows.boundary import DEFAULT_DOCUMENTS_BATCH_SIZE
@@ -40,10 +36,6 @@ async def test_topic_pipeline_no_config_provided(
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
-        patch(
-            "flows.topic_pipeline.aggregate",
-            new_callable=AsyncMock,
-        ) as mock_aggregate,
         patch(
             "flows.topic_pipeline.index",
             new_callable=AsyncMock,
@@ -80,12 +72,7 @@ async def test_topic_pipeline_no_config_provided(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
         )
-        mock_aggregate.return_value = State(
-            type=StateType.COMPLETED,
-            data=AggregateResult(
-                run_output_identifier=mock_run_output_identifier_str, errors=None
-            ),
-        )
+
         # Index returns None on success, need to mock the result() method
         mock_indexing_state = AsyncMock()
         mock_indexing_state.result = AsyncMock(return_value=None)
@@ -104,15 +91,6 @@ async def test_topic_pipeline_no_config_provided(
         assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["document_ids"] is None
         assert call_args.kwargs["batch_size"] == INFERENCE_BATCH_SIZE_DEFAULT
-
-        mock_aggregate.assert_called_once()
-        call_args = mock_aggregate.call_args
-        assert call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
-            mock_run_output_identifier_str
-        )
-        assert call_args.kwargs["config"] == test_config
-        assert call_args.kwargs["n_documents_in_batch"] == DEFAULT_N_DOCUMENTS_IN_BATCH
-        assert call_args.kwargs["n_batches"] == DEFAULT_N_BATCHES
 
         mock_indexing.assert_called_once()
         call_args = mock_indexing.call_args
@@ -146,10 +124,6 @@ async def test_topic_pipeline_with_full_config(
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
-        patch(
-            "flows.topic_pipeline.aggregate",
-            new_callable=AsyncMock,
-        ) as mock_aggregate,
         patch(
             "flows.topic_pipeline.index",
             new_callable=AsyncMock,
@@ -186,12 +160,7 @@ async def test_topic_pipeline_with_full_config(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
         )
-        mock_aggregate.return_value = State(
-            type=StateType.COMPLETED,
-            data=AggregateResult(
-                run_output_identifier=mock_run_output_identifier_str, errors=None
-            ),
-        )
+
         # Index returns None on success, need to mock the result() method
         mock_indexing_state = AsyncMock()
         mock_indexing_state.result = AsyncMock(return_value=None)
@@ -231,15 +200,6 @@ async def test_topic_pipeline_with_full_config(
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
-        mock_aggregate.assert_called_once()
-        call_args = mock_aggregate.call_args
-        assert (
-            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
-        )
-        assert call_args.kwargs["config"] == test_config
-        assert call_args.kwargs["n_documents_in_batch"] == 50
-        assert call_args.kwargs["n_batches"] == 3
-
         mock_indexing.assert_called_once_with(
             run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
             config=test_config,
@@ -275,10 +235,6 @@ async def test_topic_pipeline_with_inference_failure(
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.topic_pipeline.aggregate",
-            new_callable=AsyncMock,
-        ) as mock_aggregate,
-        patch(
             "flows.topic_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
@@ -306,12 +262,7 @@ async def test_topic_pipeline_with_inference_failure(
                 },
             ),
         )
-        mock_aggregate.return_value = State(
-            type=StateType.COMPLETED,
-            data=AggregateResult(
-                run_output_identifier=mock_run_output_identifier_str, errors=None
-            ),
-        )
+
         # Index returns None on success, need to mock the result() method
         mock_indexing_state = AsyncMock()
         mock_indexing_state.result = AsyncMock(return_value=None)
@@ -349,14 +300,6 @@ async def test_topic_pipeline_with_inference_failure(
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
-        mock_aggregate.assert_called_once()
-        call_args = mock_aggregate.call_args
-        assert (
-            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
-        )
-        assert call_args.kwargs["n_documents_in_batch"] == 50
-        assert call_args.kwargs["n_batches"] == 3
-
         mock_indexing.assert_called_once_with(
             run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
             config=test_config,
@@ -370,7 +313,6 @@ async def test_topic_pipeline_with_inference_failure(
 
         # Run the flow expecting aggregation and indexing not to run.
         mock_inference.reset_mock()
-        mock_aggregate.reset_mock()
         mock_indexing.reset_mock()
 
         mock_inference.return_value = Failed(
@@ -394,7 +336,7 @@ async def test_topic_pipeline_with_inference_failure(
             )
 
         assert mock_inference.call_count == 1
-        assert mock_aggregate.call_count == 0
+
         assert mock_indexing.call_count == 0
 
 
@@ -411,10 +353,6 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
-        patch(
-            "flows.topic_pipeline.aggregate",
-            new_callable=AsyncMock,
-        ) as mock_aggregate,
         patch(
             "flows.topic_pipeline.index",
             new_callable=AsyncMock,
@@ -437,19 +375,6 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
                     "successful_document_stems": set(document_stems_successful),
                     "run_output_identifier": mock_run_output_identifier_str,
                 },
-            ),
-        )
-
-        # aggregation state contains failed documents
-        mock_aggregate.return_value = State(
-            type=StateType.COMPLETED,
-            data=Fault(
-                msg="1/2 Documents failed",
-                loggable_data={},
-                data=AggregateResult(
-                    run_output_identifier=mock_run_output_identifier_str,
-                    errors="1/2 Documents failed",
-                ),
             ),
         )
 
@@ -496,16 +421,6 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
-        mock_aggregate.assert_called_once()
-        call_args = mock_aggregate.call_args
-        assert (
-            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
-        )
-
-        assert call_args.kwargs["config"] == test_config
-        assert call_args.kwargs["n_documents_in_batch"] == 50
-        assert call_args.kwargs["n_batches"] == 3
-
         mock_indexing.assert_called_once_with(
             run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
             config=test_config,
@@ -528,7 +443,6 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
 
         # assert pipeline completed all three flows despite inference and aggregation failures
         assert mock_inference.call_count == 1
-        assert mock_aggregate.call_count == 1
         assert mock_indexing.call_count == 1
 
 
@@ -568,10 +482,6 @@ async def test_topic_pipeline_with_document_ids_s3_path(
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.topic_pipeline.aggregate",
-            new_callable=AsyncMock,
-        ) as mock_aggregate,
-        patch(
             "flows.topic_pipeline.index",
             new_callable=AsyncMock,
         ) as mock_indexing,
@@ -600,12 +510,7 @@ async def test_topic_pipeline_with_document_ids_s3_path(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
         )
-        mock_aggregate.return_value = State(
-            type=StateType.COMPLETED,
-            data=AggregateResult(
-                run_output_identifier=mock_run_output_identifier_str, errors=None
-            ),
-        )
+
         # Index returns None on success, need to mock the result() method
         mock_indexing_state = AsyncMock()
         mock_indexing_state.result = AsyncMock(return_value=None)
@@ -637,7 +542,6 @@ async def test_topic_pipeline_with_document_ids_s3_path(
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
-        mock_aggregate.assert_called_once()
         mock_indexing.assert_called_once()
 
 
@@ -663,10 +567,6 @@ async def test_topic_pipeline_uses_aggregation_run_output_identifier_for_indexin
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
-        patch(
-            "flows.topic_pipeline.aggregate",
-            new_callable=AsyncMock,
-        ) as mock_aggregate,
         patch(
             "flows.topic_pipeline.index",
             new_callable=AsyncMock,
@@ -698,15 +598,6 @@ async def test_topic_pipeline_uses_aggregation_run_output_identifier_for_indexin
         mock_inference_state.result = AsyncMock(return_value=inference_run_id)
         mock_inference.return_value = mock_inference_state
 
-        # Aggregation returns a DIFFERENT run_output_identifier (as it does in production)
-        aggregation_result = AggregateResult(
-            run_output_identifier=aggregation_run_id,  # Different from inference!
-            errors=None,
-        )
-        mock_aggregate_state = AsyncMock()
-        mock_aggregate_state.result = AsyncMock(return_value=aggregation_result)
-        mock_aggregate.return_value = mock_aggregate_state
-
         # Index returns None on success
         mock_indexing_state = AsyncMock()
         mock_indexing_state.result = AsyncMock(return_value=None)
@@ -714,10 +605,6 @@ async def test_topic_pipeline_uses_aggregation_run_output_identifier_for_indexin
 
         # Run the flow
         await topic_pipeline(config=test_config)
-
-        # Verify that aggregation was called with inference's run_output_identifier
-        aggregate_call_args = mock_aggregate.call_args
-        assert aggregate_call_args.kwargs["run_output_identifier"] == inference_run_id
 
         # Verify that index was called with AGGREGATION's run_output_identifier
         # NOT inference's run_output_identifier
