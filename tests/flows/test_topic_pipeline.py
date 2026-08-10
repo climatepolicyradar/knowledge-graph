@@ -411,9 +411,9 @@ async def test_topic_pipeline_with_inference_unexpected_result_type(
     test_config,
 ):
     """
-    Test the flow's inference match statement raises ValueError when
-    inference resolves to a result type that is neither a Fault, an
-    Exception, nor a str run_output_identifier.
+    Test that the flow raises ValueError for an unexpected inference result type.
+
+    The result is neither a Fault, an Exception, nor a str run_output_identifier.
     """
 
     with (
@@ -442,10 +442,6 @@ async def test_topic_pipeline_with_inference_unexpected_result_type(
 async def test_topic_pipeline_with_inference_fault_missing_dict_data(
     test_config,
 ):
-    """
-    Test the flow raises ValueError when an inference Fault's data field
-    does not contain the expected dict shape.
-    """
 
     with (
         patch(
@@ -481,10 +477,11 @@ async def test_topic_pipeline_raises_on_aggregation_subflow_crash(
     mock_run_output_identifier_str,
 ):
     """
-    Test that a genuine aggregation subflow crash (not a partial-failure
-    Fault, but the subflow itself failing) propagates out of
-    aggregation_run.result() as a FailedRun, distinct from the
-    Fault-wrapped partial-failure case above.
+    Test that a genuine aggregation subflow crash propagates as a FailedRun.
+
+    Unlike a partial-failure Fault, this verifies that a failure in the subflow
+    itself propagates out of aggregation_run.result() as a FailedRun, distinct
+    from the Fault-wrapped partial-failure case above.
     """
 
     with (
@@ -546,10 +543,10 @@ async def test_topic_pipeline_summary_artifact_created_before_aggregate(
     mock_run_output_identifier_str,
 ):
     """
-    Test the ordering guarantee that the summary artifact is created before
-    aggregate() is invoked. This ordering is what makes the artifact
-    survive an aggregation failure in the tests above, so it is worth
-    locking down directly rather than only inferring it indirectly.
+    Test that the summary artifact is created before aggregate() is invoked.
+
+    This ordering ensures the artifact survives an aggregation failure, so it
+    is worth locking down directly rather than only inferring it indirectly.
     """
 
     call_order = []
@@ -618,11 +615,7 @@ async def test_topic_pipeline_summary_artifact_created_before_aggregate(
 
 @pytest.mark.asyncio
 async def test_create_topic_pipeline_summary_artifact_content(test_config):
-    """
-    Unit test for create_topic_pipeline_summary_artifact directly, asserting
-    on the markdown body content (environment name and successful document
-    count), not just the artifact's static description string.
-    """
+    """Assert the summary artifact contains the environment and document count."""
 
     from flows.topic_pipeline import create_topic_pipeline_summary_artifact
 
