@@ -609,7 +609,29 @@ async def test_topic_pipeline_raises_on_aggregation_subflow_crash(
             "flows.topic_pipeline.aggregate",
             new_callable=AsyncMock,
         ) as mock_aggregate,
+        patch(
+            "flows.topic_pipeline.get_async_session",
+        ) as mock_get_session,
     ):
+        # Mock S3 loading for document stems - inference resolving to a
+        # plain str run_output_identifier hits the `case str():` branch,
+        # which fetches successful_document_stems from S3.
+        mock_s3_client = AsyncMock()
+        mock_response = {
+            "Body": AsyncMock(
+                read=AsyncMock(
+                    return_value=b'{"successful_document_stems": ["CCLW.executive.1.1"]}'
+                )
+            )
+        }
+        mock_s3_client.get_object = AsyncMock(return_value=mock_response)
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
+        mock_session = Mock()
+        mock_session.client = Mock(return_value=mock_client_context)
+        mock_get_session.return_value = mock_session
+
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
@@ -657,7 +679,29 @@ async def test_topic_pipeline_summary_artifact_created_before_aggregate(
             "flows.topic_pipeline.create_topic_pipeline_summary_artifact",
             new_callable=AsyncMock,
         ) as mock_create_artifact,
+        patch(
+            "flows.topic_pipeline.get_async_session",
+        ) as mock_get_session,
     ):
+        # Mock S3 loading for document stems - inference resolving to a
+        # plain str run_output_identifier hits the `case str():` branch,
+        # which fetches successful_document_stems from S3.
+        mock_s3_client = AsyncMock()
+        mock_response = {
+            "Body": AsyncMock(
+                read=AsyncMock(
+                    return_value=b'{"successful_document_stems": ["CCLW.executive.1.1"]}'
+                )
+            )
+        }
+        mock_s3_client.get_object = AsyncMock(return_value=mock_response)
+        mock_client_context = AsyncMock()
+        mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
+        mock_client_context.__aexit__ = AsyncMock(return_value=None)
+        mock_session = Mock()
+        mock_session.client = Mock(return_value=mock_client_context)
+        mock_get_session.return_value = mock_session
+
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
