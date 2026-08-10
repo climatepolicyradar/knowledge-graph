@@ -6,10 +6,6 @@ from prefect.artifacts import Artifact
 from prefect.exceptions import FailedRun
 from prefect.states import Completed, Failed
 
-from flows.aggregate import (
-    RunOutputIdentifier,
-)
-from flows.boundary import DEFAULT_DOCUMENTS_BATCH_SIZE
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
     WikibaseID,
@@ -36,10 +32,6 @@ async def test_topic_pipeline_no_config_provided(
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
-        patch(
-            "flows.topic_pipeline.index",
-            new_callable=AsyncMock,
-        ) as mock_indexing,
         patch(
             "flows.topic_pipeline.Config.create",
             new_callable=AsyncMock,
@@ -73,11 +65,6 @@ async def test_topic_pipeline_no_config_provided(
             data=mock_run_output_identifier_str,
         )
 
-        # Index returns None on success, need to mock the result() method
-        mock_indexing_state = AsyncMock()
-        mock_indexing_state.result = AsyncMock(return_value=None)
-        mock_indexing.return_value = mock_indexing_state
-
         # Run the flow
         await topic_pipeline()
 
@@ -91,14 +78,6 @@ async def test_topic_pipeline_no_config_provided(
         assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["document_ids"] is None
         assert call_args.kwargs["batch_size"] == INFERENCE_BATCH_SIZE_DEFAULT
-
-        mock_indexing.assert_called_once()
-        call_args = mock_indexing.call_args
-        assert call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
-            mock_run_output_identifier_str
-        )
-        assert call_args.kwargs["config"] == test_config
-        assert call_args.kwargs["batch_size"] == DEFAULT_DOCUMENTS_BATCH_SIZE
 
         # Assert that the summary artifact was created
         summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
@@ -124,10 +103,6 @@ async def test_topic_pipeline_with_full_config(
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
-        patch(
-            "flows.topic_pipeline.index",
-            new_callable=AsyncMock,
-        ) as mock_indexing,
         patch(
             "flows.topic_pipeline.get_async_session",
         ) as mock_get_session,
@@ -160,11 +135,6 @@ async def test_topic_pipeline_with_full_config(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
         )
-
-        # Index returns None on success, need to mock the result() method
-        mock_indexing_state = AsyncMock()
-        mock_indexing_state.result = AsyncMock(return_value=None)
-        mock_indexing.return_value = mock_indexing_state
 
         # Run the flow
         await topic_pipeline(
@@ -200,17 +170,6 @@ async def test_topic_pipeline_with_full_config(
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
-        mock_indexing.assert_called_once_with(
-            run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
-            config=test_config,
-            batch_size=200,
-            indexer_concurrency_limit=2,
-            indexer_document_passages_concurrency_limit=4,
-            indexer_max_vespa_connections=8,
-            enable_v2_concepts=None,
-            return_state=True,
-        )
-
         # Assert that the summary artifact was created
         summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
@@ -234,10 +193,6 @@ async def test_topic_pipeline_with_inference_failure(
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
-        patch(
-            "flows.topic_pipeline.index",
-            new_callable=AsyncMock,
-        ) as mock_indexing,
     ):
         document_ids = [
             DocumentImportId("CCLW.executive.1.1"),
@@ -263,12 +218,7 @@ async def test_topic_pipeline_with_inference_failure(
             ),
         )
 
-        # Index returns None on success, need to mock the result() method
-        mock_indexing_state = AsyncMock()
-        mock_indexing_state.result = AsyncMock(return_value=None)
-        mock_indexing.return_value = mock_indexing_state
-
-        # Run the flow expecting aggregation and indexing to run on successful documents.
+        # Run the flow and expect an exception to be returned
         with pytest.raises(Fault, match="Some inference batches had failures!"):
             await topic_pipeline(
                 config=test_config,
@@ -300,20 +250,8 @@ async def test_topic_pipeline_with_inference_failure(
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
-        mock_indexing.assert_called_once_with(
-            run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
-            config=test_config,
-            batch_size=200,
-            indexer_concurrency_limit=2,
-            indexer_document_passages_concurrency_limit=4,
-            indexer_max_vespa_connections=8,
-            enable_v2_concepts=None,
-            return_state=True,
-        )
-
         # Run the flow expecting aggregation and indexing not to run.
         mock_inference.reset_mock()
-        mock_indexing.reset_mock()
 
         mock_inference.return_value = Failed(
             message="Test error", result=Exception("Test exception")
@@ -337,8 +275,6 @@ async def test_topic_pipeline_with_inference_failure(
 
         assert mock_inference.call_count == 1
 
-        assert mock_indexing.call_count == 0
-
 
 @pytest.mark.asyncio
 async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggregation(
@@ -353,10 +289,6 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
-        patch(
-            "flows.topic_pipeline.index",
-            new_callable=AsyncMock,
-        ) as mock_indexing,
     ):
         document_stems_successful = [DocumentStem("CCLW.executive.2.2")]
         classifier_spec = ClassifierSpec(
@@ -377,11 +309,6 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
                 },
             ),
         )
-
-        # Index returns None on success, need to mock the result() method
-        mock_indexing_state = AsyncMock()
-        mock_indexing_state.result = AsyncMock(return_value=None)
-        mock_indexing.return_value = mock_indexing_state
 
         # Run the flow and expect an exception to be returned
         with pytest.raises(
@@ -421,17 +348,6 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
-        mock_indexing.assert_called_once_with(
-            run_output_identifier=RunOutputIdentifier(mock_run_output_identifier_str),
-            config=test_config,
-            batch_size=200,
-            indexer_concurrency_limit=2,
-            indexer_document_passages_concurrency_limit=4,
-            indexer_max_vespa_connections=8,
-            enable_v2_concepts=None,
-            return_state=True,
-        )
-
         # Assert that the summary artifact was created
         summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
@@ -443,7 +359,6 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
 
         # assert pipeline completed all three flows despite inference and aggregation failures
         assert mock_inference.call_count == 1
-        assert mock_indexing.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -482,10 +397,6 @@ async def test_topic_pipeline_with_document_ids_s3_path(
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
-            "flows.topic_pipeline.index",
-            new_callable=AsyncMock,
-        ) as mock_indexing,
-        patch(
             "flows.topic_pipeline.get_async_session",
         ) as mock_get_session,
     ):
@@ -510,11 +421,6 @@ async def test_topic_pipeline_with_document_ids_s3_path(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
         )
-
-        # Index returns None on success, need to mock the result() method
-        mock_indexing_state = AsyncMock()
-        mock_indexing_state.result = AsyncMock(return_value=None)
-        mock_indexing.return_value = mock_indexing_state
 
         # Run the flow with document_ids_s3_path
         await topic_pipeline(
@@ -541,84 +447,3 @@ async def test_topic_pipeline_with_document_ids_s3_path(
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
-
-        mock_indexing.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_topic_pipeline_uses_aggregation_run_output_identifier_for_indexing(
-    test_config,
-    mock_run_output_identifier_str,
-):
-    """
-    Test that index stage receives run_output_identifier from aggregation, not inference.
-
-    This test verifies the fix for the bug where index was receiving the inference
-    run_output_identifier instead of the aggregation run_output_identifier, causing
-    it to look for documents in the wrong S3 location.
-    """
-
-    # Create distinct identifiers for each stage
-    inference_run_id = "2025-12-17T14:49-inference-id"
-    aggregation_run_id = "2025-12-17T16:12-aggregation-id"
-
-    with (
-        patch(
-            "flows.topic_pipeline.inference",
-            new_callable=AsyncMock,
-        ) as mock_inference,
-        patch(
-            "flows.topic_pipeline.index",
-            new_callable=AsyncMock,
-        ) as mock_indexing,
-        patch(
-            "flows.topic_pipeline.get_async_session",
-        ) as mock_get_session,
-    ):
-        # Mock S3 loading for document stems from inference
-        mock_s3_client = AsyncMock()
-        mock_response = {
-            "Body": AsyncMock(
-                read=AsyncMock(
-                    return_value=b'{"successful_document_stems": ["CCLW.executive.1.1", "CCLW.executive.2.2"]}'
-                )
-            )
-        }
-        mock_s3_client.get_object = AsyncMock(return_value=mock_response)
-        mock_client_context = AsyncMock()
-        mock_client_context.__aenter__ = AsyncMock(return_value=mock_s3_client)
-        mock_client_context.__aexit__ = AsyncMock(return_value=None)
-        mock_session = Mock()
-        mock_session.client = Mock(return_value=mock_client_context)
-        mock_get_session.return_value = mock_session
-
-        # Create mock State objects with properly mocked .result() methods
-        # Inference returns its own run_output_identifier
-        mock_inference_state = AsyncMock()
-        mock_inference_state.result = AsyncMock(return_value=inference_run_id)
-        mock_inference.return_value = mock_inference_state
-
-        # Index returns None on success
-        mock_indexing_state = AsyncMock()
-        mock_indexing_state.result = AsyncMock(return_value=None)
-        mock_indexing.return_value = mock_indexing_state
-
-        # Run the flow
-        await topic_pipeline(config=test_config)
-
-        # Verify that index was called with AGGREGATION's run_output_identifier
-        # NOT inference's run_output_identifier
-        index_call_args = mock_indexing.call_args
-        assert index_call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
-            aggregation_run_id
-        ), (
-            f"Index should use aggregation's run_output_identifier ({aggregation_run_id}), "
-            f"not inference's ({inference_run_id})"
-        )
-
-        # This is the bug we're testing for:
-        #
-        # If this assertion fails, index is looking in the wrong S3 location
-        assert index_call_args.kwargs["run_output_identifier"] != RunOutputIdentifier(
-            inference_run_id
-        ), "Index should NOT use inference's run_output_identifier"
