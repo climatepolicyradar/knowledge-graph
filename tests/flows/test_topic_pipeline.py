@@ -186,10 +186,6 @@ async def test_topic_pipeline_with_full_config(
             inference_gpu_concurrency_limit=5,
             aggregation_n_documents_in_batch=50,
             aggregation_n_batches=3,
-            indexing_batch_size=200,
-            indexer_concurrency_limit=2,
-            indexer_document_passages_concurrency_limit=4,
-            indexer_max_vespa_connections=8,
         )
 
         # Verify sub-flows were called with correct parameters
@@ -284,10 +280,6 @@ async def test_topic_pipeline_with_inference_failure(
                 inference_gpu_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
                 aggregation_n_batches=3,
-                indexing_batch_size=200,
-                indexer_concurrency_limit=2,
-                indexer_document_passages_concurrency_limit=4,
-                indexer_max_vespa_connections=8,
             )
 
         # Verify sub-flows were called with correct parameters
@@ -331,10 +323,6 @@ async def test_topic_pipeline_with_inference_failure(
                 inference_gpu_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
                 aggregation_n_batches=3,
-                indexing_batch_size=200,
-                indexer_concurrency_limit=2,
-                indexer_document_passages_concurrency_limit=4,
-                indexer_max_vespa_connections=8,
             )
 
         assert mock_inference.call_count == 1
@@ -409,10 +397,6 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
                 inference_gpu_concurrency_limit=5,
                 aggregation_n_documents_in_batch=50,
                 aggregation_n_batches=3,
-                indexing_batch_size=200,
-                indexer_concurrency_limit=2,
-                indexer_document_passages_concurrency_limit=4,
-                indexer_max_vespa_connections=8,
             )
 
         # Verify sub-flows were called with correct parameters
@@ -535,10 +519,6 @@ async def test_topic_pipeline_with_document_ids_s3_path(
             inference_gpu_concurrency_limit=5,
             aggregation_n_documents_in_batch=50,
             aggregation_n_batches=3,
-            indexing_batch_size=200,
-            indexer_concurrency_limit=2,
-            indexer_document_passages_concurrency_limit=4,
-            indexer_max_vespa_connections=8,
         )
 
         # Verify sub-flows were called with correct parameters
