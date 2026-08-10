@@ -229,11 +229,6 @@ async def test_topic_pipeline_does_not_pass_classifier_specs_to_aggregate_in_pro
     aggregate_inference_results_document_stems,
     mock_run_output_identifier_str,
 ):
-    """
-    Test that classifier_specs are never forwarded to aggregate in production,
-    even when explicitly provided - this is a deliberate safety behaviour so
-    that a manually-triggered run can never wipe existing concepts for users.
-    """
 
     # NOTE: this assumes `Config` is a Pydantic model supporting
     # `.model_copy(update=...)`. If `Config` is constructed differently,
