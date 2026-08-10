@@ -14,6 +14,7 @@ from argilla import (
     ResponseStatus,
     Settings,
     SpanQuestion,
+    Suggestion,
     TaskDistribution,
     TextField,
     User,
@@ -25,7 +26,11 @@ from pydantic import SecretStr
 
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.classifier.classifier import ProbabilityCapableClassifier
+from knowledge_graph.classifier.large_language_model import LLMClassifier
 from knowledge_graph.concept import Concept
+from knowledge_graph.ensemble import Ensemble
+from knowledge_graph.ensemble.aggregation import SpanAggregator, UnionAggregator
+from knowledge_graph.ensemble.metrics import MajorityVote
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import (
     LabelledPassage,
@@ -36,6 +41,45 @@ from knowledge_graph.span import Span
 logger = getLogger(__name__)
 
 load_dotenv(find_dotenv())
+
+
+def create_llm_ensemble_for_prelabelling_validation_dataset(
+    concept: Concept,
+) -> Ensemble:
+    """
+    Create an LLM ensemble for pre-labelling examples for validation datasets.
+
+    See scripts/benchmarks/eval_set_autolabelling_experiment/ for the reasoning behind
+    the specific ensemble config.
+    """
+
+    temperature = 0.7
+
+    classifiers = [
+        LLMClassifier(
+            concept=concept,
+            model_name="openrouter:anthropic/claude-opus-5",
+            random_seed=1,
+            temperature=temperature,
+        ),
+        LLMClassifier(
+            concept=concept,
+            model_name="openrouter:anthropic/claude-opus-5",
+            random_seed=2,
+            temperature=temperature,
+        ),
+        LLMClassifier(
+            concept=concept,
+            model_name="openrouter:google/gemini-3.1-pro-preview",
+            random_seed=3,
+            temperature=temperature,
+        ),
+    ]
+
+    return Ensemble(
+        concept=concept,
+        classifiers=classifiers,
+    )
 
 
 class ResourceAlreadyExistsError(Exception):
@@ -600,12 +644,77 @@ class ArgillaSession:
 
         return responses
 
+    @overload
+    def _predict_suggestion_spans_and_score(
+        self,
+        suggestion_model: Ensemble,
+        texts: list[str],
+        batch_size: int,
+        span_aggregator: SpanAggregator,
+    ) -> Sequence[tuple[list[Span], float]]: ...
+
+    @overload
+    def _predict_suggestion_spans_and_score(
+        self,
+        suggestion_model: Classifier,
+        texts: list[str],
+        batch_size: int,
+    ) -> Sequence[tuple[list[Span], None]]: ...
+
+    def _predict_suggestion_spans_and_score(
+        self,
+        suggestion_model: Classifier | Ensemble,
+        texts: list[str],
+        batch_size: int,
+        span_aggregator: SpanAggregator | None = None,
+    ) -> Sequence[tuple[list[Span], float | None]]:
+        """
+        Predict spans to suggest to annotators, with a confidence score where available.
+
+        For an Ensemble, the per-classifier spans are reduced to a single set of spans
+        by `span_aggregator`, and scored by the ensemble's majority vote. A single
+        classifier has no equivalent notion of agreement, so it needs no aggregator and
+        its spans are unscored.
+
+        :param suggestion_model: The classifier or ensemble to predict with
+        :param texts: The passage texts to predict on
+        :param batch_size: Number of texts to predict on at a time
+        :param span_aggregator: Reduces an ensemble's per-classifier spans to one set.
+            Required for an Ensemble, and not used for a single Classifier.
+        :return: A (spans, score) tuple per text, in the order the texts were given
+        """
+        if isinstance(suggestion_model, Ensemble):
+            if span_aggregator is None:
+                raise ValueError(
+                    "A span_aggregator is required to reduce an ensemble's "
+                    "per-classifier spans to a single set of suggested spans"
+                )
+            spans_per_classifier_per_passage = suggestion_model.predict(
+                texts, batch_size=batch_size
+            )
+            majority_vote = MajorityVote()
+            return [
+                (
+                    span_aggregator(spans_per_classifier),
+                    float(majority_vote(spans_per_classifier)),
+                )
+                for spans_per_classifier in spans_per_classifier_per_passage
+            ]
+
+        return [
+            (spans, None)
+            for spans in suggestion_model.predict(texts, batch_size=batch_size)
+        ]
+
     def add_labelled_passages(
         self,
         labelled_passages: list[LabelledPassage],
         wikibase_id: WikibaseID | str,
         workspace: str | None = None,
         users: list[str] | None = None,
+        suggestion_model: Classifier | Ensemble | None = None,
+        suggestion_batch_size: int = 15,
+        span_aggregator: SpanAggregator | None = None,
     ) -> Dataset:
         """
         Add labelled passages to an existing dataset in Argilla.
@@ -614,12 +723,26 @@ class ArgillaSession:
         labeller. Labellers can be provided in the spans themselves, or overwritten by
         the `users` argument.
 
+        If a `suggestion_model` is provided, it predicts on every passage and its spans
+        are attached as Argilla suggestions: hints which every annotator sees and can
+        accept or reject. Every passage gets a suggestion, empty ones included, so that
+        a passage the model judged negative is distinguishable from one it never saw.
+        Suggestions are kept separate from the passages' own spans, so model predictions
+        are never mistaken for submitted human responses.
+
         :param labelled_passages: List of LabelledPassage objects to add.
         :param wikibase_id: Wikibase ID of the dataset to add passages to
         :param workspace: Name of the workspace to add passages to. If not provided,
             the session's default_workspace will be used
         :param users: Optional list of usernames to attribute spans to if they have no
             labellers. If not provided, spans without labellers will be skipped.
+        :param suggestion_model: Optional classifier or ensemble whose predictions are
+            attached to each record as suggestions for annotators
+        :param suggestion_batch_size: Number of passages the suggestion_model predicts
+            on at a time
+        :param span_aggregator: Reduces an ensemble suggestion_model's per-classifier
+            spans to a single set of spans. Defaults to UnionAggregator, which suggests
+            every span any of the ensemble's classifiers predicted.
         :return: The updated dataset
         :raises ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
@@ -630,8 +753,31 @@ class ArgillaSession:
             dataset.name,
         )
 
+        suggested_spans_and_score: Sequence[tuple[list[Span], float | None]] | None = (
+            None
+        )
+        if suggestion_model is not None:
+            logger.info(
+                "Predicting suggestions for %d passages with %s",
+                len(labelled_passages),
+                suggestion_model,
+            )
+            texts = [passage.text for passage in labelled_passages]
+            suggested_spans_and_score = (
+                self._predict_suggestion_spans_and_score(
+                    suggestion_model,
+                    texts,
+                    suggestion_batch_size,
+                    span_aggregator or UnionAggregator(),
+                )
+                if isinstance(suggestion_model, Ensemble)
+                else self._predict_suggestion_spans_and_score(
+                    suggestion_model, texts, suggestion_batch_size
+                )
+            )
+
         records = []
-        for passage in labelled_passages:
+        for idx, passage in enumerate(labelled_passages):
             fields = {
                 "text": passage.text,
             }
@@ -640,13 +786,41 @@ class ArgillaSession:
                 passage, wikibase_id, users
             )
 
+            suggestions = None
+            if suggested_spans_and_score is not None:
+                spans, score = suggested_spans_and_score[idx]
+                span_values = self._spans_to_argilla_value(spans, wikibase_id)
+                # an empty suggestion is still attached, so that a passage the model
+                # judged negative is distinguishable from one it never saw
+                suggestions = [
+                    Suggestion(
+                        question_name="entities",
+                        value=span_values,
+                        # a span question scores each span separately, and rejects a
+                        # single value. The score is passage-level, so it's repeated.
+                        score=[score] * len(span_values)
+                        if score is not None and span_values
+                        else None,
+                        agent=str(suggestion_model),
+                        type="model",
+                    )
+                ]
+
             record = Record(
                 id=str(uuid.uuid4()),
                 fields=fields,  # type: ignore
                 responses=responses,
+                suggestions=suggestions,
                 metadata=self._format_metadata_keys_for_argilla(passage.metadata),
             )
             records.append(record)
+
+        if suggested_spans_and_score is not None:
+            logger.info(
+                "Suggested at least one span on %d of %d records",
+                sum(1 for spans, _ in suggested_spans_and_score if spans),
+                len(records),
+            )
 
         logger.debug("Formatted %d records for Argilla ingestion", len(records))
         dataset.records.log(records)
