@@ -9,18 +9,12 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
 from flows.aggregate import (
+    AggregateResult,
     RunOutputIdentifier,
-)
-from flows.boundary import (
-    DEFAULT_DOCUMENTS_BATCH_SIZE as INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
+    aggregate,
 )
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.config import Config
-from flows.index import (
-    DEFAULT_INDEXER_CONCURRENCY_LIMIT,
-    DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
-    INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
-)
 from flows.inference import (
     CLASSIFIER_CPU_CONCURRENCY_LIMIT,
     CLASSIFIER_GPU_CONCURRENCY_LIMIT,
@@ -34,7 +28,7 @@ from flows.utils import (
     SlackNotify,
     build_inference_result_s3_uri,
 )
-from knowledge_graph.cloud import get_async_session
+from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.utils import get_logger
 
 
@@ -74,13 +68,6 @@ async def topic_pipeline(
     config: Config | None = None,
     aggregation_n_documents_in_batch: PositiveInt = AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
     aggregation_n_batches: PositiveInt = 5,
-    indexing_batch_size: int = INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
-    indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
-    indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
-    indexer_max_vespa_connections: PositiveInt = DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
-    enable_v2_concepts: bool | None = None,
-    # Feature Flags
-    run_vespa_indexing: bool = True,
 ) -> None:
     """
     KG topic pipeline.
@@ -88,24 +75,17 @@ async def topic_pipeline(
     This flow orchestrates the KG topic pipeline, including:
     1. Inference
     2. Aggregation
-    3. Indexing
 
     Args:
         classifier_specs: Classifier specifications to use for inference.
         document_ids: Specific document IDs to process. If None, processes all.
         document_ids_s3_path: An S3 path string (e.g., "s3://bucket/key") that contains document ids to process.
-        config: Configuration for the inference, aggregation and index flows. If None, creates default.
+        config: Configuration for the inference and aggregation flows. If None, creates default.
         inference_batch_size: Number of documents to process in each batch.
         inference_cpu_concurrency_limit: Maximum concurrent CPU classifier batches.
         inference_gpu_concurrency_limit: Maximum concurrent GPU classifier batches.
         aggregation_n_documents_in_batch: Number of documents per aggregation batch.
         aggregation_n_batches: Number of aggregation batches to run.
-        indexing_batch_size: Number of documents to index in each batch.
-        indexer_concurrency_limit: Maximum concurrent indexers.
-        indexer_document_passages_concurrency_limit: Max concurrent passage indexers.
-        indexer_max_vespa_connections: Maximum Vespa connections for indexing.
-        enable_v2_concepts: Whether to index them into Vespa or not. If set to boolean value will be inferred.
-        run_vespa_indexing: Feature flag. When False, skip the indexing stage entirely.
 
     Returns:
         None
@@ -182,6 +162,35 @@ async def topic_pipeline(
             )
         case _:
             raise ValueError(f"unexpected result {type(inference_result_raw)}")
+
+    aggregation_run: State = await aggregate(
+        run_output_identifier=inference_run_output_identifier,
+        config=config,
+        n_documents_in_batch=aggregation_n_documents_in_batch,
+        n_batches=aggregation_n_batches,
+        return_state=True,
+        # Make sure we never wipe any concepts for users. Otherwise, it's allowed.
+        classifier_specs=classifier_specs
+        if config.aws_env != AwsEnv.production
+        else None,
+    )
+
+    aggregation_result_raw: (
+        AggregateResult | Fault | Exception
+    ) = await aggregation_run.result(raise_on_failure=False)
+    logger.info("aggregation completed")
+
+    match aggregation_result_raw:
+        case Exception() if not isinstance(aggregation_result_raw, Fault):
+            raise aggregation_result_raw
+        case Fault():
+            raise aggregation_result_raw
+        case AggregateResult():
+            pass
+        case _:
+            raise ValueError(
+                f"unexpected result {type(aggregation_result_raw)}, {aggregation_result_raw}"
+            )
 
     await create_topic_pipeline_summary_artifact(
         config=config,
