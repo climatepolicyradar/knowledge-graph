@@ -163,6 +163,11 @@ async def topic_pipeline(
         case _:
             raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
+    await create_topic_pipeline_summary_artifact(
+        config=config,
+        successful_document_stems=successful_document_stems,
+    )
+
     aggregation_run: State = await aggregate(
         run_output_identifier=inference_run_output_identifier,
         config=config,
@@ -191,11 +196,6 @@ async def topic_pipeline(
             raise ValueError(
                 f"unexpected result {type(aggregation_result_raw)}, {aggregation_result_raw}"
             )
-
-    await create_topic_pipeline_summary_artifact(
-        config=config,
-        successful_document_stems=successful_document_stems,
-    )
 
     logger.info("checking after the fact for earlier stage failures")
     if isinstance(inference_result_raw, Fault):
