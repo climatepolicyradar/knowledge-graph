@@ -208,8 +208,7 @@ def load_model_pricing(output_dir: Path) -> dict[str, TokenPrices]:
     """
 
     if (path := output_dir / OPENROUTER_PRICING_CACHE_FILENAME).exists():
-        cached = read_pricing_cache(path)
-        if cached:
+        if cached := read_pricing_cache(path):
             return cached
 
     try:
