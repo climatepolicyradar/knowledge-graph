@@ -9,7 +9,6 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
 from flows.aggregate import (
-    AggregateResult,
     RunOutputIdentifier,
     aggregate,
 )
@@ -180,24 +179,10 @@ async def topic_pipeline(
         else None,
     )
 
-    aggregation_result_raw: (
-        AggregateResult | Fault | Exception
-    ) = await aggregation_run.result(raise_on_failure=False)
-    logger.info("aggregation completed")
+    await aggregation_run.result()
+    logger.info("Aggregation completed!")
 
-    match aggregation_result_raw:
-        case Exception() if not isinstance(aggregation_result_raw, Fault):
-            raise aggregation_result_raw
-        case Fault():
-            raise aggregation_result_raw
-        case AggregateResult():
-            pass
-        case _:
-            raise ValueError(
-                f"unexpected result {type(aggregation_result_raw)}, {aggregation_result_raw}"
-            )
-
-    logger.info("checking after the fact for earlier stage failures")
+    logger.info("Checking after the fact whether inference was a partial failure.")
     if isinstance(inference_result_raw, Fault):
         raise inference_result_raw
 
