@@ -234,6 +234,7 @@ async def test_topic_pipeline_does_not_pass_classifier_specs_to_aggregate_in_pro
     even when explicitly provided - this is a deliberate safety behaviour so
     that a manually-triggered run can never wipe existing concepts for users.
     """
+
     # NOTE: this assumes `Config` is a Pydantic model supporting
     # `.model_copy(update=...)`. If `Config` is constructed differently,
     # adjust how `production_config` below is built accordingly.
@@ -414,6 +415,7 @@ async def test_topic_pipeline_with_inference_unexpected_result_type(
     inference resolves to a result type that is neither a Fault, an
     Exception, nor a str run_output_identifier.
     """
+
     with (
         patch(
             "flows.topic_pipeline.inference",
@@ -444,6 +446,7 @@ async def test_topic_pipeline_with_inference_fault_missing_dict_data(
     Test the flow raises ValueError when an inference Fault's data field
     does not contain the expected dict shape.
     """
+
     with (
         patch(
             "flows.topic_pipeline.inference",
@@ -483,6 +486,7 @@ async def test_topic_pipeline_raises_on_aggregation_subflow_crash(
     aggregation_run.result() as a FailedRun, distinct from the
     Fault-wrapped partial-failure case above.
     """
+
     with (
         patch(
             "flows.topic_pipeline.inference",
@@ -547,6 +551,7 @@ async def test_topic_pipeline_summary_artifact_created_before_aggregate(
     survive an aggregation failure in the tests above, so it is worth
     locking down directly rather than only inferring it indirectly.
     """
+
     call_order = []
 
     with (
@@ -618,6 +623,7 @@ async def test_create_topic_pipeline_summary_artifact_content(test_config):
     on the markdown body content (environment name and successful document
     count), not just the artifact's static description string.
     """
+
     from flows.topic_pipeline import create_topic_pipeline_summary_artifact
 
     successful_document_stems = {
