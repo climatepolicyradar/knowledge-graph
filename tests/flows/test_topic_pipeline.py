@@ -3,9 +3,16 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from prefect.artifacts import Artifact
+from prefect.client.schemas.objects import State, StateType
 from prefect.exceptions import FailedRun
 from prefect.states import Completed, Failed
 
+from flows.aggregate import (
+    DEFAULT_N_BATCHES,
+    DEFAULT_N_DOCUMENTS_IN_BATCH,
+    AggregateResult,
+    RunOutputIdentifier,
+)
 from flows.classifier_specs.spec_interface import (
     ClassifierSpec,
     WikibaseID,
@@ -32,6 +39,10 @@ async def test_topic_pipeline_no_config_provided(
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
+        patch(
+            "flows.topic_pipeline.aggregate",
+            new_callable=AsyncMock,
+        ) as mock_aggregate,
         patch(
             "flows.topic_pipeline.Config.create",
             new_callable=AsyncMock,
@@ -64,6 +75,12 @@ async def test_topic_pipeline_no_config_provided(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
         )
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=AggregateResult(
+                run_output_identifier=mock_run_output_identifier_str, errors=None
+            ),
+        )
 
         # Run the flow
         await topic_pipeline()
@@ -78,6 +95,15 @@ async def test_topic_pipeline_no_config_provided(
         assert call_args.kwargs["classifier_specs"] is None
         assert call_args.kwargs["document_ids"] is None
         assert call_args.kwargs["batch_size"] == INFERENCE_BATCH_SIZE_DEFAULT
+
+        mock_aggregate.assert_called_once()
+        call_args = mock_aggregate.call_args
+        assert call_args.kwargs["run_output_identifier"] == RunOutputIdentifier(
+            mock_run_output_identifier_str
+        )
+        assert call_args.kwargs["config"] == test_config
+        assert call_args.kwargs["n_documents_in_batch"] == DEFAULT_N_DOCUMENTS_IN_BATCH
+        assert call_args.kwargs["n_batches"] == DEFAULT_N_BATCHES
 
         # Assert that the summary artifact was created
         summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
@@ -103,6 +129,10 @@ async def test_topic_pipeline_with_full_config(
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
+        patch(
+            "flows.topic_pipeline.aggregate",
+            new_callable=AsyncMock,
+        ) as mock_aggregate,
         patch(
             "flows.topic_pipeline.get_async_session",
         ) as mock_get_session,
@@ -134,6 +164,13 @@ async def test_topic_pipeline_with_full_config(
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
+        )
+
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=AggregateResult(
+                run_output_identifier=mock_run_output_identifier_str, errors=None
+            ),
         )
 
         # Run the flow
@@ -170,6 +207,15 @@ async def test_topic_pipeline_with_full_config(
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
+        mock_aggregate.assert_called_once()
+        call_args = mock_aggregate.call_args
+        assert (
+            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
+        )
+        assert call_args.kwargs["config"] == test_config
+        assert call_args.kwargs["n_documents_in_batch"] == 50
+        assert call_args.kwargs["n_batches"] == 3
+
         # Assert that the summary artifact was created
         summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
@@ -193,6 +239,10 @@ async def test_topic_pipeline_with_inference_failure(
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
+        patch(
+            "flows.topic_pipeline.aggregate",
+            new_callable=AsyncMock,
+        ) as mock_aggregate,
     ):
         document_ids = [
             DocumentImportId("CCLW.executive.1.1"),
@@ -217,8 +267,13 @@ async def test_topic_pipeline_with_inference_failure(
                 },
             ),
         )
-
-        # Run the flow and expect an exception to be returned
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=AggregateResult(
+                run_output_identifier=mock_run_output_identifier_str, errors=None
+            ),
+        )
+        # Run the flow expecting aggregation to run on successful documents.
         with pytest.raises(Fault, match="Some inference batches had failures!"):
             await topic_pipeline(
                 config=test_config,
@@ -250,8 +305,17 @@ async def test_topic_pipeline_with_inference_failure(
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
+        mock_aggregate.assert_called_once()
+        call_args = mock_aggregate.call_args
+        assert (
+            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
+        )
+        assert call_args.kwargs["n_documents_in_batch"] == 50
+        assert call_args.kwargs["n_batches"] == 3
+
         # Run the flow expecting aggregation and indexing not to run.
         mock_inference.reset_mock()
+        mock_aggregate.reset_mock()
 
         mock_inference.return_value = Failed(
             message="Test error", result=Exception("Test exception")
@@ -274,6 +338,7 @@ async def test_topic_pipeline_with_inference_failure(
             )
 
         assert mock_inference.call_count == 1
+        assert mock_aggregate.call_count == 0
 
 
 @pytest.mark.asyncio
@@ -289,6 +354,10 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
             "flows.topic_pipeline.inference",
             new_callable=AsyncMock,
         ) as mock_inference,
+        patch(
+            "flows.topic_pipeline.aggregate",
+            new_callable=AsyncMock,
+        ) as mock_aggregate,
     ):
         document_stems_successful = [DocumentStem("CCLW.executive.2.2")]
         classifier_spec = ClassifierSpec(
@@ -307,6 +376,19 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
                     "successful_document_stems": set(document_stems_successful),
                     "run_output_identifier": mock_run_output_identifier_str,
                 },
+            ),
+        )
+
+        # aggregation state contains failed documents
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=Fault(
+                msg="1/2 Documents failed",
+                loggable_data={},
+                data=AggregateResult(
+                    run_output_identifier=mock_run_output_identifier_str,
+                    errors="1/2 Documents failed",
+                ),
             ),
         )
 
@@ -348,6 +430,16 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
 
+        mock_aggregate.assert_called_once()
+        call_args = mock_aggregate.call_args
+        assert (
+            call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
+        )
+
+        assert call_args.kwargs["config"] == test_config
+        assert call_args.kwargs["n_documents_in_batch"] == 50
+        assert call_args.kwargs["n_batches"] == 3
+
         # Assert that the summary artifact was created
         summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
@@ -359,6 +451,7 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
 
         # assert pipeline completed all three flows despite inference and aggregation failures
         assert mock_inference.call_count == 1
+        assert mock_aggregate.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -397,6 +490,10 @@ async def test_topic_pipeline_with_document_ids_s3_path(
             new_callable=AsyncMock,
         ) as mock_inference,
         patch(
+            "flows.topic_pipeline.aggregate",
+            new_callable=AsyncMock,
+        ) as mock_aggregate,
+        patch(
             "flows.topic_pipeline.get_async_session",
         ) as mock_get_session,
     ):
@@ -420,6 +517,12 @@ async def test_topic_pipeline_with_document_ids_s3_path(
         mock_inference.return_value = Completed(
             message="Successfully ran inference on all batches!",
             data=mock_run_output_identifier_str,
+        )
+        mock_aggregate.return_value = State(
+            type=StateType.COMPLETED,
+            data=AggregateResult(
+                run_output_identifier=mock_run_output_identifier_str, errors=None
+            ),
         )
 
         # Run the flow with document_ids_s3_path
@@ -447,3 +550,5 @@ async def test_topic_pipeline_with_document_ids_s3_path(
         assert call_args.kwargs["batch_size"] == 500
         assert call_args.kwargs["classifier_cpu_concurrency_limit"] == 5
         assert call_args.kwargs["classifier_gpu_concurrency_limit"] == 5
+
+        mock_aggregate.assert_called_once()
