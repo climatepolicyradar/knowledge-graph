@@ -330,12 +330,14 @@ async def test_topic_pipeline_with_inference_failure(
 
 
 @pytest.mark.asyncio
-async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggregation(
+async def test_topic_pipeline_raises_on_aggregation_failure_despite_partial_inference_failure(
     test_config,
     mock_run_output_identifier_str,
 ):
-    """Test that indexing flows completes after some documents fail on aggregation."""
-
+    """
+    Test that the pipeline raises immediately on aggregation failures, even
+    when inference also had partial (non-fatal) failures.
+    """
     # Mock the sub-flows
     with (
         patch(
@@ -380,10 +382,11 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
             ),
         )
 
-        # Run the flow and expect an exception to be returned
+        # Aggregation failures now raise immediately, so the flow surfaces the
+        # aggregation Fault rather than the deferred inference Fault.
         with pytest.raises(
             Fault,
-            match="Some inference batches had failures!",
+            match="1/2 Documents failed",
         ):
             await topic_pipeline(
                 config=test_config,
@@ -419,21 +422,10 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
         assert (
             call_args.kwargs["run_output_identifier"] == mock_run_output_identifier_str
         )
-
         assert call_args.kwargs["config"] == test_config
         assert call_args.kwargs["n_documents_in_batch"] == 50
         assert call_args.kwargs["n_batches"] == 3
 
-        # Assert that the summary artifact was created
-        summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
-        print(f"Summary artifact {summary_artifact}")
-        assert summary_artifact and summary_artifact.description
-        assert (
-            summary_artifact.description
-            == "Summary of the topic pipeline successful run."
-        )
-
-        # assert pipeline completed all three flows despite inference and aggregation failures
         assert mock_inference.call_count == 1
         assert mock_aggregate.call_count == 1
 
