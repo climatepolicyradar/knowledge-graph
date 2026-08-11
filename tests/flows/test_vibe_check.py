@@ -133,33 +133,28 @@ async def test_vibe_check_inference(vibe_check_externals):
 
 
 @pytest.mark.asyncio
-async def test_vibe_check_returns_failed_status_when_concept_not_found(
+async def test_vibe_check_fails_the_run_when_concept_not_found(
     vibe_check_externals,
 ):
     vibe_check_externals.wikibase_session.get_concept_async = AsyncMock(
         side_effect=ValueError("concept not found")
     )
 
-    results = await vibe_check_inference(wikibase_ids=["Q1"])
+    with pytest.raises(RuntimeError, match="1/1 concepts failed to process: Q1"):
+        await vibe_check_inference(wikibase_ids=["Q1"])
 
-    assert len(results) == 1
-    assert results[0]["status"] == "failed"
-    assert "concept not found" in results[0]["error"]
     # Nothing should be uploaded when the concept can't be loaded.
     assert vibe_check_externals.push_to_s3.call_count == 0
 
 
 @pytest.mark.asyncio
-async def test_vibe_check_returns_failed_status_when_s3_upload_fails(
+async def test_vibe_check_fails_the_run_when_s3_upload_fails(
     vibe_check_externals,
 ):
     vibe_check_externals.push_to_s3.side_effect = RuntimeError("s3 upload failed")
 
-    results = await vibe_check_inference(wikibase_ids=["Q1"])
-
-    assert len(results) == 1
-    assert results[0]["status"] == "failed"
-    assert "s3 upload failed" in results[0]["error"]
+    with pytest.raises(RuntimeError, match="1/1 concepts failed to process: Q1"):
+        await vibe_check_inference(wikibase_ids=["Q1"])
 
 
 @pytest.mark.asyncio
@@ -175,9 +170,8 @@ async def test_vibe_check_isolates_failures_across_multiple_concepts(
         side_effect=_get_concept
     )
 
-    results = await vibe_check_inference(wikibase_ids=["Q1", "Q2"])
+    # The run fails because Q2 failed, but Q1 is still processed and uploaded
+    with pytest.raises(RuntimeError, match="1/2 concepts failed to process: Q2"):
+        await vibe_check_inference(wikibase_ids=["Q1", "Q2"])
 
-    by_id = {r["concept_id"]: r for r in results}
-    assert by_id[WikibaseID("Q1")]["status"] == "success"
-    assert by_id[WikibaseID("Q2")]["status"] == "failed"
-    assert "Q2 not found" in by_id[WikibaseID("Q2")]["error"]
+    assert vibe_check_externals.push_to_s3.call_count == 3

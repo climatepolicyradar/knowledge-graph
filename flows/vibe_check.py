@@ -34,6 +34,7 @@ from sentence_transformers import SentenceTransformer
 
 from flows.config import Config
 from flows.train import _set_up_training_environment, load_wikibase_ids_from_config
+from flows.utils import SlackNotifyKnowledgeGraph
 from knowledge_graph.cloud import (
     AwsEnv,
     get_aws_ssm_param,
@@ -355,6 +356,8 @@ async def process_single_concept(
 @flow(  # pyright: ignore[reportCallIssue, reportReturnType]
     timeout_seconds=FLOW_TIMEOUT_SECONDS,
     task_runner=ThreadPoolTaskRunner(max_workers=3),  # pyright: ignore[reportArgumentType]
+    on_failure=[SlackNotifyKnowledgeGraph.message],
+    on_crashed=[SlackNotifyKnowledgeGraph.message],
 )
 async def vibe_check_inference(
     wikibase_ids: Optional[list[str]] = None,
@@ -478,5 +481,13 @@ async def vibe_check_inference(
     logger.info(
         f"Successfully processed {len(successful_results)}/{len(collected_results)} concepts"
     )
+
+    if failed_results:
+        # Raise so the run is marked as failed and the Slack hooks fire.
+        failed_ids = ", ".join(str(r["concept_id"]) for r in failed_results)
+        raise RuntimeError(
+            f"{len(failed_results)}/{len(collected_results)} concepts failed to "
+            f"process: {failed_ids}"
+        )
 
     return collected_results
