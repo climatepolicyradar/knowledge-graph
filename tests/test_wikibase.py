@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from unittest.mock import AsyncMock, patch
 
@@ -144,6 +145,48 @@ async def test_get_concepts_async__logs_warning_on_retry(MockedWikibaseSession, 
             await wikibase.get_concepts_async()
 
     assert any("Retrying" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_get_concepts_async__terminates_when_negative_concepts_form_a_cycle(
+    MockedWikibaseSession,
+):
+    """
+    Concepts which list each other as negative concepts must not recurse forever.
+
+    Real example: "tax" (Q715) has "tax advantage" (Q1269) as a negative concept, and
+    "tax advantage" has "tax" as a negative concept.
+    """
+    wikibase = MockedWikibaseSession()
+
+    cyclic_concepts = {
+        WikibaseID("Q10"): Concept(
+            wikibase_id=WikibaseID("Q10"),
+            preferred_label="tax",
+            negative_concepts=[WikibaseID("Q20")],
+        ),
+        WikibaseID("Q20"): Concept(
+            wikibase_id=WikibaseID("Q20"),
+            preferred_label="tax advantage",
+            negative_concepts=[WikibaseID("Q10")],
+        ),
+    }
+
+    with patch.object(
+        type(wikibase),
+        "_parse_wikibase_entity",
+        lambda self, wikibase_id, entity, revision_id: cyclic_concepts[
+            wikibase_id
+        ].model_copy(deep=True),
+    ):
+        concepts = await asyncio.wait_for(
+            wikibase.get_concepts_async(wikibase_ids=[WikibaseID("Q10")]),
+            timeout=30,
+        )
+
+    assert [concept.wikibase_id for concept in concepts] == [WikibaseID("Q10")]
+    # The negative concept's positive labels are still merged in, one level deep
+    assert concepts[0].negative_labels == ["tax advantage"]
 
 
 def test_get_concept_ids_with_property__invalid_property_raises(MockedWikibaseSession):
