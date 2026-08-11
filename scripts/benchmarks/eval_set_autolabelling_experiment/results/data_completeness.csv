@@ -1,0 +1,11 @@
+concept,gold_passages,members_expected,members_cached,members_complete,worst_member_passages,missing_members,scored_passages,excluded,exclusion_reason
+Q618,128,10,10,10,128,,128,False,
+Q661,129,10,10,10,129,,129,False,
+Q2029,260,10,10,10,260,,260,False,
+Q47,130,10,10,10,130,,130,False,
+Q1277,130,10,10,10,130,,130,False,
+Q557,130,10,10,10,130,,130,False,
+Q1837,130,10,10,10,130,,130,False,
+Q912,227,10,8,8,227,"opus seed=4, opus seed=5",0,True,"2 member(s) never run: opus seed=4, opus seed=5"
+Q1829,644,10,5,5,644,"opus seed=1, opus seed=2, opus seed=3, opus seed=4, opus seed=5",0,True,"5 member(s) never run: opus seed=1, opus seed=2, opus seed=3, opus seed=4, opus seed=5"
+Q32,107,10,10,10,107,,107,False,
