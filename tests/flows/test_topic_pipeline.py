@@ -229,7 +229,6 @@ async def test_topic_pipeline_does_not_pass_classifier_specs_to_aggregate_in_pro
     aggregate_inference_results_document_stems,
     mock_run_output_identifier_str,
 ):
-
     # NOTE: this assumes `Config` is a Pydantic model supporting
     # `.model_copy(update=...)`. If `Config` is constructed differently,
     # adjust how `production_config` below is built accordingly.
@@ -437,7 +436,6 @@ async def test_topic_pipeline_with_inference_unexpected_result_type(
 async def test_topic_pipeline_with_inference_fault_missing_dict_data(
     test_config,
 ):
-
     with (
         patch(
             "flows.topic_pipeline.inference",
