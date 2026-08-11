@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from pydantic import SecretStr
 
-from flows.vibe_check import vibe_check_inference
+from flows.vibe_check import process_single_concept, vibe_check_inference
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaConfig
@@ -38,6 +38,13 @@ class VibeCheckExternals:
     push_to_s3: MagicMock
     wikibase_session: MagicMock
     classifier: MagicMock
+
+
+@pytest.fixture(autouse=True)
+def no_retry_delay():
+    """Keep the retries in `process_single_concept` from slowing the tests down."""
+    with patch.object(process_single_concept, "retry_delay_seconds", 0):
+        yield
 
 
 @pytest.fixture
@@ -155,6 +162,19 @@ async def test_vibe_check_fails_the_run_when_s3_upload_fails(
 
     with pytest.raises(RuntimeError, match="1/1 concepts failed to process: Q1"):
         await vibe_check_inference(wikibase_ids=["Q1"])
+
+
+@pytest.mark.asyncio
+async def test_vibe_check_retries_a_failing_concept(vibe_check_externals):
+    """A concept that fails is retried before the run is marked as failed."""
+    get_concept = AsyncMock(side_effect=ValueError("transient failure"))
+    vibe_check_externals.wikibase_session.get_concept_async = get_concept
+
+    with pytest.raises(RuntimeError, match="1/1 concepts failed to process: Q1"):
+        await vibe_check_inference(wikibase_ids=["Q1"])
+
+    expected_attempts = 1 + (process_single_concept.retries or 0)
+    assert get_concept.await_count == expected_attempts
 
 
 @pytest.mark.asyncio

@@ -175,182 +175,166 @@ async def process_single_concept(
     """
     Process inference for a single concept.
 
-    This task is designed to be isolated - if it fails, it won't affect the other
-    concept processing tasks.
+    Failures are left to propagate, so that Prefect retries the task and the flow can
+    record the concept as failed. Concepts are still isolated from each other: the flow
+    collects each task's outcome separately, so one failing concept doesn't stop the
+    others.
     """
     logger = get_logger()
-    try:
-        wikibase = WikibaseSession(
-            username=wikibase_config.username,
-            password=wikibase_config.password.get_secret_value(),
-            url=str(wikibase_config.url),
-        )
-        concept = await wikibase.get_concept_async(wikibase_id)
-        logger.info(f"Loaded concept: {concept}")
+    wikibase = WikibaseSession(
+        username=wikibase_config.username,
+        password=wikibase_config.password.get_secret_value(),
+        url=str(wikibase_config.url),
+    )
+    concept = await wikibase.get_concept_async(wikibase_id)
+    logger.info(f"Loaded concept: {concept}")
 
-        concept_embedding = embedding_model.encode(
-            concept.to_markdown(), normalize_embeddings=True
-        )
+    concept_embedding = embedding_model.encode(
+        concept.to_markdown(), normalize_embeddings=True
+    )
 
-        # Ensure embeddings and concept embedding have compatible dimensions
-        if len(passages_embeddings) != len(passages_dataset):
-            raise ValueError(
-                f"Mismatch between embeddings ({len(passages_embeddings)}) "
-                f"and dataset ({len(passages_dataset)}) lengths"
-            )
-
-        similarities = passages_embeddings @ concept_embedding  # Shape: (n_passages,)
-
-        similarity_threshold = 0.65
-        min_passages = 10_000
-        max_passages = 100_000
-
-        # Sort indices by similarity descending without copying the full DataFrame
-        sorted_indices = np.argsort(similarities)[::-1]
-        sorted_similarities = similarities[sorted_indices]
-
-        above_count = int((sorted_similarities > similarity_threshold).sum())
-        below_count = len(sorted_similarities) - above_count
-
-        logger.info(
-            f"Found {above_count} passages above threshold {similarity_threshold}"
-        )
-        logger.info(f"Found {below_count} passages below threshold")
-
-        # Selection strategy:
-        # 1. If we have enough above threshold, take all of them, up to max_passages.
-        # 2. If we don't have enough above threshold, take everything which is above
-        #    the threshold, and then supplement the list with the passages which are
-        #    closest to the threshold to reach min_passages.
-        if above_count >= min_passages:
-            selected_indices = sorted_indices[: min(above_count, max_passages)]
-        else:
-            # sorted_indices[above_count:] are below-threshold, already ordered closest
-            # to threshold first (since sorted desc by similarity)
-            remaining_needed = min(min_passages - above_count, below_count)
-            selected_indices = sorted_indices[: above_count + remaining_needed]
-            selected_indices = selected_indices[:max_passages]
-
-        # Copy only the selected subset (up to max_passages rows, not the full dataset)
-        selected_passages = passages_dataset.iloc[selected_indices].copy()
-        selected_passages = selected_passages.assign(
-            similarity=similarities[selected_indices]
-        )
-        selected_passages = selected_passages.reset_index(drop=True)
-
-        logger.info(f"Selected {len(selected_passages)} passages")
-        max_similarity = max(selected_passages["similarity"])
-        min_similarity = min(selected_passages["similarity"])
-        logger.info(f"Similarity range: {min_similarity:.3f}-{max_similarity:.3f}")
-
-        # Get or create classifier from W&B (with force=False, this will fetch existing
-        # or train new if missing, ensuring we always have the latest model)
-        classifier = await run_training(
-            wikibase_id=wikibase_id,
-            track_and_upload=track_and_upload,
-            aws_env=aws_env,
-            wikibase_config=wikibase_config,
-            argilla_config=argilla_config,
-            s3_client=s3_client,
-            force=False,  # Fetch if exists, train if missing
-            # We don't need to run evaluation during the vibe checking stage. Doing so
-            # before the concept has a proper labelled dataset in argilla will also lead
-            # to the task crashing.
-            evaluate=False,
-        )
-        logger.info(f"Loaded/trained classifier: {classifier}")
-
-        classifier_metadata = {
-            "id": classifier.id,
-            "name": str(classifier),
-            "date": datetime.now().date().isoformat(),
-        }
-
-        # Run inference for the concept
-        logger.info(f"Running inference for {classifier}")
-
-        assert isinstance(selected_passages, pd.DataFrame)
-        texts = selected_passages["text_block.text"].astype(str).tolist()
-
-        logger.info(f"Making predictions for {len(texts)} passages")
-        predicted_spans_list = classifier.predict(texts, show_progress=False)
-
-        metadata_records = selected_passages.astype(str).to_dict(orient="records")
-        labelled_passages: list[LabelledPassage] = [
-            LabelledPassage(text=text, spans=predicted_spans, metadata=record)
-            for text, predicted_spans, record in zip(
-                texts, predicted_spans_list, metadata_records
-            )
-        ]
-
-        logger.info(f"Generated {len(labelled_passages)} labelled passages")
-
-        # before uploading the passages, we should shuffle them
-        random.shuffle(labelled_passages)
-
-        bucket_name = get_bucket_name_from_ssm()
-        output_prefix = Path(wikibase_id) / classifier.id
-        logger.info(f"Outputs will be stored in s3://{bucket_name}/{output_prefix}")
-
-        # Push results for this concept to S3
-        passages_with_markup = [
-            LabelledPassageWithMarkup.from_labelled_passage(labelled_passage)
-            for labelled_passage in labelled_passages
-        ]
-        jsonl_string = serialise_pydantic_list_as_jsonl(passages_with_markup)
-
-        logger.info(f"Pushing predictions to S3: {output_prefix / 'predictions.jsonl'}")
-        push_object_bytes_to_s3(
-            s3_client=s3_client,
-            key=output_prefix / "predictions.jsonl",
-            data=jsonl_string.encode("utf-8"),
+    # Ensure embeddings and concept embedding have compatible dimensions
+    if len(passages_embeddings) != len(passages_dataset):
+        raise ValueError(
+            f"Mismatch between embeddings ({len(passages_embeddings)}) "
+            f"and dataset ({len(passages_dataset)}) lengths"
         )
 
-        logger.info(f"Pushing concept data to S3: {output_prefix / 'concept.json'}")
-        push_object_bytes_to_s3(
-            s3_client=s3_client,
-            key=output_prefix / "concept.json",
-            data=concept.model_dump_json().encode("utf-8"),
+    similarities = passages_embeddings @ concept_embedding  # Shape: (n_passages,)
+
+    similarity_threshold = 0.65
+    min_passages = 10_000
+    max_passages = 100_000
+
+    # Sort indices by similarity descending without copying the full DataFrame
+    sorted_indices = np.argsort(similarities)[::-1]
+    sorted_similarities = similarities[sorted_indices]
+
+    above_count = int((sorted_similarities > similarity_threshold).sum())
+    below_count = len(sorted_similarities) - above_count
+
+    logger.info(f"Found {above_count} passages above threshold {similarity_threshold}")
+    logger.info(f"Found {below_count} passages below threshold")
+
+    # Selection strategy:
+    # 1. If we have enough above threshold, take all of them, up to max_passages.
+    # 2. If we don't have enough above threshold, take everything which is above
+    #    the threshold, and then supplement the list with the passages which are
+    #    closest to the threshold to reach min_passages.
+    if above_count >= min_passages:
+        selected_indices = sorted_indices[: min(above_count, max_passages)]
+    else:
+        # sorted_indices[above_count:] are below-threshold, already ordered closest
+        # to threshold first (since sorted desc by similarity)
+        remaining_needed = min(min_passages - above_count, below_count)
+        selected_indices = sorted_indices[: above_count + remaining_needed]
+        selected_indices = selected_indices[:max_passages]
+
+    # Copy only the selected subset (up to max_passages rows, not the full dataset)
+    selected_passages = passages_dataset.iloc[selected_indices].copy()
+    selected_passages = selected_passages.assign(
+        similarity=similarities[selected_indices]
+    )
+    selected_passages = selected_passages.reset_index(drop=True)
+
+    logger.info(f"Selected {len(selected_passages)} passages")
+    max_similarity = max(selected_passages["similarity"])
+    min_similarity = min(selected_passages["similarity"])
+    logger.info(f"Similarity range: {min_similarity:.3f}-{max_similarity:.3f}")
+
+    # Get or create classifier from W&B (with force=False, this will fetch existing
+    # or train new if missing, ensuring we always have the latest model)
+    classifier = await run_training(
+        wikibase_id=wikibase_id,
+        track_and_upload=track_and_upload,
+        aws_env=aws_env,
+        wikibase_config=wikibase_config,
+        argilla_config=argilla_config,
+        s3_client=s3_client,
+        force=False,  # Fetch if exists, train if missing
+        # We don't need to run evaluation during the vibe checking stage. Doing so
+        # before the concept has a proper labelled dataset in argilla will also lead
+        # to the task crashing.
+        evaluate=False,
+    )
+    logger.info(f"Loaded/trained classifier: {classifier}")
+
+    classifier_metadata = {
+        "id": classifier.id,
+        "name": str(classifier),
+        "date": datetime.now().date().isoformat(),
+    }
+
+    # Run inference for the concept
+    logger.info(f"Running inference for {classifier}")
+
+    assert isinstance(selected_passages, pd.DataFrame)
+    texts = selected_passages["text_block.text"].astype(str).tolist()
+
+    logger.info(f"Making predictions for {len(texts)} passages")
+    predicted_spans_list = classifier.predict(texts, show_progress=False)
+
+    metadata_records = selected_passages.astype(str).to_dict(orient="records")
+    labelled_passages: list[LabelledPassage] = [
+        LabelledPassage(text=text, spans=predicted_spans, metadata=record)
+        for text, predicted_spans, record in zip(
+            texts, predicted_spans_list, metadata_records
         )
+    ]
 
-        logger.info(
-            f"Pushing classifier metadata to S3: {output_prefix / 'classifier.json'}"
-        )
-        push_object_bytes_to_s3(
-            s3_client=s3_client,
-            key=output_prefix / "classifier.json",
-            data=json.dumps(classifier_metadata).encode("utf-8"),
-        )
+    logger.info(f"Generated {len(labelled_passages)} labelled passages")
 
-        n_positive_passages = sum(1 for passage in labelled_passages if passage.spans)
-        n_passages = len(labelled_passages)
+    # before uploading the passages, we should shuffle them
+    random.shuffle(labelled_passages)
 
-        result = {
-            "concept_id": wikibase_id,
-            "preferred_label": concept.preferred_label,
-            "n_passages": n_passages,
-            "n_positive_passages": n_positive_passages,
-            "output_prefix": str(output_prefix),
-            "status": "success",
-        }
+    bucket_name = get_bucket_name_from_ssm()
+    output_prefix = Path(wikibase_id) / classifier.id
+    logger.info(f"Outputs will be stored in s3://{bucket_name}/{output_prefix}")
 
-        logger.info(
-            f"Completed processing {wikibase_id} ({n_positive_passages}/{len(labelled_passages)} positive)"
-        )
-        return result
+    # Push results for this concept to S3
+    passages_with_markup = [
+        LabelledPassageWithMarkup.from_labelled_passage(labelled_passage)
+        for labelled_passage in labelled_passages
+    ]
+    jsonl_string = serialise_pydantic_list_as_jsonl(passages_with_markup)
 
-    except Exception as e:
-        logger.error(f"Failed to process concept {wikibase_id}: {str(e)}")
-        # Return failure result instead of raising exception
-        # This prevents one concept failure from stopping others
-        return {
-            "concept_id": wikibase_id,
-            "status": "failed",
-            "error": str(e),
-            "n_passages": len(passages_dataset),
-            "n_positive_passages": 0,
-            "output_prefix": "",
-        }
+    logger.info(f"Pushing predictions to S3: {output_prefix / 'predictions.jsonl'}")
+    push_object_bytes_to_s3(
+        s3_client=s3_client,
+        key=output_prefix / "predictions.jsonl",
+        data=jsonl_string.encode("utf-8"),
+    )
+
+    logger.info(f"Pushing concept data to S3: {output_prefix / 'concept.json'}")
+    push_object_bytes_to_s3(
+        s3_client=s3_client,
+        key=output_prefix / "concept.json",
+        data=concept.model_dump_json().encode("utf-8"),
+    )
+
+    logger.info(
+        f"Pushing classifier metadata to S3: {output_prefix / 'classifier.json'}"
+    )
+    push_object_bytes_to_s3(
+        s3_client=s3_client,
+        key=output_prefix / "classifier.json",
+        data=json.dumps(classifier_metadata).encode("utf-8"),
+    )
+
+    n_positive_passages = sum(1 for passage in labelled_passages if passage.spans)
+    n_passages = len(labelled_passages)
+
+    logger.info(
+        f"Completed processing {wikibase_id} ({n_positive_passages}/{len(labelled_passages)} positive)"
+    )
+    return {
+        "concept_id": wikibase_id,
+        "preferred_label": concept.preferred_label,
+        "n_passages": n_passages,
+        "n_positive_passages": n_positive_passages,
+        "output_prefix": str(output_prefix),
+        "status": "success",
+    }
 
 
 @flow(  # pyright: ignore[reportCallIssue, reportReturnType]
@@ -439,9 +423,9 @@ async def vibe_check_inference(
         try:
             result = future.result()
         except Exception as e:
-            # eg the task timed out. Recorded as a failure rather than dropped, so it
-            # shows up in the summary below
-            logger.error(f"Unexpected error collecting result for {wikibase_id}: {e}")
+            # The concept failed every attempt, or the task timed out. Recorded as a
+            # failure rather than dropped, so it shows up in the summary below
+            logger.error(f"Failed to process concept {wikibase_id}: {e}")
             result = {
                 "concept_id": wikibase_id,
                 "status": "failed",
