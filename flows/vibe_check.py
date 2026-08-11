@@ -148,7 +148,12 @@ def load_embeddings_metadata(
     return json.load(io.BytesIO(bytes_from_s3))
 
 
-@task(retries=2, retry_delay_seconds=10, cache_policy=NO_CACHE)
+@task(
+    retries=2,
+    retry_delay_seconds=10,
+    cache_policy=NO_CACHE,
+    task_run_name="process_single_concept-{wikibase_id}",
+)
 async def process_single_concept(
     wikibase_id: WikibaseID,
     passages_dataset: pd.DataFrame,
