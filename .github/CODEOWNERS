@@ -2,7 +2,7 @@ tests/flows/    @climatepolicyradar/deng
 flows/          @climatepolicyradar/deng
 automations.py  @climatepolicyradar/deng
 deployments.py  @climatepolicyradar/deng
-*               @climatepolicyradar/deng @climatepolicyradar/datascience
+*               @climatepolicyradar/deng @climatepolicyradar/fusion
 
 # Dependency updates - only require deng team
 pyproject.toml             @climatepolicyradar/deng
