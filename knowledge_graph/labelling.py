@@ -155,6 +155,11 @@ class ArgillaSession:
             self.default_workspace,
         )
 
+        # Used to define `rg.Response` objects – see https://docs.argilla.io/latest/reference/argilla/records/responses/#format-per-question-type
+        # These are unique identifiers for each question asked on the record. In the
+        # setup as configured we only ask one question, with name 'entities'.
+        self._default_question_name = "entities"
+
     def __repr__(self) -> str:
         """Return a string representation of the Argilla session"""
         return f"<ArgillaSession: workspace={self.default_workspace}>"
@@ -272,7 +277,7 @@ class ArgillaSession:
             fields=[TextField(name="text", title="Text", use_markdown=True)],
             questions=[
                 SpanQuestion(
-                    name="entities",
+                    name=self._default_question_name,
                     field="text",
                     labels={str(concept.wikibase_id): concept.preferred_label},
                     required=True,
@@ -635,7 +640,7 @@ class ArgillaSession:
             # Always create a response, even with empty spans (for negative examples)
             responses.append(
                 Response(
-                    question_name="entities",
+                    question_name=self._default_question_name,
                     value=span_values,
                     user_id=user.id,
                     status=ResponseStatus.submitted,
@@ -794,7 +799,7 @@ class ArgillaSession:
                 # judged negative is distinguishable from one it never saw
                 suggestions = [
                     Suggestion(
-                        question_name="entities",
+                        question_name=self._default_question_name,
                         value=span_values,
                         # a span question scores each span separately, and rejects a
                         # single value. The score is passage-level, so it's repeated.
