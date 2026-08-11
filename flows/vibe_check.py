@@ -50,6 +50,11 @@ from knowledge_graph.wikibase import WikibaseConfig, WikibaseSession
 
 aws_region = os.getenv("AWS_REGION", "eu-west-1")
 
+# Bounds to stop a hanging concept from holding a task runner slot, and the whole flow
+# run, forever. A healthy concept takes minutes at most.
+CONCEPT_TIMEOUT_SECONDS = 30 * 60
+FLOW_TIMEOUT_SECONDS = 6 * 60 * 60
+
 
 class LabelledPassageWithMarkup(LabelledPassage):
     """LabelledPassage wrapper including an extra field for text marked up as HTML."""
@@ -153,6 +158,7 @@ def load_embeddings_metadata(
     retry_delay_seconds=10,
     cache_policy=NO_CACHE,
     task_run_name="process_single_concept-{wikibase_id}",
+    timeout_seconds=CONCEPT_TIMEOUT_SECONDS,
 )
 async def process_single_concept(
     wikibase_id: WikibaseID,
@@ -347,7 +353,7 @@ async def process_single_concept(
 
 
 @flow(  # pyright: ignore[reportCallIssue, reportReturnType]
-    timeout_seconds=None,
+    timeout_seconds=FLOW_TIMEOUT_SECONDS,
     task_runner=ThreadPoolTaskRunner(max_workers=3),  # pyright: ignore[reportArgumentType]
 )
 async def vibe_check_inference(
@@ -419,20 +425,29 @@ async def vibe_check_inference(
             aws_env=config.aws_env,
             track_and_upload=True,
         )
-        concept_futures.append(future)
+        concept_futures.append((wikibase_id, future))
 
     logger.info("Waiting for all concept inference tasks to complete...")
-    wait(concept_futures)
+    wait([future for _, future in concept_futures])
 
     # Track completion and collect results
     collected_results = []
-    for future in concept_futures:
+    for wikibase_id, future in concept_futures:
         try:
             result = future.result()
-            collected_results.append(result)
         except Exception as e:
-            logger.error(f"Unexpected error collecting result: {str(e)}")
-            continue
+            # eg the task timed out. Recorded as a failure rather than dropped, so it
+            # shows up in the summary below
+            logger.error(f"Unexpected error collecting result for {wikibase_id}: {e}")
+            result = {
+                "concept_id": wikibase_id,
+                "status": "failed",
+                "error": str(e),
+                "n_passages": 0,
+                "n_positive_passages": 0,
+                "output_prefix": "",
+            }
+        collected_results.append(result)
 
     # Log summary results
     logger.info("Completed processing all concepts")
