@@ -1,3 +1,4 @@
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -27,6 +28,9 @@ def patched_push_dependencies(labelled_passages, mock_concept, test_config):
         patch("flows.push_new_dataset.Config") as mock_config_cls,
         patch("flows.push_new_dataset.ArgillaSession") as mock_argilla_cls,
         patch("flows.push_new_dataset.WikibaseSession") as mock_wikibase_cls,
+        patch(
+            "flows.push_new_dataset.create_llm_ensemble_for_prelabelling_validation_dataset"
+        ) as mock_create_ensemble,
     ):
         mock_load.return_value = labelled_passages
         mock_config_cls.create = AsyncMock(return_value=test_config)
@@ -44,6 +48,7 @@ def patched_push_dependencies(labelled_passages, mock_concept, test_config):
             "argilla": mock_argilla,
             "argilla_cls": mock_argilla_cls,
             "wikibase_cls": mock_wikibase_cls,
+            "create_ensemble": mock_create_ensemble,
         }
 
 
@@ -147,3 +152,51 @@ async def test_push_new_dataset_passes_wikibase_credentials_from_config(
         password=test_config.wikibase_password.get_secret_value(),
         url=test_config.wikibase_url,
     )
+
+
+@pytest.mark.asyncio
+async def test_push_new_dataset_prelabels_with_an_llm_ensemble_by_default(
+    patched_push_dependencies, mock_concept, test_config, monkeypatch
+):
+    """The ensemble is built for the concept and passed on as the suggestion model."""
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+    await push_new_dataset(
+        wikibase_id=WikibaseID("Q787"),
+        wandb_artifact_path="climatepolicyradar/Q787/labelled-passages:v0",
+        config=test_config,
+    )
+
+    create_ensemble = patched_push_dependencies["create_ensemble"]
+    create_ensemble.assert_called_once_with(mock_concept)
+
+    call_kwargs = patched_push_dependencies[
+        "argilla"
+    ].add_labelled_passages.call_args.kwargs
+    assert call_kwargs["suggestion_model"] is create_ensemble.return_value
+
+    # pydantic-ai reads the OpenRouter key from the environment
+    assert (
+        os.environ["OPENROUTER_API_KEY"]
+        == test_config.openrouter_api_key.get_secret_value()
+    )
+
+
+@pytest.mark.asyncio
+async def test_push_new_dataset_skips_prelabelling_when_disabled(
+    patched_push_dependencies, test_config
+):
+    """With the flag off, no ensemble is built and no suggestions are pushed."""
+    await push_new_dataset(
+        wikibase_id=WikibaseID("Q787"),
+        wandb_artifact_path="climatepolicyradar/Q787/labelled-passages:v0",
+        prelabel_with_llm_ensemble=False,
+        config=test_config,
+    )
+
+    patched_push_dependencies["create_ensemble"].assert_not_called()
+
+    call_kwargs = patched_push_dependencies[
+        "argilla"
+    ].add_labelled_passages.call_args.kwargs
+    assert call_kwargs["suggestion_model"] is None

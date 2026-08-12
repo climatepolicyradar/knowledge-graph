@@ -329,8 +329,15 @@ class WikibaseSession:
         wikibase_id: WikibaseID,
         timestamp: datetime,
         entity_info: dict[str, Any],
+        incorporate_negative_concepts: bool = True,
     ) -> Concept | None:
-        """Async helper to fetch a single concept."""
+        """
+        Async helper to fetch a single concept.
+
+        :param incorporate_negative_concepts: Whether to merge the positive labels of
+            the concept's negative concepts into its negative labels. Set to False when
+            fetching the negative concepts themselves, to stop the fetch recursing.
+        """
         client = await self._get_client()
 
         # Use semaphore to limit concurrent requests
@@ -402,24 +409,29 @@ class WikibaseSession:
                 # Parse concept data
                 concept = self._parse_wikibase_entity(wikibase_id, entity, revision_id)
 
-                concept = await self._incorporate_negative_concepts(concept)
-
                 # Small delay to be gentle on the server
                 await asyncio.sleep(self.REQUEST_DELAY_SECONDS)
 
-                return concept
-
             except (KeyError, json.JSONDecodeError) as e:
                 logger.warning("❌ Failed to parse concept %s: %s", wikibase_id, e)
+                return None
             except (
                 ConceptNotFoundError,
                 RevisionNotFoundError,
                 InvalidConceptError,
             ) as e:
                 logger.warning("❌ %s", str(e))
+                return None
             except ValidationError as e:
                 logger.warning("❌ Failed to validate concept %s: %s", wikibase_id, e)
-            return None
+                return None
+
+        # Negative concepts are fetched after releasing the semaphore, otherwise
+        # one fetch consumes 2/3 semaphore permits at a given time.
+        if incorporate_negative_concepts:
+            concept = await self._incorporate_negative_concepts(concept)
+
+        return concept
 
     def _parse_wikibase_entity(
         self,
@@ -515,9 +527,14 @@ class WikibaseSession:
             return concept
 
         try:
-            # Fetch all negative concepts
+            # Fetch all negative concepts. Their own negative concepts are deliberately
+            # not incorporated: a concept's negative labels are only its negative
+            # concepts' positive labels, and concepts are routinely each other's
+            # negative concepts (eg "tax" and "tax advantage"), so recursing would
+            # never terminate.
             negative_concepts = await self.get_concepts_async(
-                wikibase_ids=concept.negative_concepts
+                wikibase_ids=concept.negative_concepts,
+                incorporate_negative_concepts=False,
             )
 
             # Combine existing negative labels with new negative labels
@@ -559,6 +576,7 @@ class WikibaseSession:
         limit: int | None = None,
         wikibase_ids: list[WikibaseID] | None = None,
         timestamp: datetime | None = None,
+        incorporate_negative_concepts: bool = True,
     ) -> list[Concept]:
         """
         Async method to get concepts from Wikibase with concurrent fetching.
@@ -572,6 +590,8 @@ class WikibaseSession:
             timestamp: If specified, the retrieved concepts will contain the data as it
                 existed at the specified timestamp. Defaults to None, and retrieves the
                 latest version of the concept.
+            incorporate_negative_concepts: Whether to merge each concept's negative
+                concepts' positive labels into its negative labels.
 
         Returns:
             List of Concept objects
@@ -648,7 +668,10 @@ class WikibaseSession:
                     str(wikibase_id), {}
                 ):
                     task = self._fetch_concept_async(
-                        wikibase_id, timestamp, entity_info
+                        wikibase_id,
+                        timestamp,
+                        entity_info,
+                        incorporate_negative_concepts=incorporate_negative_concepts,
                     )
                     tasks.append(task)
                     valid_concepts_in_batch += 1

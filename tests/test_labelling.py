@@ -10,6 +10,7 @@ from hypothesis import strategies as st
 from knowledge_graph.classifier import Classifier
 from knowledge_graph.classifier.classifier import ProbabilityCapableClassifier
 from knowledge_graph.concept import Concept
+from knowledge_graph.ensemble import Ensemble
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import (
@@ -1051,3 +1052,149 @@ def test_label_passages_omits_prediction_probabilities_by_default():
     result = label_passages_with_classifier(classifier, passages)
 
     assert "prediction_probability" not in result[0].metadata
+
+
+SUGGESTION_TEXT = "Solar and wind power are renewable"
+
+
+class _StubMarkerClassifier(Classifier):
+    """A stub classifier which labels its marker wherever it appears in the text."""
+
+    def __init__(self, concept: Concept, classifier_id: str, marker: str):
+        super().__init__(concept)
+        self._id = ClassifierID(classifier_id)
+        self.marker = marker
+
+    @property
+    def id(self) -> ClassifierID:
+        return self._id
+
+    def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
+        if (start := text.find(self.marker)) == -1:
+            return []
+        return [
+            Span(
+                text=text,
+                start_index=start,
+                end_index=start + len(self.marker),
+                concept_id=self.concept.wikibase_id,
+                labellers=[str(self)],
+            )
+        ]
+
+
+def _mock_dataset_for_suggestions(mock_argilla_client, mock_workspace, mock_dataset):
+    """Wire up a mocked Q123 dataset, returning it for assertions on logged records."""
+    mock_client, _ = mock_argilla_client
+    dataset = mock_dataset(name="Q123")
+    dataset.records = MagicMock()
+    dataset.settings = MagicMock()
+    mock_client.workspaces.return_value = mock_workspace()
+    mock_client.datasets.return_value = dataset
+    return dataset
+
+
+def _stub_ensemble(markers: list[str]):
+    """Build an ensemble of stub classifiers, one per marker."""
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="renewables")
+    return Ensemble(
+        concept=concept,
+        classifiers=[
+            _StubMarkerClassifier(concept, f"stubcfr{'abcdefgh'[idx]}", marker)
+            for idx, marker in enumerate(markers)
+        ],
+    )
+
+
+def test_whether_a_unanimous_ensemble_suggestion_is_attached_with_a_full_score(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """All three classifiers agree, so the majority vote scores the suggestion 1.0."""
+    dataset = _mock_dataset_for_suggestions(
+        mock_argilla_client, mock_workspace, mock_dataset
+    )
+    ensemble = _stub_ensemble(["Solar", "Solar", "Solar"])
+
+    session = ArgillaSession()
+    session.add_labelled_passages(
+        labelled_passages=[LabelledPassage(text=SUGGESTION_TEXT, spans=[])],
+        wikibase_id="Q123",
+        suggestion_model=ensemble,
+    )
+
+    record = dataset.records.log.call_args[0][0][0]
+    suggestions = list(record.suggestions)
+    assert len(suggestions) == 1
+    suggestion = suggestions[0]
+    assert suggestion.question_name == "entities"
+    # the three identical spans are merged into one by the UnionAggregator
+    assert suggestion.value == [{"start": 0, "end": 5, "label": "Q123"}]
+    # a span question scores each span separately
+    assert suggestion.score == [1.0]
+    assert suggestion.type == "model"
+    assert suggestion.agent == str(ensemble)
+
+
+def test_whether_a_minority_ensemble_suggestion_is_attached_with_a_zero_score(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """One of three classifiers fires: the union still suggests, the vote says no."""
+    dataset = _mock_dataset_for_suggestions(
+        mock_argilla_client, mock_workspace, mock_dataset
+    )
+    ensemble = _stub_ensemble(["Solar", "nuclear", "hydrogen"])
+
+    session = ArgillaSession()
+    session.add_labelled_passages(
+        labelled_passages=[LabelledPassage(text=SUGGESTION_TEXT, spans=[])],
+        wikibase_id="Q123",
+        suggestion_model=ensemble,
+    )
+
+    suggestion = list(dataset.records.log.call_args[0][0][0].suggestions)[0]
+    assert suggestion.value == [{"start": 0, "end": 5, "label": "Q123"}]
+    assert suggestion.score == [0.0]
+
+
+def test_whether_a_single_classifier_suggestion_is_attached_without_a_score(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """A lone classifier has no notion of agreement, so its suggestion is unscored."""
+    dataset = _mock_dataset_for_suggestions(
+        mock_argilla_client, mock_workspace, mock_dataset
+    )
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="renewables")
+    classifier = _StubMarkerClassifier(concept, "stubcfra", "wind")
+
+    session = ArgillaSession()
+    session.add_labelled_passages(
+        labelled_passages=[LabelledPassage(text=SUGGESTION_TEXT, spans=[])],
+        wikibase_id="Q123",
+        suggestion_model=classifier,
+    )
+
+    suggestion = list(dataset.records.log.call_args[0][0][0].suggestions)[0]
+    assert suggestion.value == [{"start": 10, "end": 14, "label": "Q123"}]
+    assert suggestion.score is None
+    assert suggestion.agent == str(classifier)
+
+
+def test_whether_an_empty_suggestion_is_attached_when_the_model_predicts_nothing(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """A negative prediction is recorded, so it reads differently from an unseen passage."""
+    dataset = _mock_dataset_for_suggestions(
+        mock_argilla_client, mock_workspace, mock_dataset
+    )
+
+    session = ArgillaSession()
+    session.add_labelled_passages(
+        labelled_passages=[LabelledPassage(text=SUGGESTION_TEXT, spans=[])],
+        wikibase_id="Q123",
+        suggestion_model=_stub_ensemble(["nuclear", "nuclear", "nuclear"]),
+    )
+
+    suggestion = list(dataset.records.log.call_args[0][0][0].suggestions)[0]
+    assert suggestion.value == []
+    # no spans to score, and the server rejects an empty score list
+    assert suggestion.score is None

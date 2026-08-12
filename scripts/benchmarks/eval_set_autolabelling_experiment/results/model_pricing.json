@@ -1,0 +1,12 @@
+{
+  "opus": {
+    "model": "anthropic/claude-opus-5",
+    "prompt": 5e-06,
+    "completion": 2.5e-05
+  },
+  "gemini": {
+    "model": "google/gemini-3.1-pro-preview",
+    "prompt": 2e-06,
+    "completion": 1.2e-05
+  }
+}

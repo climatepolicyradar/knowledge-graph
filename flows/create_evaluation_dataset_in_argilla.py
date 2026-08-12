@@ -69,6 +69,13 @@ async def create_evaluation_dataset_in_argilla(
         Optional[int],
         Field(description="Limit the number of passages loaded to Argilla"),
     ] = 130,
+    prelabel_with_llm_ensemble: Annotated[
+        bool,
+        Field(
+            description="Whether to pre-label the passages with an LLM ensemble, whose "
+            "predictions are shown to annotators as suggestions"
+        ),
+    ] = True,
     aws_env: AwsEnv = AwsEnv.production,
     config: Optional[Config] = None,
 ) -> None:
@@ -104,5 +111,6 @@ async def create_evaluation_dataset_in_argilla(
         wandb_artifact_path=wandb_artifact_path,
         workspace_name=workspace_name,
         limit=limit,
+        prelabel_with_llm_ensemble=prelabel_with_llm_ensemble,
         config=config,
     )

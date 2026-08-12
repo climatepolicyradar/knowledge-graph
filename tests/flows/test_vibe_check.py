@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from pydantic import SecretStr
 
-from flows.vibe_check import vibe_check_inference
+from flows.vibe_check import process_single_concept, vibe_check_inference
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelling import ArgillaConfig
@@ -38,6 +38,13 @@ class VibeCheckExternals:
     push_to_s3: MagicMock
     wikibase_session: MagicMock
     classifier: MagicMock
+
+
+@pytest.fixture(autouse=True)
+def no_retry_delay():
+    """Keep the retries in `process_single_concept` from slowing the tests down."""
+    with patch.object(process_single_concept, "retry_delay_seconds", 0):
+        yield
 
 
 @pytest.fixture
@@ -133,33 +140,41 @@ async def test_vibe_check_inference(vibe_check_externals):
 
 
 @pytest.mark.asyncio
-async def test_vibe_check_returns_failed_status_when_concept_not_found(
+async def test_vibe_check_fails_the_run_when_concept_not_found(
     vibe_check_externals,
 ):
     vibe_check_externals.wikibase_session.get_concept_async = AsyncMock(
         side_effect=ValueError("concept not found")
     )
 
-    results = await vibe_check_inference(wikibase_ids=["Q1"])
+    with pytest.raises(RuntimeError, match="1/1 concepts failed to process: Q1"):
+        await vibe_check_inference(wikibase_ids=["Q1"])
 
-    assert len(results) == 1
-    assert results[0]["status"] == "failed"
-    assert "concept not found" in results[0]["error"]
     # Nothing should be uploaded when the concept can't be loaded.
     assert vibe_check_externals.push_to_s3.call_count == 0
 
 
 @pytest.mark.asyncio
-async def test_vibe_check_returns_failed_status_when_s3_upload_fails(
+async def test_vibe_check_fails_the_run_when_s3_upload_fails(
     vibe_check_externals,
 ):
     vibe_check_externals.push_to_s3.side_effect = RuntimeError("s3 upload failed")
 
-    results = await vibe_check_inference(wikibase_ids=["Q1"])
+    with pytest.raises(RuntimeError, match="1/1 concepts failed to process: Q1"):
+        await vibe_check_inference(wikibase_ids=["Q1"])
 
-    assert len(results) == 1
-    assert results[0]["status"] == "failed"
-    assert "s3 upload failed" in results[0]["error"]
+
+@pytest.mark.asyncio
+async def test_vibe_check_retries_a_failing_concept(vibe_check_externals):
+    """A concept that fails is retried before the run is marked as failed."""
+    get_concept = AsyncMock(side_effect=ValueError("transient failure"))
+    vibe_check_externals.wikibase_session.get_concept_async = get_concept
+
+    with pytest.raises(RuntimeError, match="1/1 concepts failed to process: Q1"):
+        await vibe_check_inference(wikibase_ids=["Q1"])
+
+    expected_attempts = 1 + (process_single_concept.retries or 0)
+    assert get_concept.await_count == expected_attempts
 
 
 @pytest.mark.asyncio
@@ -175,9 +190,8 @@ async def test_vibe_check_isolates_failures_across_multiple_concepts(
         side_effect=_get_concept
     )
 
-    results = await vibe_check_inference(wikibase_ids=["Q1", "Q2"])
+    # The run fails because Q2 failed, but Q1 is still processed and uploaded
+    with pytest.raises(RuntimeError, match="1/2 concepts failed to process: Q2"):
+        await vibe_check_inference(wikibase_ids=["Q1", "Q2"])
 
-    by_id = {r["concept_id"]: r for r in results}
-    assert by_id[WikibaseID("Q1")]["status"] == "success"
-    assert by_id[WikibaseID("Q2")]["status"] == "failed"
-    assert "Q2 not found" in by_id[WikibaseID("Q2")]["error"]
+    assert vibe_check_externals.push_to_s3.call_count == 3
