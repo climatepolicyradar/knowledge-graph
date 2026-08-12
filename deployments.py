@@ -360,11 +360,6 @@ async def main() -> None:
                 }
             ),
         },
-        deployment_parameters=JsonDict(
-            {
-                "run_vespa_indexing": False,
-            }
-        ),
         concurrency_limit=ConcurrencyLimitConfig(
             limit=1,
             collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
