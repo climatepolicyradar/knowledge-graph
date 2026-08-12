@@ -9,21 +9,11 @@ from flows.aggregate import (
     DEFAULT_N_DOCUMENTS_IN_BATCH as AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
 )
 from flows.aggregate import (
-    AggregateResult,
     RunOutputIdentifier,
     aggregate,
 )
-from flows.boundary import (
-    DEFAULT_DOCUMENTS_BATCH_SIZE as INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
-)
 from flows.classifier_specs.spec_interface import ClassifierSpec
 from flows.config import Config
-from flows.index import (
-    DEFAULT_INDEXER_CONCURRENCY_LIMIT,
-    DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
-    INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
-    index,
-)
 from flows.inference import (
     CLASSIFIER_CPU_CONCURRENCY_LIMIT,
     CLASSIFIER_GPU_CONCURRENCY_LIMIT,
@@ -77,13 +67,6 @@ async def topic_pipeline(
     config: Config | None = None,
     aggregation_n_documents_in_batch: PositiveInt = AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
     aggregation_n_batches: PositiveInt = 5,
-    indexing_batch_size: int = INDEXING_DEFAULT_DOCUMENTS_BATCH_SIZE,
-    indexer_concurrency_limit: PositiveInt = DEFAULT_INDEXER_CONCURRENCY_LIMIT,
-    indexer_document_passages_concurrency_limit: PositiveInt = INDEXER_DOCUMENT_PASSAGES_CONCURRENCY_LIMIT,
-    indexer_max_vespa_connections: PositiveInt = DEFAULT_VESPA_MAX_CONNECTIONS_AGG_INDEXER,
-    enable_v2_concepts: bool | None = None,
-    # Feature Flags
-    run_vespa_indexing: bool = True,
 ) -> None:
     """
     KG topic pipeline.
@@ -91,24 +74,17 @@ async def topic_pipeline(
     This flow orchestrates the KG topic pipeline, including:
     1. Inference
     2. Aggregation
-    3. Indexing
 
     Args:
         classifier_specs: Classifier specifications to use for inference.
         document_ids: Specific document IDs to process. If None, processes all.
         document_ids_s3_path: An S3 path string (e.g., "s3://bucket/key") that contains document ids to process.
-        config: Configuration for the inference, aggregation and index flows. If None, creates default.
+        config: Configuration for the inference and aggregation flows. If None, creates default.
         inference_batch_size: Number of documents to process in each batch.
         inference_cpu_concurrency_limit: Maximum concurrent CPU classifier batches.
         inference_gpu_concurrency_limit: Maximum concurrent GPU classifier batches.
         aggregation_n_documents_in_batch: Number of documents per aggregation batch.
         aggregation_n_batches: Number of aggregation batches to run.
-        indexing_batch_size: Number of documents to index in each batch.
-        indexer_concurrency_limit: Maximum concurrent indexers.
-        indexer_document_passages_concurrency_limit: Max concurrent passage indexers.
-        indexer_max_vespa_connections: Maximum Vespa connections for indexing.
-        enable_v2_concepts: Whether to index them into Vespa or not. If set to boolean value will be inferred.
-        run_vespa_indexing: Feature flag. When False, skip the indexing stage entirely.
 
     Returns:
         None
@@ -186,6 +162,11 @@ async def topic_pipeline(
         case _:
             raise ValueError(f"unexpected result {type(inference_result_raw)}")
 
+    await create_topic_pipeline_summary_artifact(
+        config=config,
+        successful_document_stems=successful_document_stems,
+    )
+
     aggregation_run: State = await aggregate(
         run_output_identifier=inference_run_output_identifier,
         config=config,
@@ -198,59 +179,11 @@ async def topic_pipeline(
         else None,
     )
 
-    aggregation_result_raw: (
-        AggregateResult | Fault | Exception
-    ) = await aggregation_run.result(raise_on_failure=False)
-    logger.info("aggregation completed")
+    await aggregation_run.result()
+    logger.info("Aggregation completed!")
 
-    match aggregation_result_raw:
-        case Exception() if not isinstance(aggregation_result_raw, Fault):
-            raise aggregation_result_raw
-        case Fault():
-            # Partial success - extract AggregateResult from Fault data
-            if isinstance(aggregation_result_raw.data, AggregateResult):
-                aggregation_run_output_identifier = (
-                    aggregation_result_raw.data.run_output_identifier
-                )
-            else:
-                raise ValueError(
-                    f"Expected Fault.data to contain AggregateResult, got {type(aggregation_result_raw.data)}"
-                )
-        case AggregateResult():
-            aggregation_run_output_identifier = (
-                aggregation_result_raw.run_output_identifier
-            )
-        case _:
-            raise ValueError(
-                f"unexpected result {type(aggregation_result_raw)}, {aggregation_result_raw}"
-            )
-
-    if aggregation_run_output_identifier is not None and run_vespa_indexing:
-        logger.info("Attempting indexing with successful aggregation results.")
-        indexing_run: State = await index(
-            run_output_identifier=aggregation_run_output_identifier,
-            config=config,
-            batch_size=indexing_batch_size,
-            indexer_concurrency_limit=indexer_concurrency_limit,
-            indexer_document_passages_concurrency_limit=indexer_document_passages_concurrency_limit,
-            indexer_max_vespa_connections=indexer_max_vespa_connections,
-            enable_v2_concepts=enable_v2_concepts,
-            return_state=True,
-        )
-        indexing_result_raw = await indexing_run.result(raise_on_failure=False)
-        logger.info("indexing completed")
-        if isinstance(indexing_result_raw, Exception):
-            raise indexing_result_raw
-
-    await create_topic_pipeline_summary_artifact(
-        config=config,
-        successful_document_stems=successful_document_stems,
-    )
-
-    logger.info("checking after the fact for earlier stage failures")
+    logger.info("Checking after the fact whether inference was a partial failure.")
     if isinstance(inference_result_raw, Fault):
         raise inference_result_raw
-    if isinstance(aggregation_result_raw, Fault):
-        raise aggregation_result_raw
 
     logger.info("Topic pipeline run completed successfully!")
