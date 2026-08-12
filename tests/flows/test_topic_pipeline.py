@@ -430,9 +430,9 @@ async def test_topic_pipeline_completes_after_some_docs_fail_inference_and_aggre
         summary_artifact = await Artifact.get("topic-pipeline-results-summary-sandbox")
         print(f"Summary artifact {summary_artifact}")
         assert summary_artifact and summary_artifact.description
-        assert (
-            summary_artifact.description
-            == "Summary of the topic pipeline
+        assert summary_artifact.description == "Summary of the topic pipeline"
+
+
 @pytest.mark.asyncio
 async def test_topic_pipeline_with_document_ids_s3_path(
     test_config,
