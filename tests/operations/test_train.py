@@ -1,4 +1,7 @@
+import asyncio
 import os
+import threading
+import time
 from pathlib import Path
 from unittest.mock import ANY, MagicMock, Mock, patch
 
@@ -20,6 +23,7 @@ from knowledge_graph.operations.train import (
     get_next_version,
     limit_and_balance_training_samples,
     run_training,
+    train_classifier,
     upload_model_artifact,
 )
 from knowledge_graph.span import Span
@@ -863,3 +867,86 @@ def test_limit_training_samples_returns_all_when_below_max():
     ]
     result = limit_and_balance_training_samples(passages, max_samples=10)
     assert len(result) == 3
+
+
+def test_train_classifier_never_has_two_wandb_runs_active_at_once(tmp_path):
+    """
+    Concurrent training must not overlap W&B runs.
+
+    `wandb.init()` returns the *previously active* run when one is already active in
+    the process, because `reinit` defaults to "return_previous" outside notebooks. Two
+    concepts training at the same time would therefore silently share a single run: the
+    first one to leave its `with` block finishes the run, and the other's artifact
+    commit then dies with "context canceled".
+    """
+    active = 0
+    max_active = 0
+    state_lock = threading.Lock()
+
+    class FakeRun:
+        """Stands in for a W&B run, recording how many are active at once."""
+
+        def __init__(self):
+            self.summary = {}
+
+        def __enter__(self):
+            nonlocal active, max_active
+            with state_lock:
+                active += 1
+                max_active = max(max_active, active)
+            return self
+
+        def __exit__(self, *exc_info):
+            nonlocal active
+            with state_lock:
+                active -= 1
+            return False
+
+    def make_classifier() -> Mock:
+        classifier = Mock()
+        classifier.id = ClassifierID("aaaa2222")
+        classifier.version = None
+        classifier.model_name = "gpt-4"
+        # Hold the run open long enough for a second thread to reach wandb.init()
+        classifier.fit.side_effect = lambda *args, **kwargs: time.sleep(0.3)
+        return classifier
+
+    def train(wikibase_id: str) -> None:
+        asyncio.run(
+            train_classifier(
+                classifier=make_classifier(),
+                wikibase_id=WikibaseID(wikibase_id),
+                track_and_upload=True,
+                aws_env=AwsEnv.labs,
+                s3_client=Mock(),
+                evaluate=False,
+            )
+        )
+
+    with (
+        patch("knowledge_graph.operations.train.validate_params"),
+        patch("wandb.init", new=lambda **kwargs: FakeRun()),
+        patch("knowledge_graph.operations.train.get_next_version", return_value="v0"),
+        patch(
+            "knowledge_graph.operations.train.get_local_classifier_path",
+            return_value=tmp_path / "model.pickle",
+        ),
+        patch(
+            "knowledge_graph.operations.train.upload_model_artifact",
+            return_value=("bucket", "key"),
+        ),
+        patch("knowledge_graph.operations.train.create_and_link_model_artifact"),
+    ):
+        threads = [
+            threading.Thread(target=train, args=(wikibase_id,))
+            for wikibase_id in ("Q2420", "Q2421")
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+    assert max_active == 1, (
+        f"{max_active} W&B runs were active at once; concurrent runs in one process "
+        "share a single run object and corrupt each other"
+    )

@@ -8,6 +8,7 @@ nothing about Prefect; it is imported directly by the training flows and CLI wra
 
 import os
 import random
+import threading
 from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, overload
@@ -49,6 +50,15 @@ from knowledge_graph.wandb_helpers import (
     log_labelled_passages_artifact_to_wandb_run,
 )
 from knowledge_graph.wikibase import WikibaseConfig
+
+# Only one W&B run may be active per process at a time. `wandb.init()` returns the
+# previously active run rather than creating a new one when one is already active
+# (`reinit` defaults to "return_previous" outside notebooks), so callers training
+# several concepts concurrently in one process — e.g. the vibe check flow, which uses a
+# ThreadPoolTaskRunner — would otherwise silently share a single run. The first concept
+# to finish that run then breaks the others: their model artifacts are filed under the
+# wrong project and their commits fail with "context canceled".
+_wandb_run_lock = threading.Lock()
 
 
 # --wikibase-id given, --from-yaml-config not used  ->  no config returned
@@ -430,15 +440,18 @@ async def train_classifier(
             wandb_config["completion_price_usd"] = pricing.completion_price
 
     with (
-        wandb.init(
-            entity=namespace.entity,
-            project=namespace.project,
-            job_type=job_type,
-            config=wandb_config,
-        )
-        if track_and_upload
-        else nullcontext()
-    ) as run:
+        _wandb_run_lock if track_and_upload else nullcontext(),
+        (
+            wandb.init(
+                entity=namespace.entity,
+                project=namespace.project,
+                job_type=job_type,
+                config=wandb_config,
+            )
+            if track_and_upload
+            else nullcontext()
+        ) as run,
+    ):
         # Determine training data and deduplicate against evaluation set
         training_data = (
             train_validation_data if train_validation_data is not None else []
