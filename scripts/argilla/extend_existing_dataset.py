@@ -1,14 +1,9 @@
 import typer
-from rich.console import Console
 
-from knowledge_graph.config import processed_data_dir
 from knowledge_graph.identifiers import WikibaseID
-from knowledge_graph.labelled_passage import LabelledPassage
-from knowledge_graph.labelling import ArgillaSession
-from knowledge_graph.wikibase import WikibaseSession
+from knowledge_graph.operations.extend_dataset import extend_dataset_locally
 
 app = typer.Typer()
-console = Console()
 
 
 @app.command()
@@ -25,6 +20,11 @@ def main(
     limit: int | None = typer.Option(
         130, help="Limit the number of passages loaded to Argilla."
     ),
+    require_full_limit: bool = typer.Option(
+        False,
+        help="Fail, rather than warn and add fewer, when fewer than --limit of the "
+        "sampled passages are new.",
+    ),
 ):
     """
     Extend an existing dataset for a concept to Argilla.
@@ -33,73 +33,12 @@ def main(
     exists. Deduplicates the input passages based on an exact text match against what's
     already in Argilla.
     """
-    with console.status("Connecting to Argilla..."):
-        argilla = ArgillaSession()
-    console.log("✅ Connected to Argilla")
-
-    sampled_passages_dir = processed_data_dir / "sampled_passages"
-    sampled_passages_path = sampled_passages_dir / f"{wikibase_id}.jsonl"
-
-    if not sampled_passages_path.exists():
-        raise FileNotFoundError(
-            f"Sampled passages not found for {wikibase_id}. Run the sample script (scripts/sample.py) first."
-        )
-
-    console.log(f"Loading sampled passages for {wikibase_id}")
-    with open(sampled_passages_path, "r", encoding="utf-8") as f:
-        labelled_passages = [LabelledPassage.model_validate_json(line) for line in f]
-    n_annotations = sum([len(entry.spans) for entry in labelled_passages])
-    console.log(
-        f"Loaded {len(labelled_passages)} labelled passages "
-        f"with {n_annotations} individual annotations"
+    extend_dataset_locally(
+        wikibase_id=wikibase_id,
+        workspace=workspace_name,
+        limit=limit,
+        require_full_limit=require_full_limit,
     )
-
-    # Get concept metadata from wikibase
-    wikibase = WikibaseSession()
-    concept = wikibase.get_concept(wikibase_id)
-    console.log(f"✅ Loaded metadata for {concept}")
-
-    # Get existing dataset from Argilla
-    with console.status(f"Looking for existing dataset for {concept}..."):
-        dataset = argilla.get_dataset(wikibase_id, workspace=workspace_name)
-    console.log(
-        f"✅ Found existing dataset '{dataset.name}' with {len(list(dataset.records))} records"
-    )
-
-    # Deduplicate local dataset based on text in Argilla
-    with console.status(
-        "Deduplicating text in input labelled passages based on records in Argilla..."
-    ):
-        argilla_records = list(dataset.records)
-        text_in_argilla: set[str] = set(
-            [record.fields.get("text", "") for record in argilla_records]
-        )
-
-        lp_length_before = len(labelled_passages)
-        labelled_passages = [
-            lp for lp in labelled_passages if lp.text not in text_in_argilla
-        ]
-
-    console.print(
-        f"{len(labelled_passages)}/{lp_length_before} input passages remaining after deduplication"
-    )
-
-    if limit is not None:
-        console.log(f"Limiting number of labelled passages to {limit}")
-        labelled_passages = labelled_passages[:limit]
-
-    # Push labelled passages to the dataset
-    with console.status(f"Adding {len(labelled_passages)} passages to dataset..."):
-        argilla.add_labelled_passages(
-            labelled_passages=labelled_passages,
-            wikibase_id=wikibase_id,
-            workspace=workspace_name,
-        )
-
-    console.log(
-        f"✅ Successfully added {len(labelled_passages)} passages to dataset '{dataset.name}'"
-    )
-    console.log(f"Dataset now contains {len(list(dataset.records))} total records")
 
 
 if __name__ == "__main__":

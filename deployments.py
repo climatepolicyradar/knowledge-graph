@@ -28,6 +28,7 @@ from flows.create_evaluation_dataset_in_argilla import (
 )
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
+from flows.extend_existing_dataset import extend_existing_dataset
 from flows.index import index, index_batch_of_documents
 from flows.inference import (
     inference,
@@ -231,6 +232,11 @@ async def main() -> None:
     await create_deployment(
         flow=create_evaluation_dataset_in_argilla,
         description="Sample passages for a concept and push them directly to Argilla as a new dataset",
+    )
+
+    await create_deployment(
+        flow=extend_existing_dataset,
+        description="Add more labelling passages from a W&B artifact to a concept's existing Argilla dataset",
     )
 
     # Train
