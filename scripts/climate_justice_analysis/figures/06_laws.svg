@@ -1,0 +1,779 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="922.2912pt" height="593.7984pt" viewBox="0 0 922.2912 593.7984" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-08-13T15:36:55.208076</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.1, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 593.7984 
+L 922.2912 593.7984 
+L 922.2912 0 
+L 0 0 
+z
+" style="fill: #fcfcfb"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 240.3072 512.208 
+L 655.531709 512.208 
+L 655.531709 125.136 
+L 240.3072 125.136 
+z
+" style="fill: #fcfcfb"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      <path d="M 240.3072 512.208 
+L 240.3072 125.136 
+" clip-path="url(#p75668a69d1)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_2">
+      <defs>
+       <path id="m05e91e2b26" d="M 0 0 
+L 0 3.5 
+" style="stroke: #52514e; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#m05e91e2b26" x="240.3072" y="512.208" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_1">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="240.3072" y="527.776" transform="rotate(-0 240.3072 527.776)">0</text>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_3">
+      <path d="M 329.184687 512.208 
+L 329.184687 125.136 
+" clip-path="url(#p75668a69d1)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_4">
+      <g>
+       <use xlink:href="#m05e91e2b26" x="329.184687" y="512.208" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_2">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="329.184687" y="527.776" transform="rotate(-0 329.184687 527.776)">10</text>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_5">
+      <path d="M 418.062174 512.208 
+L 418.062174 125.136 
+" clip-path="url(#p75668a69d1)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_6">
+      <g>
+       <use xlink:href="#m05e91e2b26" x="418.062174" y="512.208" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_3">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="418.062174" y="527.776" transform="rotate(-0 418.062174 527.776)">20</text>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_7">
+      <path d="M 506.939661 512.208 
+L 506.939661 125.136 
+" clip-path="url(#p75668a69d1)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_8">
+      <g>
+       <use xlink:href="#m05e91e2b26" x="506.939661" y="512.208" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_4">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="506.939661" y="527.776" transform="rotate(-0 506.939661 527.776)">30</text>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_9">
+      <path d="M 595.817148 512.208 
+L 595.817148 125.136 
+" clip-path="url(#p75668a69d1)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_10">
+      <g>
+       <use xlink:href="#m05e91e2b26" x="595.817148" y="512.208" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_5">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="595.817148" y="527.776" transform="rotate(-0 595.817148 527.776)">40</text>
+     </g>
+    </g>
+    <g id="text_6">
+     <text style="font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="447.919455" y="542.0706" transform="rotate(-0 447.919455 542.0706)">% of passages carrying any justice label</text>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2"/>
+   <g id="patch_3">
+    <path d="M 240.3072 503.376746 
+L 277.108428 503.376746 
+L 277.108428 490.97541 
+L 240.3072 490.97541 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #4a3aa7"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 240.3072 484.586843 
+L 277.339486 484.586843 
+L 277.339486 472.185507 
+L 240.3072 472.185507 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #4a3aa7"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 240.3072 465.79694 
+L 292.588075 465.79694 
+L 292.588075 453.395604 
+L 240.3072 453.395604 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #4a3aa7"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 240.3072 447.007037 
+L 296.104725 447.007037 
+L 296.104725 434.605701 
+L 240.3072 434.605701 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #4a3aa7"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 240.3072 428.217134 
+L 296.865601 428.217134 
+L 296.865601 415.815798 
+L 240.3072 415.815798 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #4a3aa7"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 240.3072 409.427231 
+L 297.647514 409.427231 
+L 297.647514 397.025895 
+L 240.3072 397.025895 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 240.3072 390.637328 
+L 305.411685 390.637328 
+L 305.411685 378.235992 
+L 240.3072 378.235992 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 240.3072 371.847425 
+L 313.275258 371.847425 
+L 313.275258 359.446089 
+L 240.3072 359.446089 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 240.3072 353.057522 
+L 315.769217 353.057522 
+L 315.769217 340.656186 
+L 240.3072 340.656186 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 240.3072 334.267619 
+L 322.601169 334.267619 
+L 322.601169 321.866283 
+L 240.3072 321.866283 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 240.3072 315.477717 
+L 341.304344 315.477717 
+L 341.304344 303.076381 
+L 240.3072 303.076381 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 240.3072 296.687814 
+L 342.011583 296.687814 
+L 342.011583 284.286478 
+L 240.3072 284.286478 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #4a3aa7"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 240.3072 277.897911 
+L 357.69256 277.897911 
+L 357.69256 265.496575 
+L 240.3072 265.496575 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 240.3072 259.108008 
+L 365.047532 259.108008 
+L 365.047532 246.706672 
+L 240.3072 246.706672 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_17">
+    <path d="M 240.3072 240.318105 
+L 366.151429 240.318105 
+L 366.151429 227.916769 
+L 240.3072 227.916769 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_18">
+    <path d="M 240.3072 221.528202 
+L 385.743088 221.528202 
+L 385.743088 209.126866 
+L 240.3072 209.126866 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_19">
+    <path d="M 240.3072 202.738299 
+L 437.812726 202.738299 
+L 437.812726 190.336963 
+L 240.3072 190.336963 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_20">
+    <path d="M 240.3072 183.948396 
+L 484.624101 183.948396 
+L 484.624101 171.54706 
+L 240.3072 171.54706 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_21">
+    <path d="M 240.3072 165.158493 
+L 510.113857 165.158493 
+L 510.113857 152.757157 
+L 240.3072 152.757157 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_22">
+    <path d="M 240.3072 146.36859 
+L 559.710668 146.36859 
+L 559.710668 133.967254 
+L 240.3072 133.967254 
+z
+" clip-path="url(#p75668a69d1)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_23">
+    <path d="M 240.3072 512.208 
+L 655.531709 512.208 
+" style="fill: none; stroke: #e3e2de; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="500.353778" transform="rotate(-0 235.418938 500.353778)">Higher Education Support Act 2003</text>
+   </g>
+   <g id="text_8">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="282.091122" y="500.511278" transform="rotate(-0 282.091122 500.511278)">4.1%</text>
+   </g>
+   <g id="text_9">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="317.80043" y="499.836478" transform="rotate(-0 317.80043 499.836478)">146/3526</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="481.563875" transform="rotate(-0 235.418938 481.563875)">Offshore Petroleum and Greenhouse Gas Storage (Env…</text>
+   </g>
+   <g id="text_11">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="282.32218" y="481.721375" transform="rotate(-0 282.32218 481.721375)">4.2%</text>
+   </g>
+   <g id="text_12">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="318.031488" y="481.046575" transform="rotate(-0 318.031488 481.046575)">10/240</text>
+   </g>
+   <g id="text_13">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="462.773972" transform="rotate(-0 235.418938 462.773972)">Net Zero Economy Authority Act 2024</text>
+   </g>
+   <g id="text_14">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="297.570769" y="462.931472" transform="rotate(-0 297.570769 462.931472)">5.9%</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="333.280077" y="462.256672" transform="rotate(-0 333.280077 462.256672)">30/510</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="443.984069" transform="rotate(-0 235.418938 443.984069)">Future Drought Fund Act 2019</text>
+   </g>
+   <g id="text_17">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="301.08742" y="444.141569" transform="rotate(-0 301.08742 444.141569)">6.3%</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="336.796727" y="443.466769" transform="rotate(-0 336.796727 443.466769)">14/223</text>
+   </g>
+   <g id="text_19">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="425.194166" transform="rotate(-0 235.418938 425.194166)">Climate Change Act 2022</text>
+   </g>
+   <g id="text_20">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="301.848295" y="425.351666" transform="rotate(-0 301.848295 425.351666)">6.4%</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="337.557603" y="424.676866" transform="rotate(-0 337.557603 424.676866)">7/110</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="406.404263" transform="rotate(-0 235.418938 406.404263)">Law on the Use of Renewable Energy Resources for t…</text>
+   </g>
+   <g id="text_23">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="302.630208" y="406.561763" transform="rotate(-0 302.630208 406.561763)">6.5%</text>
+   </g>
+   <g id="text_24">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="338.339516" y="405.886963" transform="rotate(-0 338.339516 405.886963)">2/31</text>
+   </g>
+   <g id="text_25">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="387.61436" transform="rotate(-0 235.418938 387.61436)">Law on Change in Some Laws</text>
+   </g>
+   <g id="text_26">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="310.39438" y="387.77186" transform="rotate(-0 310.39438 387.77186)">7.3%</text>
+   </g>
+   <g id="text_27">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="346.103687" y="387.09706" transform="rotate(-0 346.103687 387.09706)">66/901</text>
+   </g>
+   <g id="text_28">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="368.824457" transform="rotate(-0 235.418938 368.824457)">Decree No. 31248/2020</text>
+   </g>
+   <g id="text_29">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="318.257952" y="368.981957" transform="rotate(-0 318.257952 368.981957)">8.2%</text>
+   </g>
+   <g id="text_30">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="353.96726" y="368.307157" transform="rotate(-0 353.96726 368.307157)">61/743</text>
+   </g>
+   <g id="text_31">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="350.034554" transform="rotate(-0 235.418938 350.034554)">Amendment to Law No. 5686 on Geothermal Resources …</text>
+   </g>
+   <g id="text_32">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="320.751911" y="350.192054" transform="rotate(-0 320.751911 350.192054)">8.5%</text>
+   </g>
+   <g id="text_33">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="356.461219" y="349.517254" transform="rotate(-0 356.461219 349.517254)">9/106</text>
+   </g>
+   <g id="text_34">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="331.244651" transform="rotate(-0 235.418938 331.244651)">Law on the Use of Renewable Energy Resources for t…</text>
+   </g>
+   <g id="text_35">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="327.583863" y="331.402151" transform="rotate(-0 327.583863 331.402151)">9.3%</text>
+   </g>
+   <g id="text_36">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="363.293171" y="330.727351" transform="rotate(-0 363.293171 330.727351)">5/54</text>
+   </g>
+   <g id="text_37">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="312.454749" transform="rotate(-0 235.418938 312.454749)">Act No. 5627 on Energy Efficiency</text>
+   </g>
+   <g id="text_38">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="346.287038" y="312.612249" transform="rotate(-0 346.287038 312.612249)">11.4%</text>
+   </g>
+   <g id="text_39">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="381.996346" y="311.937449" transform="rotate(-0 381.996346 311.937449)">5/44</text>
+   </g>
+   <g id="text_40">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="293.664846" transform="rotate(-0 235.418938 293.664846)">Budget Strategy 2022-23</text>
+   </g>
+   <g id="text_41">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="346.994277" y="293.822346" transform="rotate(-0 346.994277 293.822346)">11.4%</text>
+   </g>
+   <g id="text_42">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="382.703585" y="293.147546" transform="rotate(-0 382.703585 293.147546)">268/2342</text>
+   </g>
+   <g id="text_43">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="274.874943" transform="rotate(-0 235.418938 274.874943)">Regulation on Environmental Impact Assessment </text>
+   </g>
+   <g id="text_44">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="362.675254" y="275.032443" transform="rotate(-0 362.675254 275.032443)">13.2%</text>
+   </g>
+   <g id="text_45">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="398.384562" y="274.357643" transform="rotate(-0 398.384562 274.357643)">7/53</text>
+   </g>
+   <g id="text_46">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="256.08504" transform="rotate(-0 235.418938 256.08504)">Law on Geothermal Resources And Mineral Waters</text>
+   </g>
+   <g id="text_47">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="370.030227" y="256.24254" transform="rotate(-0 370.030227 256.24254)">14.0%</text>
+   </g>
+   <g id="text_48">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="405.739534" y="255.56774" transform="rotate(-0 405.739534 255.56774)">8/57</text>
+   </g>
+   <g id="text_49">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="237.295137" transform="rotate(-0 235.418938 237.295137)">Electricity Market Law</text>
+   </g>
+   <g id="text_50">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="371.134123" y="237.452637" transform="rotate(-0 371.134123 237.452637)">14.2%</text>
+   </g>
+   <g id="text_51">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="406.843431" y="236.777837" transform="rotate(-0 406.843431 236.777837)">16/113</text>
+   </g>
+   <g id="text_52">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="218.505234" transform="rotate(-0 235.418938 218.505234)">Law on Geothermal Resources And Mineral Waters</text>
+   </g>
+   <g id="text_53">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="390.725782" y="218.662734" transform="rotate(-0 390.725782 218.662734)">16.4%</text>
+   </g>
+   <g id="text_54">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="426.43509" y="217.987934" transform="rotate(-0 426.43509 217.987934)">9/55</text>
+   </g>
+   <g id="text_55">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="199.715331" transform="rotate(-0 235.418938 199.715331)">Law No. 6306 on restructuring of areas under risk …</text>
+   </g>
+   <g id="text_56">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="442.795421" y="199.872831" transform="rotate(-0 442.795421 199.872831)">22.2%</text>
+   </g>
+   <g id="text_57">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="478.504728" y="199.198031" transform="rotate(-0 478.504728 199.198031)">14/63</text>
+   </g>
+   <g id="text_58">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="180.925428" transform="rotate(-0 235.418938 180.925428)">Eleventh National Development Plan (2019-2023)</text>
+   </g>
+   <g id="text_59">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="489.606795" y="181.082928" transform="rotate(-0 489.606795 181.082928)">27.5%</text>
+   </g>
+   <g id="text_60">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="525.316103" y="180.408128" transform="rotate(-0 525.316103 180.408128)">254/924</text>
+   </g>
+   <g id="text_61">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="162.135525" transform="rotate(-0 235.418938 162.135525)">Law 7552 - Climate Law</text>
+   </g>
+   <g id="text_62">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="515.096551" y="162.293025" transform="rotate(-0 515.096551 162.293025)">30.4%</text>
+   </g>
+   <g id="text_63">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="550.805858" y="161.618225" transform="rotate(-0 550.805858 161.618225)">17/56</text>
+   </g>
+   <g id="text_64">
+    <text style="font-size: 8.6px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #0b0b0b" x="235.418938" y="143.345622" transform="rotate(-0 235.418938 143.345622)">Act No. 5403 on Soil Conservation and Land Use</text>
+   </g>
+   <g id="text_65">
+    <text style="font-weight: 700; font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #52514e" x="564.693363" y="143.503122" transform="rotate(-0 564.693363 143.503122)">35.9%</text>
+   </g>
+   <g id="text_66">
+    <text style="font-size: 7.2px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #8a8983" x="600.40267" y="142.828322" transform="rotate(-0 600.40267 142.828322)">23/64</text>
+   </g>
+   <g id="text_67">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="240.3072" y="115.136" transform="rotate(-0 240.3072 115.136)">Top 20 laws by justice density</text>
+   </g>
+  </g>
+  <g id="axes_2">
+   <g id="patch_24">
+    <path d="M 738.39992 512.208 
+L 915.0912 512.208 
+L 915.0912 125.136 
+L 738.39992 125.136 
+z
+" style="fill: #fcfcfb"/>
+   </g>
+   <g id="matplotlib.axis_3">
+    <g id="xtick_6">
+     <g id="line2d_11">
+      <g>
+       <use xlink:href="#m05e91e2b26" x="766.737925" y="512.208" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_68">
+      <text style="font-size: 8.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(752.4238 527.3224)">Climate</text>
+      <text style="font-size: 8.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(754.603863 537.3436)">justice</text>
+     </g>
+    </g>
+    <g id="xtick_7">
+     <g id="line2d_12">
+      <g>
+       <use xlink:href="#m05e91e2b26" x="826.74556" y="512.208" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_69">
+      <text style="font-size: 8.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(805.665497 527.3224)">Distributive</text>
+      <text style="font-size: 8.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(814.611497 537.3436)">justice</text>
+     </g>
+    </g>
+    <g id="xtick_8">
+     <g id="line2d_13">
+      <g>
+       <use xlink:href="#m05e91e2b26" x="886.753195" y="512.208" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_70">
+      <text style="font-size: 8.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(866.374663 527.3224)">Procedural</text>
+      <text style="font-size: 8.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(874.619132 537.3436)">justice</text>
+     </g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_4">
+    <g id="ytick_1">
+     <g id="line2d_14">
+      <path d="M 738.39992 512.208 
+L 915.0912 512.208 
+" clip-path="url(#pda77b2a207)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_15">
+      <defs>
+       <path id="ma31a8207ed" d="M 0 0 
+L -3.5 0 
+" style="stroke: #52514e; stroke-width: 0.8"/>
+      </defs>
+      <g>
+       <use xlink:href="#ma31a8207ed" x="738.39992" y="512.208" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_71">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="731.39992" y="516.492" transform="rotate(-0 731.39992 516.492)">0</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_16">
+      <path d="M 738.39992 450.768 
+L 915.0912 450.768 
+" clip-path="url(#pda77b2a207)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_17">
+      <g>
+       <use xlink:href="#ma31a8207ed" x="738.39992" y="450.768" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_72">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="731.39992" y="455.052" transform="rotate(-0 731.39992 455.052)">2</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_18">
+      <path d="M 738.39992 389.328 
+L 915.0912 389.328 
+" clip-path="url(#pda77b2a207)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_19">
+      <g>
+       <use xlink:href="#ma31a8207ed" x="738.39992" y="389.328" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_73">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="731.39992" y="393.612" transform="rotate(-0 731.39992 393.612)">4</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_20">
+      <path d="M 738.39992 327.888 
+L 915.0912 327.888 
+" clip-path="url(#pda77b2a207)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_21">
+      <g>
+       <use xlink:href="#ma31a8207ed" x="738.39992" y="327.888" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_74">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="731.39992" y="332.172" transform="rotate(-0 731.39992 332.172)">6</text>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_22">
+      <path d="M 738.39992 266.448 
+L 915.0912 266.448 
+" clip-path="url(#pda77b2a207)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_23">
+      <g>
+       <use xlink:href="#ma31a8207ed" x="738.39992" y="266.448" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_75">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="731.39992" y="270.732" transform="rotate(-0 731.39992 270.732)">8</text>
+     </g>
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_24">
+      <path d="M 738.39992 205.008 
+L 915.0912 205.008 
+" clip-path="url(#pda77b2a207)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_25">
+      <g>
+       <use xlink:href="#ma31a8207ed" x="738.39992" y="205.008" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_76">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="731.39992" y="209.292" transform="rotate(-0 731.39992 209.292)">10</text>
+     </g>
+    </g>
+    <g id="ytick_7">
+     <g id="line2d_26">
+      <path d="M 738.39992 143.568 
+L 915.0912 143.568 
+" clip-path="url(#pda77b2a207)" style="fill: none; stroke: #e3e2de; stroke-width: 0.7; stroke-linecap: square"/>
+     </g>
+     <g id="line2d_27">
+      <g>
+       <use xlink:href="#ma31a8207ed" x="738.39992" y="143.568" style="fill: #52514e; stroke: #52514e; stroke-width: 0.8"/>
+      </g>
+     </g>
+     <g id="text_77">
+      <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #52514e" x="731.39992" y="147.852" transform="rotate(-0 731.39992 147.852)">12</text>
+     </g>
+    </g>
+    <g id="text_78">
+     <text style="font-size: 8.8px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="715.518645" y="318.672" transform="rotate(-90 715.518645 318.672)">% of all law passages</text>
+    </g>
+   </g>
+   <g id="patch_25">
+    <path d="M 746.431341 512.208 
+L 765.44176 512.208 
+L 765.44176 466.92573 
+L 746.431341 466.92573 
+z
+" clip-path="url(#pda77b2a207)" style="fill: #4a3aa7"/>
+   </g>
+   <g id="patch_26">
+    <path d="M 806.438976 512.208 
+L 825.449395 512.208 
+L 825.449395 441.815935 
+L 806.438976 441.815935 
+z
+" clip-path="url(#pda77b2a207)" style="fill: #4a3aa7"/>
+   </g>
+   <g id="patch_27">
+    <path d="M 866.446611 512.208 
+L 885.45703 512.208 
+L 885.45703 502.615494 
+L 866.446611 502.615494 
+z
+" clip-path="url(#pda77b2a207)" style="fill: #4a3aa7"/>
+   </g>
+   <g id="patch_28">
+    <path d="M 768.03409 512.208 
+L 787.044509 512.208 
+L 787.044509 241.200601 
+L 768.03409 241.200601 
+z
+" clip-path="url(#pda77b2a207)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_29">
+    <path d="M 828.041725 512.208 
+L 847.052143 512.208 
+L 847.052143 202.735035 
+L 828.041725 202.735035 
+z
+" clip-path="url(#pda77b2a207)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_30">
+    <path d="M 888.049359 512.208 
+L 907.059778 512.208 
+L 907.059778 394.188649 
+L 888.049359 394.188649 
+z
+" clip-path="url(#pda77b2a207)" style="fill: #eda100"/>
+   </g>
+   <g id="patch_31">
+    <path d="M 738.39992 512.208 
+L 738.39992 125.136 
+" style="fill: none; stroke: #e3e2de; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="patch_32">
+    <path d="M 738.39992 512.208 
+L 915.0912 512.208 
+" style="fill: none; stroke: #e3e2de; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_79">
+    <text style="font-weight: 700; font-size: 9.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="755.936551" y="459.97073" transform="rotate(-0 755.936551 459.97073)">1.5%</text>
+   </g>
+   <g id="text_80">
+    <text style="font-size: 7px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #8a8983" x="755.936551" y="446.38833" transform="rotate(-0 755.936551 446.38833)">321</text>
+   </g>
+   <g id="text_81">
+    <text style="font-weight: 700; font-size: 9.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="815.944186" y="434.860935" transform="rotate(-0 815.944186 434.860935)">2.3%</text>
+   </g>
+   <g id="text_82">
+    <text style="font-size: 7px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #8a8983" x="815.944186" y="421.278535" transform="rotate(-0 815.944186 421.278535)">499</text>
+   </g>
+   <g id="text_83">
+    <text style="font-weight: 700; font-size: 9.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="875.95182" y="495.660494" transform="rotate(-0 875.95182 495.660494)">0.3%</text>
+   </g>
+   <g id="text_84">
+    <text style="font-size: 7px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #8a8983" x="875.95182" y="482.078094" transform="rotate(-0 875.95182 482.078094)">68</text>
+   </g>
+   <g id="text_85">
+    <text style="font-weight: 700; font-size: 9.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="777.539299" y="234.245601" transform="rotate(-0 777.539299 234.245601)">8.8%</text>
+   </g>
+   <g id="text_86">
+    <text style="font-size: 7px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #8a8983" x="777.539299" y="220.663201" transform="rotate(-0 777.539299 220.663201)">310</text>
+   </g>
+   <g id="text_87">
+    <text style="font-weight: 700; font-size: 9.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="837.546934" y="195.780035" transform="rotate(-0 837.546934 195.780035)">10.1%</text>
+   </g>
+   <g id="text_88">
+    <text style="font-size: 7px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #8a8983" x="837.546934" y="182.197635" transform="rotate(-0 837.546934 182.197635)">354</text>
+   </g>
+   <g id="text_89">
+    <text style="font-weight: 700; font-size: 9.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #52514e" x="897.554569" y="387.233649" transform="rotate(-0 897.554569 387.233649)">3.8%</text>
+   </g>
+   <g id="text_90">
+    <text style="font-size: 7px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: middle; fill: #8a8983" x="897.554569" y="373.651249" transform="rotate(-0 897.554569 373.651249)">135</text>
+   </g>
+   <g id="text_91">
+    <text style="font-weight: 700; font-size: 10.5px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="738.39992" y="115.136" transform="rotate(-0 738.39992 115.136)">All laws pooled, by country</text>
+   </g>
+   <g id="legend_1">
+    <g id="patch_33">
+     <path d="M 846.9612 141.804 
+L 864.9612 141.804 
+L 864.9612 135.504 
+L 846.9612 135.504 
+z
+" style="fill: #4a3aa7"/>
+    </g>
+    <g id="text_92">
+     <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="872.1612" y="141.804" transform="rotate(-0 872.1612 141.804)">Australia</text>
+    </g>
+    <g id="patch_34">
+     <path d="M 846.9612 156.789 
+L 864.9612 156.789 
+L 864.9612 150.489 
+L 846.9612 150.489 
+z
+" style="fill: #eda100"/>
+    </g>
+    <g id="text_93">
+     <text style="font-size: 9px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="872.1612" y="156.789" transform="rotate(-0 872.1612 156.789)">Türkiye</text>
+    </g>
+   </g>
+  </g>
+  <g id="text_94">
+   <text style="font-weight: 700; font-size: 15px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #0b0b0b" x="7.2" y="21.825" transform="rotate(-0 7.2 21.825)">Turkish climate law carries 4× Australia's justice density</text>
+  </g>
+  <g id="text_95">
+   <text style="font-size: 9.5px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(7.2 44.8026)">Every published Australian and Turkish law in the database with at least 30 passages: 29 Australian, 17 Turkish.</text>
+   <text style="font-size: 9.5px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(7.2 56.1361)">Colour marks the country here, not the classifier. Small grey figures are labelled passages over total passages.</text>
+   <text style="font-size: 9.5px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #52514e" transform="translate(7.2 67.4696)">Australia: 29 laws, 21,777 passages, 3.3% any justice   ·   Türkiye: 17 laws, 3,514 passages, 14.2% any justice</text>
+  </g>
+  <g id="text_96">
+   <text style="font-size: 7.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #8a8983" transform="translate(7.2 558.434)">Composition drives much of the country gap: Türkiye's set includes the Eleventh National Development Plan (924 passages, 27.5% justice-labelled), while Australia's largest law by volume is the Higher Education Support Act (3,526 passages, 4.1%).</text>
+   <text style="font-size: 7.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #8a8983" transform="translate(7.2 567.2622)">'Law' is the front-end category; policies are excluded by request. Of 63 published laws, 10 have no passages at all and a further 7 fall below the 30-passage floor.</text>
+   <text style="font-size: 7.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #8a8983" transform="translate(7.2 576.0904)">All passage types included (not just body text), matching the deep-dive panel; passages under 20 characters dropped.</text>
+   <text style="font-size: 7.4px; font-family: 'Helvetica Neue', 'Helvetica', 'Arial', 'DejaVu Sans'; fill: #8a8983" transform="translate(7.2 584.9186)">Source: Climate Policy Radar, PRODUCTION.PUBLISHED.PASSAGES (Snowflake), Aug 2026.</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p75668a69d1">
+   <rect x="240.3072" y="125.136" width="415.224509" height="387.072"/>
+  </clipPath>
+  <clipPath id="pda77b2a207">
+   <rect x="738.39992" y="125.136" width="176.69128" height="387.072"/>
+  </clipPath>
+ </defs>
+</svg>
