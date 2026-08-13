@@ -1,4 +1,3 @@
-import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -34,6 +33,26 @@ class CountingRecords:
         """Count this iteration, then yield a mock record per text."""
         self.access_count += 1
         return iter([MagicMock(fields={"text": text}) for text in self.texts])
+
+
+@pytest.fixture
+def mock_logger():
+    """
+    Patch the module's get_logger.
+
+    caplog is unreliable here: get_logger() can return a Prefect run logger which doesn't
+    propagate to caplog's root handler. See tests/test_large_language_model.py for the
+    same workaround.
+    """
+    with patch(
+        "knowledge_graph.operations.extend_dataset.get_logger"
+    ) as mock_get_logger:
+        yield mock_get_logger.return_value
+
+
+def logged(mock_logger, level: str) -> list[str]:
+    """Messages passed to the given log level."""
+    return [str(call.args[0]) for call in getattr(mock_logger, level).call_args_list]
 
 
 @pytest.fixture
@@ -85,19 +104,21 @@ def test_limit_is_applied_after_deduplication(mock_argilla):
     assert {p.text for p in added} <= {f"passage {i}" for i in range(5, 10)}
 
 
-def test_warns_and_adds_fewer_when_not_enough_new_passages(mock_argilla, caplog):
+def test_warns_and_adds_fewer_when_not_enough_new_passages(mock_argilla, mock_logger):
     """Short of the limit, it adds what it has rather than failing."""
     mock_argilla["dataset"].records = CountingRecords(
         [f"passage {i}" for i in range(8)]
     )
 
-    with caplog.at_level(logging.WARNING, logger="knowledge_graph"):
-        added = run_extend_dataset(
-            wikibase_id=WIKIBASE_ID, labelled_passages=make_passages(10), limit=50
-        )
+    added = run_extend_dataset(
+        wikibase_id=WIKIBASE_ID, labelled_passages=make_passages(10), limit=50
+    )
 
     assert len(added) == 2
-    assert "Only 2 new passages available" in caplog.text
+    assert any(
+        "Only 2 new passages available" in message
+        for message in logged(mock_logger, "warning")
+    )
 
 
 def test_raises_when_require_full_limit_and_not_enough_new(mock_argilla):
@@ -182,7 +203,7 @@ def test_dataset_records_are_fetched_once(mock_argilla):
     assert records.access_count == 1
 
 
-def test_final_count_is_computed_not_re_read(mock_argilla, caplog):
+def test_final_count_is_computed_not_re_read(mock_argilla, mock_logger):
     """A stale read-back after the write must not change the reported total."""
     mock_argilla["dataset"].records = CountingRecords(
         [f"passage {i}" for i in range(3)]
@@ -194,12 +215,14 @@ def test_final_count_is_computed_not_re_read(mock_argilla, caplog):
 
     mock_argilla["session"].add_labelled_passages.side_effect = go_stale
 
-    with caplog.at_level(logging.INFO, logger="knowledge_graph"):
-        run_extend_dataset(
-            wikibase_id=WIKIBASE_ID, labelled_passages=make_passages(10), limit=2
-        )
+    run_extend_dataset(
+        wikibase_id=WIKIBASE_ID, labelled_passages=make_passages(10), limit=2
+    )
 
-    assert "Dataset now contains 5 distinct passages" in caplog.text
+    assert any(
+        "Dataset now contains 5 distinct passages" in message
+        for message in logged(mock_logger, "info")
+    )
 
 
 def test_extend_dataset_locally_raises_without_a_sample_file(tmp_path, mock_argilla):
