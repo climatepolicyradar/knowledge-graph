@@ -16,7 +16,7 @@ import wandb
 from knowledge_graph.classifier import EmbeddingClassifier, KeywordClassifier
 from knowledge_graph.classifier.classifier import Classifier
 from knowledge_graph.config import WANDB_ENTITY, equity_columns, processed_data_dir
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import Identifier, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.sampling import create_balanced_sample, split_evenly
 from knowledge_graph.utils import get_logger, serialise_pydantic_list_as_jsonl
@@ -43,6 +43,7 @@ def run_sampling(
     min_negative_proportion: float = 0.1,
     corpus_types_include: list[str] | None = None,
     corpus_types_exclude: list[str] | None = None,
+    exclude_passage_ids: set[str] | None = None,
     max_size_to_sample_from: int = 500_000,
     max_negative_proportion: float | None = None,
     track_and_upload: bool = True,
@@ -97,6 +98,17 @@ def run_sampling(
             f"{len(dataset)} passages remain"
         )
 
+    if exclude_passage_ids:
+        before = len(dataset)
+        passage_ids = dataset["text_block.text"].map(Identifier.generate)
+        dataset = cast(
+            pd.DataFrame, dataset[~passage_ids.isin(list(exclude_passage_ids))]
+        )
+        logger.info(
+            f"Excluded {before - len(dataset)} passages already in the labelling "
+            f"dataset: {len(dataset)} candidates remain"
+        )
+
     # Limit dataset size if needed
     if len(dataset) > max_size_to_sample_from:
         logger.info(
@@ -129,6 +141,7 @@ def run_sampling(
         "experimental_concept": concept_overrides is not None
         and len(concept_overrides) > 0,
         "concept_overrides": concept_overrides,
+        "n_excluded_passages": len(exclude_passage_ids or []),
     }
 
     logged_artifact = None
@@ -194,16 +207,16 @@ def run_sampling(
                 positive_samples_list.append(sampled_df)
 
         # Combine positive samples
+        if not positive_samples_list:
+            raise ValueError(
+                f"No positive passages found for {wikibase_id} in {len(dataset)} "
+                f"candidates: neither the keyword nor the embedding classifier matched "
+                f"anything, so there is nothing worth labelling. Try "
+                f'dataset_name="combined" for a much larger pool, or check the '
+                f"concept's labels in Wikibase."
+            )
         positive_samples = pd.concat(positive_samples_list, ignore_index=True)
         positive_samples = positive_samples.drop_duplicates(subset=["text_block.text"])
-
-        # Calculate the number of negative samples we need to take
-        negative_sample_size = sample_size - len(positive_samples)
-        if max_negative_proportion is not None:
-            negative_sample_size = min(
-                negative_sample_size,
-                math.floor(sample_size * max_negative_proportion),
-            )
 
         # Get negative samples (passages not identified by any classifier)
         negative_indices = ~dataset[[model.name for model in models]].any(axis=1)

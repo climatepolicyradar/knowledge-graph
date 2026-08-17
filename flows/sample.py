@@ -72,6 +72,7 @@ async def run_sampling_task(
     wikibase_username: str | None,
     wikibase_password: str | None,
     wikibase_url: str | None,
+    exclude_passage_ids: list[str] | None = None,
 ) -> str | None:
     import asyncio
 
@@ -90,6 +91,9 @@ async def run_sampling_task(
             min_negative_proportion=min_negative_proportion,
             corpus_types_include=corpus_types_include,
             corpus_types_exclude=corpus_types_exclude,
+            exclude_passage_ids=set(exclude_passage_ids)
+            if exclude_passage_ids
+            else None,
             max_size_to_sample_from=max_size_to_sample_from,
             max_negative_proportion=max_negative_proportion,
             track_and_upload=track_and_upload,
@@ -149,6 +153,13 @@ async def sample(
             description="Corpus types to exclude. Can be specified multiple times.",
         ),
     ] = None,
+    exclude_passage_ids: Annotated[
+        Optional[list[str]],
+        Field(
+            description="LabelledPassage IDs to remove from the sampling pool before "
+            "classifying, e.g. those already in Argilla."
+        ),
+    ] = None,
     max_size_to_sample_from: Annotated[
         int,
         Field(
@@ -205,6 +216,7 @@ async def sample(
         min_negative_proportion=min_negative_proportion,
         corpus_types_include=corpus_types_include,
         corpus_types_exclude=corpus_types_exclude,
+        exclude_passage_ids=exclude_passage_ids,
         max_size_to_sample_from=max_size_to_sample_from,
         max_negative_proportion=max_negative_proportion,
         track_and_upload=track_and_upload,

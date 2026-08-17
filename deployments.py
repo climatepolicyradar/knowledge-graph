@@ -236,7 +236,8 @@ async def main() -> None:
 
     await create_deployment(
         flow=extend_existing_dataset,
-        description="Add more labelling passages from a W&B artifact to a concept's existing Argilla dataset",
+        description="Sample more labelling passages for a concept, excluding those "
+        "already labelled, and add them to its existing Argilla dataset",
     )
 
     # Train

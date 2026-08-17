@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from flows.extend_existing_dataset import extend_existing_dataset
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import Identifier, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 
 WIKIBASE_ID = WikibaseID("Q2419")
@@ -23,6 +23,9 @@ def mock_concept():
     return concept
 
 
+EXISTING_IDS = {Identifier.generate(f"existing {i}") for i in range(3)}
+
+
 @pytest.fixture
 def patched_extend_dependencies(labelled_passages, mock_concept, test_config):
     with (
@@ -36,6 +39,15 @@ def patched_extend_dependencies(labelled_passages, mock_concept, test_config):
             "flows.extend_existing_dataset.create_llm_ensemble_for_prelabelling_validation_dataset"
         ) as mock_create_ensemble,
         patch("flows.extend_existing_dataset.run_extend_dataset") as mock_run_extend,
+        patch(
+            "flows.extend_existing_dataset.get_passage_ids_in_argilla",
+            return_value=EXISTING_IDS,
+        ) as mock_get_ids,
+        patch(
+            "flows.extend_existing_dataset.sample",
+            new_callable=AsyncMock,
+            return_value=ARTIFACT,
+        ) as mock_sample,
     ):
         mock_load.return_value = labelled_passages
         mock_config_cls.create = AsyncMock(return_value=test_config)
@@ -51,7 +63,94 @@ def patched_extend_dependencies(labelled_passages, mock_concept, test_config):
             "wikibase_cls": mock_wikibase_cls,
             "create_ensemble": mock_create_ensemble,
             "run_extend": mock_run_extend,
+            "get_ids": mock_get_ids,
+            "sample": mock_sample,
         }
+
+
+@pytest.mark.asyncio
+async def test_samples_when_given_no_artifact_path(
+    patched_extend_dependencies, test_config
+):
+    """
+    With no artifact the flow samples for itself — one command, not two.
+
+    sample_size defaults to n_new_passages because the passages already in Argilla are
+    excluded from the pool, so there is nothing to overshoot.
+    """
+    await extend_existing_dataset(
+        wikibase_id=WIKIBASE_ID, n_new_passages=50, config=test_config
+    )
+
+    kwargs = patched_extend_dependencies["sample"].call_args.kwargs
+    assert kwargs["sample_size"] == 50
+    assert kwargs["exclude_passage_ids"] == sorted(EXISTING_IDS)
+    assert kwargs["track_and_upload"] is True
+    patched_extend_dependencies["load"].assert_called_once_with(wandb_path=ARTIFACT)
+
+
+@pytest.mark.asyncio
+async def test_does_not_sample_when_given_an_artifact_path(
+    patched_extend_dependencies, test_config
+):
+    await extend_existing_dataset(
+        wikibase_id=WIKIBASE_ID, wandb_artifact_path=ARTIFACT, config=test_config
+    )
+
+    patched_extend_dependencies["sample"].assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_explicit_sample_size_overrides_n_new_passages(
+    patched_extend_dependencies, test_config
+):
+    await extend_existing_dataset(
+        wikibase_id=WIKIBASE_ID,
+        n_new_passages=50,
+        sample_size=200,
+        config=test_config,
+    )
+
+    assert patched_extend_dependencies["sample"].call_args.kwargs["sample_size"] == 200
+
+
+@pytest.mark.asyncio
+async def test_raises_when_sample_returns_no_artifact(
+    patched_extend_dependencies, test_config
+):
+    patched_extend_dependencies["sample"].return_value = None
+
+    with pytest.raises(RuntimeError, match="did not return an artifact path"):
+        await extend_existing_dataset(wikibase_id=WIKIBASE_ID, config=test_config)
+
+    patched_extend_dependencies["run_extend"].assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_raises_when_no_size_is_given_to_sample_with(
+    patched_extend_dependencies, test_config
+):
+    with pytest.raises(ValueError, match="No sample size"):
+        await extend_existing_dataset(
+            wikibase_id=WIKIBASE_ID,
+            n_new_passages=None,
+            sample_size=None,
+            config=test_config,
+        )
+
+    patched_extend_dependencies["sample"].assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_reads_argilla_once_and_reuses_the_ids(
+    patched_extend_dependencies, test_config
+):
+    """The IDs are fetched up front and handed to both sampling and the extend op."""
+    await extend_existing_dataset(wikibase_id=WIKIBASE_ID, config=test_config)
+
+    patched_extend_dependencies["get_ids"].assert_called_once()
+    kwargs = patched_extend_dependencies["run_extend"].call_args.kwargs
+    assert kwargs["existing_passage_ids"] == EXISTING_IDS
 
 
 @pytest.mark.asyncio
@@ -64,22 +163,6 @@ async def test_loads_candidate_passages_from_the_given_artifact(
     )
 
     patched_extend_dependencies["load"].assert_called_once_with(wandb_path=ARTIFACT)
-
-
-@pytest.mark.asyncio
-async def test_refuses_to_run_without_an_artifact_path(
-    patched_extend_dependencies, test_config
-):
-    """
-    The flow does not sample.
-
-    With no artifact it must fail immediately and name the sample flow, rather than silently sampling or pushing nothing.
-    """
-    with pytest.raises(ValueError, match="sample"):
-        await extend_existing_dataset(wikibase_id=WIKIBASE_ID, config=test_config)
-
-    patched_extend_dependencies["load"].assert_not_called()
-    patched_extend_dependencies["run_extend"].assert_not_called()
 
 
 @pytest.mark.asyncio

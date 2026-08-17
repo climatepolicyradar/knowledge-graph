@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import Identifier, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.operations.extend_dataset import (
     NotEnoughNewPassagesError,
@@ -251,3 +251,47 @@ def test_extend_dataset_locally_reads_the_sample_file(tmp_path, mock_argilla):
         added = extend_dataset_locally(wikibase_id=WIKIBASE_ID, limit=None)
 
     assert [p.text for p in added] == [p.text for p in passages]
+
+
+def test_deduplicates_by_passage_id_not_raw_text(mock_argilla):
+    """Deduplicate keys on LabelledPassage.id."""
+    mock_argilla["dataset"].records = CountingRecords(["passage 0"])
+
+    added = run_extend_dataset(
+        wikibase_id=WIKIBASE_ID,
+        labelled_passages=[
+            LabelledPassage(text="passage 0", spans=[]),
+            LabelledPassage(text="passage 0 ", spans=[]),
+        ],
+        limit=None,
+    )
+
+    assert [lp.text for lp in added] == ["passage 0 "]
+
+
+def test_does_not_refetch_records_when_given_existing_passage_ids(mock_argilla):
+    """Each iteration of dataset.records is an HTTP fetch, so the caller can skip it."""
+    records = CountingRecords([f"passage {i}" for i in range(4)])
+    mock_argilla["dataset"].records = records
+    known: set[str] = {Identifier.generate(f"passage {i}") for i in range(4)}
+
+    added = run_extend_dataset(
+        wikibase_id=WIKIBASE_ID,
+        labelled_passages=make_passages(10),
+        existing_passage_ids=known,
+        limit=None,
+    )
+
+    assert records.access_count == 0
+    assert len(added) == 6
+
+
+def test_fetches_records_once_when_not_given_existing_passage_ids(mock_argilla):
+    records = CountingRecords([f"passage {i}" for i in range(4)])
+    mock_argilla["dataset"].records = records
+
+    run_extend_dataset(
+        wikibase_id=WIKIBASE_ID, labelled_passages=make_passages(10), limit=None
+    )
+
+    assert records.access_count == 1

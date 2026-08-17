@@ -7,7 +7,7 @@ annotators never see the same passage twice.
 """
 
 from knowledge_graph.config import processed_data_dir
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import Identifier, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaSession
 from knowledge_graph.utils import get_logger
@@ -18,11 +18,33 @@ class NotEnoughNewPassagesError(Exception):
 
     def __init__(self, wikibase_id: WikibaseID | str, requested: int, available: int):
         self.message = (
-            f"Only {available} of the input passages for {wikibase_id} aren't already in "
-            f"Argilla, but {requested} were requested. Sample more passages (a larger "
-            f"sample_size) and run again, or lower the limit."
+            f"Only {available} of the input passages for {wikibase_id} are new, but "
+            f"{requested} were requested. Either the input sample was too small — sample "
+            f"more passages — or the candidate pool for {wikibase_id} is exhausted, in "
+            f'which case switch to dataset_name="combined" for a much larger pool, '
+            f"rather than raising sample_size. Otherwise lower the limit."
         )
         super().__init__(self.message)
+
+
+def get_passage_ids_in_argilla(
+    wikibase_id: WikibaseID,
+    workspace: str = "knowledge-graph",
+    argilla_api_url: str | None = None,
+    argilla_api_key: str | None = None,
+) -> set[str]:
+    """Return the IDs of the passages already in a concept's Argilla dataset."""
+    logger = get_logger()
+
+    argilla = ArgillaSession(api_url=argilla_api_url, api_key=argilla_api_key)
+    dataset = argilla.get_dataset(wikibase_id, workspace=workspace)
+    passage_ids: set[str] = {
+        Identifier.generate(record.fields.get("text", "")) for record in dataset.records
+    }
+    logger.info(
+        f"✅ Found {len(passage_ids)} passages already in dataset '{dataset.name}'"
+    )
+    return passage_ids
 
 
 def run_extend_dataset(
@@ -32,15 +54,16 @@ def run_extend_dataset(
     limit: int | None = 130,
     suggestion_model=None,
     require_full_limit: bool = False,
+    existing_passage_ids: set[str] | None = None,
     argilla_api_url: str | None = None,
     argilla_api_key: str | None = None,
 ) -> list[LabelledPassage]:
     """
     Add more labelled passages to a dataset which already exists in Argilla.
 
-    Deduplicates the input passages based on an exact text match against what's already
-    in Argilla, before applying the limit — so `limit` is the number of  new
-    passages added, not the number of inputs considered.
+    Deduplicates the input passages by the passage text's Identifier against what's already in
+    Argilla, before applying the limit — so `limit` is the number of new passages added,
+    not the number of inputs considered.
     """
     logger = get_logger()
 
@@ -50,20 +73,22 @@ def run_extend_dataset(
     # Get existing dataset from Argilla
     logger.info(f"Looking for existing dataset for {wikibase_id}")
     dataset = argilla.get_dataset(wikibase_id, workspace=workspace)
-    # FIX 1: materialise the records once — the script iterated dataset.records three
-    # separate times, each a fresh paginated HTTP fetch
-    argilla_records = list(dataset.records)
+    if existing_passage_ids is None:
+        existing_passage_ids = {
+            Identifier.generate(record.fields.get("text", ""))
+            for record in dataset.records
+        }
     logger.info(
-        f"✅ Found existing dataset '{dataset.name}' with {len(argilla_records)} records"
+        f"✅ Found existing dataset '{dataset.name}' with "
+        f"{len(existing_passage_ids)} distinct passages"
     )
 
-    # Deduplicate input passages based on text in Argilla
-    text_in_argilla: set[str] = {
-        record.fields.get("text", "") for record in argilla_records
-    }
+    # Deduplicate input passages against Argilla
     lp_length_before = len(labelled_passages)
     labelled_passages = [
-        lp for lp in labelled_passages if lp.text not in text_in_argilla
+        lp
+        for lp in labelled_passages
+        if Identifier.generate(lp.text) not in existing_passage_ids
     ]
     logger.info(
         f"{len(labelled_passages)}/{lp_length_before} input passages remaining after "
@@ -77,8 +102,8 @@ def run_extend_dataset(
             )
         logger.warning(
             f"Only {len(labelled_passages)} new passages available, fewer than the "
-            f"{limit} requested. Sampling is unseeded, so sample again and re-run to top "
-            f"up — anything added now is deduplicated away next time."
+            f"{limit} requested. Re-run to top up — passages added now are excluded from "
+            f"the next sample."
         )
     elif limit is not None:
         logger.info(f"Limiting number of labelled passages to {limit}")
@@ -95,7 +120,7 @@ def run_extend_dataset(
         labelled_passages=labelled_passages,
         wikibase_id=wikibase_id,
         workspace=workspace,
-        suggestion_model=suggestion_model,  # the script never passed this
+        suggestion_model=suggestion_model,
     )
 
     logger.info(
@@ -103,7 +128,7 @@ def run_extend_dataset(
         f"'{dataset.name}'"
     )
     logger.info(
-        f"Dataset now contains {len(text_in_argilla) + len(labelled_passages)} "
+        f"Dataset now contains {len(existing_passage_ids) + len(labelled_passages)} "
         f"distinct passages"
     )
     return labelled_passages
