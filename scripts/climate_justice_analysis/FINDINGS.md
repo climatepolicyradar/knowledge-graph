@@ -1,19 +1,29 @@
 # Climate justice classifiers — exploratory analysis
 
-Three BERT classifiers, all `primary` profile, all carrying `dont_run_on: ["sabin"]`:
+> **Written by Claude (Anthropic), working with Anne Sietsma, August 2026.**
+> Every number here was produced by the scripts in this directory and can be
+> regenerated from them. The analysis, the framing and the figure captions are
+> machine-written and have not been independently reviewed — treat the findings
+> as a starting point for discussion rather than as settled results, and check
+> anything you intend to publish against the source data. Points where the
+> evidence does not settle a question are flagged in the text rather than
+> smoothed over.
 
-| Concept | Label | Passages (body text) | Documents |
-|---|---|---:|---:|
-| `Q32` | climate justice | 419,978 | 15,969 |
-| `Q911` | distributive justice | 746,978 | 16,721 |
-| `Q912` | procedural justice | 229,922 | 14,661 |
+Three BERT classifiers, all `primary` profile, all carrying
+`dont_run_on: ["sabin"]`:
 
-896,744 body-text passages carry at least one justice label — about 12% of the
-10.9M-passage corpus. Litigation is excluded throughout: all three specs carry
-`dont_run_on: ["sabin"]` and every published Litigation document is a Sabin
-record (17,347 of 17,347), so there is no inference there to report.
+| Concept | Label | Body-text passages |
+|---|---|---:|
+| `Q32` | climate justice | 420,780 |
+| `Q911` | distributive justice | 748,528 |
+| `Q912` | procedural justice | 230,667 |
 
-All figures in `figures/`, all numbers reproducible from `pull_data.py` →
+898,556 body-text passages carry at least one justice label. Litigation is
+excluded throughout: all three specs carry `dont_run_on: ["sabin"]` and every
+published Litigation document is a Sabin record (17,347 of 17,347), so there is
+no inference there to report.
+
+Ten figures in `figures/`, all numbers reproducible from `pull_data.py` →
 `text_stats.py` / `specificity.py` → `viz.py`.
 
 ---
@@ -133,10 +143,12 @@ justice is the most dependent, with only 17% firing alone.
 
 **By corpus (fig 3).** Cells are each corpus's own passage share, so corpus size
 is divided out; shading is scaled within each column because the three
-classifiers have very different base rates (12.0% / 21.4% / 6.6% overall).
+classifiers have very different base rates (12.0% / 21.3% / 6.6% overall).
 Multilateral Climate Fund projects lead on all three (28.1% / 32.4% / 16.6%).
-Policy is close behind on distributive (30.3%) but middling on procedural
-(6.5%). Law runs 6.1% / 10.8% / 2.9%; Corporate Disclosure is the floor.
+Policy is close behind on distributive (30.0%) but middling on procedural
+(6.5%). Law runs 6.0% / 10.6% / 2.8% and Corporate Disclosure is the floor at
+5.8% / 5.1% / 2.2%. Only Litigation is excluded, because the classifiers were
+never run on it.
 
 **By region (fig 4).** Sub-Saharan Africa leads on all three, Europe & Central
 Asia and North America trail. Two confounds tested:
@@ -152,7 +164,7 @@ Asia and North America trail. Two confounds tested:
 
 ## 5. Deep dives
 
-**Seven documents (fig 5).** Three 2026 NBSAPs, plus both countries' current NDC
+**Seven documents (figs 5a and 5b).** Three 2026 NBSAPs, plus both countries' current NDC
 and current long-term strategy. Tick width is one passage's share of the
 document, so equal ink means an equal share — a 54-passage NDC and a
 2,697-passage strategy no longer look equally dense at very different rates.
@@ -178,10 +190,20 @@ ones (463 and 2,697) carrying inventory tables and sectoral detail that dilute
 any single theme. The gap is real; the causal story is not settled by these
 numbers.
 
-Among the NBSAPs, Portugal is the outlier — 43.4% overall and 13.8% procedural,
-well above Uganda (25.1% / 7.7%) and Armenia (27.3% / 7.3%). Procedural justice
-is the thinnest strand in every document here except Türkiye's NDC 3.0 and
-Portugal's NBSAP.
+Among these three NBSAPs Portugal looks procedurally heavy — 43.4% overall and
+13.8% procedural against Uganda (25.1% / 7.7%) and Armenia (27.3% / 7.3%) — but
+that is an artefact of the comparison set. Across all 114 NBSAPs with at least
+100 passages, procedural justice runs from 0.9% to 28.7% with a median of 8.7%.
+Portugal's 13.8% ranks 30th: above median, nowhere near the top (Cambodia 28.7%,
+Tuvalu 25.9%, Timor-Leste 24.8%). Uganda at 7.7% is the unusual one, ranking
+72nd, below the median.
+
+The within-country trend is the more interesting number: Portugal's own 2018
+NBSAP scored 9.1% (rank 53), so the 2026 revision raised its procedural share by
+half again.
+
+Procedural justice is the thinnest strand in every document in figs 5a-5b except
+Türkiye's NDC 3.0 and Portugal's NBSAP.
 
 Türkiye's NDC 3.0 is only 54 passages, so one passage moves its rate by 1.9
 points; read the short rows as patterns, not rates.
@@ -217,6 +239,66 @@ thinnest panel — 690 Turkish passages — so treat it as the most provisional.
 Turkish documents here are largely machine-translated, so part of this
 separation is translation register rather than policy substance; `order` on the
 Turkish distributive side is the clearest example.
+
+## 6. What each classifier travels with (fig 8)
+
+Co-occurrence against the two concept families, measured as lift —
+P(concept | justice) / P(concept) — so a common concept does not simply
+dominate every column. Families taken from the concept store hierarchy; only
+members carrying a primary classifier reach `topics`, giving 6 of Q47's
+descendants and 9 of Q672's. Q672 itself has no classifier.
+
+| Concept | Q32 | Q911 | Q912 |
+|---|---:|---:|---:|
+| legal safeguards for vulnerable groups | 7.6× | 3.4× | **12.0×** |
+| social inclusion | 6.1× | 2.9× | **10.2×** |
+| indigenous people | 6.4× | 3.3× | **10.0×** |
+| marginalized ethnicity | 6.4× | 3.3× | 9.7× |
+| sexual minority | 7.2× | 2.8× | 6.2× |
+| women and minority genders | 7.2× | 3.0× | 5.6× |
+| just transition | 4.9× | 2.7× | 5.6× |
+| people with limited assets | 5.0× | 3.5× | 3.6× |
+| green jobs | 2.1× | 2.0× | 2.0× |
+
+Every value exceeds 1×, as expected for justice-adjacent concepts. What differs
+is the spread. **Procedural justice has both the highest peaks and the widest
+range** (1.9× to 12.0×) — it is strongly enriched for the language of who gets
+a seat at the table. **Climate justice is uniformly high** (2.1× to 7.6×),
+consistent with an umbrella. **Distributive justice is flat at 2.0–3.5× against
+everything**, the same weak specificity its own vocabulary showed in §2 — it is
+not preferentially attached to any impacted group or just-transition theme.
+
+Caveat: both Q911 and Q912 are formally `subconcept_of` Q32 in the concept
+store, and Q47 lists Q32 as a related concept, so part of this structure is
+ontology design rather than independent discourse.
+
+## 7. Over time (fig 9)
+
+The series covers the three regularly-updated corpora. Corporate disclosure is
+excluded because that dataset has not been refreshed this year, so its passages
+all sit in the past and would distort any trend drawn through them; Report is
+excluded as too small to read at this scale.
+
+Across those three corpora the justice share runs 33.1% in 2016 — the Paris
+Agreement year — and 26.9% in 2025. Standardising on the 2016 corpus mix, 2025
+would read **37.2%**, above 2016's own 33.1%. The dip is composition, not a
+retreat from justice language.
+
+| corpus | justice rate 2016 | 2025 | share of corpus 2016 | 2025 |
+|---|---:|---:|---:|---:|
+| Law + Policy | 33.4% | 30.9% | 37.4% | 24.6% |
+| MCF project | 36.3% | **55.3%** | 37.6% | 13.2% |
+| UN submission | 28.1% | 19.3% | 25.0% | **62.3%** |
+
+The mechanism is a straight swap between two corpora. Multilateral fund
+projects — the densest at 55.3% and rising — fell from 37.6% of volume to
+13.2%, while UN submissions, the least dense of the three and falling, went
+from 25.0% to 62.3% as national inventory reporting grew. Law and
+Policy held roughly flat on both rate and share of attention.
+
+**This is the finding most likely to be misread if published as a bare time
+series.** A raw share line shows justice language falling six points since
+Paris; holding corpus mix fixed shows it rising four.
 
 ---
 

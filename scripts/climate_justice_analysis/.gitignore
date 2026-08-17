@@ -3,3 +3,8 @@
 # passage text, and the root .gitignore's `data/**/*` rule is anchored to the
 # repo root so it does not cover this directory.
 data/
+assets/fonts/
+
+# Machine-generated vector copies of the figures: ~400KB of unreviewable XML
+# each, and 95% of the diff. Regenerate with `uv run --script viz.py`.
+figures/*.svg

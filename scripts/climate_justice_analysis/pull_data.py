@@ -40,9 +40,18 @@ DEEP_DIVE_DOCS = {
     "UNFCCC.document.i00007760.n0000": "Australia LT-LEDS3 (Nov 2025)",
 }
 
-# Passages sampled per class for the text-statistics work. Sampling is by
-# hash(id) so the same rows come back on every run.
-SAMPLE_PER_CLASS = 60_000
+# Per-group caps for the text-statistics pull. The three exclusive classes and
+# the all-three class are taken in full, so figure 1 describes the whole corpus
+# rather than a sample. `background` stays capped: it is millions of passages and
+# only supplies the Dirichlet prior and the lexicon baseline, both of which are
+# already estimated to well under a tenth of a point at this size.
+SAMPLE_LIMITS = {
+    "only_Q32": None,
+    "only_Q911": None,
+    "only_Q912": None,
+    "all_three": None,
+    "background": 60_000,
+}
 
 # Standard passage hygiene for the corpus-wide comparisons: body text only, no
 # short fragments (gotchas 2 & 3). Corpora differ a lot in how much page
@@ -58,6 +67,37 @@ PASSAGE_FILTER = "p.content_type = 'Text' and length(p.content) >= 20"
 # documents it matches PASSAGES_V1 row counts exactly and overstates the real
 # v2 row count by 7-11x. Always count PASSAGES rows directly.
 DOC_FILTER = "length(p.content) >= 20"
+
+
+# Concept families for the co-occurrence heatmap, taken from the concept store
+# hierarchy rather than from name guesses. Only members that carry a `primary`
+# classifier reach `topics` (gotcha 8), so these are the subsets that actually
+# appear in the data: 6 of Q47's descendants and 9 of Q672's.
+#
+# Q672 ("impacted group") itself has no classifier, so only its children fire.
+# Note both Q911 and Q912 are formally subconcept_of Q32, and Q47 lists Q32 as a
+# related concept, so any co-occurrence here is partly ontology, not discourse.
+JUST_TRANSITION = {
+    "Q47": "just transition",
+    "Q58": "social inclusion",
+    "Q53": "social protection",
+    "Q68": "decent work",
+    "Q1754": "aligning skills",
+    "Q69": "green jobs",
+    "Q1744": "legal safeguards for vulnerable groups",
+}
+IMPACTED_GROUPS = {
+    "Q704": "women and minority genders",
+    "Q695": "youth",
+    "Q676": "marginalized ethnicity",
+    "Q684": "indigenous people",
+    "Q1167": "people with limited assets",
+    "Q690": "people with health conditions",
+    "Q701": "people on the move",
+    "Q708": "elderly people",
+    "Q1016": "sexual minority",
+}
+RELATED_CONCEPTS = {**JUST_TRANSITION, **IMPACTED_GROUPS}
 
 
 def has(cid: str, col: str = "p.concept_ids") -> str:
@@ -94,6 +134,9 @@ def pull_text_samples(conn) -> pd.DataFrame:
     }
     frames = []
     for name, predicate in groups.items():
+        cap = SAMPLE_LIMITS[name]
+        # hash(id) ordering makes a capped draw quasi-random and reproducible.
+        order_clause = f"order by hash(p.id) limit {cap}" if cap else ""
         sql = f"""
             select '{name}' as grp, p.id, p.document_id, p.content, d.category
             from PRODUCTION.PUBLISHED.PASSAGES p
@@ -102,8 +145,7 @@ def pull_text_samples(conn) -> pd.DataFrame:
               and not d.is_principal and not d.is_collection
               and d.document_status = 'published'
               and ({predicate})
-            order by hash(p.id)
-            limit {SAMPLE_PER_CLASS}
+            {order_clause}
         """
         df = query(conn, sql)
         print(f"  {name:12s} {len(df):>7,} passages")
@@ -275,6 +317,85 @@ def pull_country_rates(conn) -> pd.DataFrame:
     return query(conn, sql)
 
 
+def pull_concept_cooccurrence(conn) -> pd.DataFrame:
+    """
+    Co-occurrence of each justice classifier with the related concept families.
+
+    Returns per-concept co-occurrence counts plus the three justice marginals and
+    the corpus total, so lift can be computed without a second query.
+    """
+    ids = ", ".join(f"'{c}'" for c in RELATED_CONCEPTS)
+    sql = f"""
+        with base as (
+            select p.concept_ids,
+                   {has("Q32")} as q32, {has("Q911")} as q911, {has("Q912")} as q912
+            from PRODUCTION.PUBLISHED.PASSAGES p
+            join PRODUCTION.PUBLISHED.DOCUMENTS d on d.id = p.document_id
+            where {PASSAGE_FILTER}
+              and not d.is_principal and not d.is_collection
+              and d.document_status = 'published'
+              and d.category != 'Litigation'
+        ),
+        tot as (
+            select count(*) as n_all,
+                   sum(iff(q32, 1, 0)) as n_q32,
+                   sum(iff(q911, 1, 0)) as n_q911,
+                   sum(iff(q912, 1, 0)) as n_q912
+            from base
+        )
+        select c.value::string as concept_id,
+               count(*) as n_concept,
+               sum(iff(b.q32, 1, 0)) as with_q32,
+               sum(iff(b.q911, 1, 0)) as with_q911,
+               sum(iff(b.q912, 1, 0)) as with_q912,
+               any_value(t.n_all) as n_all,
+               any_value(t.n_q32) as n_q32,
+               any_value(t.n_q911) as n_q911,
+               any_value(t.n_q912) as n_q912
+        from base b, lateral flatten(input => b.concept_ids) c, tot t
+        where c.value::string in ({ids})
+        group by 1
+    """
+    return query(conn, sql)
+
+
+def pull_justice_timeline(conn) -> pd.DataFrame:
+    """
+    Justice-labelled passages per publication year and corpus group.
+
+    Rows are disjoint on the exclusivity classes, so only_* plus multiple sums to
+    the justice total. Malformed years (a handful of documents carry values like
+    22 and 223) and null dates are dropped; 2026 is a partial year.
+    """
+    sql = f"""
+        select year(d.published_date) as yr,
+               case when d.category in ('Law', 'Policy') then 'Law + Policy'
+                    when d.category = 'UN submission' then 'UN submission'
+                    when d.category = 'Multilateral Climate Fund project' then 'MCF project'
+                    end as corpus_group,
+               count(*) as passages_total,
+               sum(iff({has("Q32")} and not {has("Q911")} and not {has("Q912")}, 1, 0)) as only_q32,
+               sum(iff(not {has("Q32")} and {has("Q911")} and not {has("Q912")}, 1, 0)) as only_q911,
+               sum(iff(not {has("Q32")} and not {has("Q911")} and {has("Q912")}, 1, 0)) as only_q912,
+               sum(iff(iff({has("Q32")}, 1, 0) + iff({has("Q911")}, 1, 0)
+                       + iff({has("Q912")}, 1, 0) > 1, 1, 0)) as multiple
+        from PRODUCTION.PUBLISHED.PASSAGES p
+        join PRODUCTION.PUBLISHED.DOCUMENTS d on d.id = p.document_id
+        where {PASSAGE_FILTER}
+          and not d.is_principal and not d.is_collection
+          and d.document_status = 'published'
+          -- Only the three regularly-updated corpora. Corporate disclosure has
+          -- not been refreshed this year, and Report is too small to read.
+          and d.category in ('Law', 'Policy', 'UN submission',
+                             'Multilateral Climate Fund project')
+          and d.published_date is not null
+          and year(d.published_date) between 1998 and 2026
+        group by 1, 2
+        order by 1, 2
+    """
+    return query(conn, sql)
+
+
 def pull_overlap(conn) -> pd.DataFrame:
     """Seven-cell breakdown of which classifiers co-fire on the same passage."""
     sql = f"""
@@ -374,6 +495,8 @@ def main() -> None:
     pulls = {
         "corpus_rates": pull_corpus_rates,
         "overlap": pull_overlap,
+        "concept_cooccurrence": pull_concept_cooccurrence,
+        "justice_timeline": pull_justice_timeline,
         "region_rates": pull_region_rates,
         "region_rates_by_corpus": pull_region_rates_by_corpus,
         "region_rates_ex_mcf": pull_region_rates_ex_mcf,

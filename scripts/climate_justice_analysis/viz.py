@@ -1,6 +1,7 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["matplotlib>=3.9", "pandas>=2.2", "numpy>=1.26", "pyarrow>=16"]
+# dependencies = ["matplotlib>=3.9", "pandas>=2.2", "numpy>=1.26", "pyarrow>=16",
+#                 "svgpath2mpl>=1.0", "fonttools>=4.50"]
 # ///
 # pyright: reportAttributeAccessIssue=false, reportArgumentType=false
 # pyright: reportCallIssue=false, reportIndexIssue=false, reportOperatorIssue=false
@@ -15,22 +16,31 @@ Figures for the climate justice classifier analysis.
 Run with `uv run --script viz.py` so it resolves its own dependencies and
 leaves the shared repo environment alone.
 
-Every figure carries its exact values as text so the whole thing can be rebuilt
-in a design tool without going back to the data. Each is written to both PNG
-(200 dpi, for review) and SVG (for redrawing).
+House style — palette, typography, logo, caption conventions — lives in
+house_style.py. Captions here are deliberately terse: the subtitle says how to
+read the marks, the footnote carries only caveats that change how the numbers
+should be taken. The argument belongs in FINDINGS.md.
 
-Palette is the first three categorical slots of the reference data-viz palette
-— blue / orange / aqua — which clear the all-pairs CVD and normal-vision gates
-in light mode. Aqua sits below 3:1 against the surface, so the relief rule
-applies: every mark carries a visible direct label.
+Every figure still carries its exact values as text so it can be rebuilt in a
+design tool without going back to the data.
 """
 
 from pathlib import Path
 
-import matplotlib as mpl
+import house_style as hs
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from house_style import (
+    GRID,
+    INK,
+    INK2,
+    INK3,
+    ink_on,
+    sequential,
+    text_colour,
+    titled,
+)
 from matplotlib.patches import Rectangle
 
 BASE = Path(__file__).parent
@@ -39,90 +49,20 @@ RESULTS = BASE / "results"
 FIG = BASE / "figures"
 FIG.mkdir(exist_ok=True)
 
-SURFACE = "#fcfcfb"
-INK = "#0b0b0b"
-INK2 = "#52514e"
-INK3 = "#8a8983"
-GRID = "#e3e2de"
+hs.apply()
 
-Q32, Q911, Q912 = "#2a78d6", "#eb6834", "#1baf7a"
+Q32, Q911, Q912 = hs.Q32_C, hs.Q911_C, hs.Q912_C
 COLORS = {"Q32": Q32, "Q911": Q911, "Q912": Q912}
 LABELS = {
     "Q32": "Climate justice",
     "Q911": "Distributive justice",
     "Q912": "Procedural justice",
 }
-# Sequential blue ramp, 100 -> 700, for magnitude encoding.
-BLUE_RAMP = [
-    "#cde2fb",
-    "#b7d3f6",
-    "#9ec5f4",
-    "#86b6ef",
-    "#6da7ec",
-    "#5598e7",
-    "#3987e5",
-    "#2a78d6",
-    "#256abf",
-    "#1c5cab",
-    "#184f95",
-    "#104281",
-    "#0d366b",
-]
-
-mpl.rcParams.update(
-    {
-        "font.family": ["Helvetica Neue", "Helvetica", "Arial", "DejaVu Sans"],
-        "figure.facecolor": SURFACE,
-        "axes.facecolor": SURFACE,
-        "savefig.facecolor": SURFACE,
-        "text.color": INK,
-        "axes.labelcolor": INK2,
-        "xtick.color": INK2,
-        "ytick.color": INK2,
-        "axes.edgecolor": GRID,
-        "axes.linewidth": 0.8,
-        "xtick.major.width": 0.8,
-        "ytick.major.width": 0.8,
-        "font.size": 9,
-        "axes.titlesize": 10,
-        "svg.fonttype": "none",
-    }
-)
-
-
-def sequential(value: float, vmax: float) -> str:
-    """Pick a step from the blue ramp for a 0..vmax magnitude."""
-    if vmax <= 0:
-        return BLUE_RAMP[0]
-    i = int(round((value / vmax) ** 0.75 * (len(BLUE_RAMP) - 1)))
-    return BLUE_RAMP[max(0, min(len(BLUE_RAMP) - 1, i))]
-
-
-def ink_on(hexcolor: str) -> str:
-    r, g, b = (int(hexcolor[i : i + 2], 16) / 255 for i in (1, 3, 5))
-    return "#ffffff" if (0.299 * r + 0.587 * g + 0.114 * b) < 0.55 else INK
-
-
-def titled(fig, title: str, subtitle: str, note: str = "") -> None:
-    fig.text(0.012, 0.975, title, fontsize=15, weight="bold", color=INK, va="top")
-    fig.text(0.012, 0.928, subtitle, fontsize=9.5, color=INK2, va="top")
-    if note:
-        fig.text(0.012, 0.017, note, fontsize=7.4, color=INK3, va="bottom")
+COUNTRY_COLORS = {"Australia": hs.COUNTRY_A, "Türkiye": hs.COUNTRY_B}
 
 
 def save(fig, name: str) -> None:
-    for ext in ("png", "svg"):
-        fig.savefig(
-            FIG / f"{name}.{ext}", dpi=200, bbox_inches="tight", facecolor=SURFACE
-        )
-    plt.close(fig)
-    print(f"  wrote figures/{name}.png / .svg")
-
-
-SOURCE = (
-    "Source: Climate Policy Radar, PRODUCTION.PUBLISHED.PASSAGES (Snowflake), Aug 2026. "
-    "Body text passages only (content_type='Text', >=20 chars), published non-principal documents."
-)
+    hs.save(fig, name, FIG)
 
 
 # ---------------------------------------------------------------- figure 1
@@ -137,7 +77,13 @@ def fig_vocabulary() -> None:
     """
     lo = pd.read_csv(RESULTS / "log_odds_by_class.csv")
     keys = ["only_Q32", "only_Q911", "only_Q912"]
-    n_uni, n_bi = 12, 6
+    n_uni, n_bi = 10, 5
+    # Derived from the data so the caption cannot go stale.
+    raw = pd.read_parquet(DATA / "text_samples.parquet", columns=["GRP", "CONTENT"])
+    raw["CONTENT"] = (
+        raw.CONTENT.str.lower().str.replace(r"\s+", " ", regex=True).str.strip()
+    )
+    counts = raw.drop_duplicates(["GRP", "CONTENT"]).GRP.value_counts().to_dict()
     fig, axes = plt.subplots(1, 3, figsize=(15.0, 10.4))
     for ax, key in zip(axes, keys):
         cid = key.split("_")[1]
@@ -157,7 +103,7 @@ def fig_vocabulary() -> None:
                 r.term,
                 va="center",
                 ha="right",
-                fontsize=9.6,
+                fontsize=11.5,
                 color=INK,
             )
             ax.text(
@@ -166,7 +112,7 @@ def fig_vocabulary() -> None:
                 f"{r.rate_per_10k_in_class:.0f} vs {r.rate_per_10k_in_others:.0f} per 10k",
                 va="center",
                 ha="right",
-                fontsize=6.8,
+                fontsize=8.2,
                 color=INK3,
             )
             ax.text(
@@ -175,7 +121,7 @@ def fig_vocabulary() -> None:
                 f"{r.z:.0f}",
                 va="center",
                 ha="left",
-                fontsize=8.4,
+                fontsize=10.1,
                 color=INK2,
                 weight="bold",
             )
@@ -184,7 +130,7 @@ def fig_vocabulary() -> None:
             -zmax * 1.26,
             gap_y,
             "two-word terms, ranked separately",
-            fontsize=7.2,
+            fontsize=8.6,
             color=INK3,
             va="center",
             ha="left",
@@ -196,9 +142,9 @@ def fig_vocabulary() -> None:
         ax.set_xlim(-zmax * 1.28, zmax * 1.12)
         ax.set_title(
             f"{LABELS[cid]}  ({cid})",
-            color=COLORS[cid],
+            color=text_colour(COLORS[cid]),
             weight="bold",
-            fontsize=11.5,
+            fontsize=13.8,
             pad=16,
             loc="left",
         )
@@ -207,7 +153,7 @@ def fig_vocabulary() -> None:
             -zmax * 1.26,
             -0.95,
             "bar length = log-odds z vs the other two classifiers",
-            fontsize=7.2,
+            fontsize=8.6,
             color=INK3,
             va="center",
             ha="left",
@@ -216,16 +162,9 @@ def fig_vocabulary() -> None:
     titled(
         fig,
         "Three justice classifiers, three vocabularies",
-        "The 12 single words and 6 two-word terms most over-represented in the passages where each classifier fires alone, versus\n"
-        "passages where only the other two fire. Grey figures under each term are its rate per 10,000 words in this class versus\n"
-        "the other two combined. Distributive justice reads as mitigation vocabulary rather than allocation vocabulary — a finding\n"
-        'about where distributive claims sit in this corpus, not a defect: the classifier was built so it would not need the word "equity".',
-        "Log-odds ratio with informative Dirichlet prior (Monroe, Colaresi & Quinn 2008), z-scored; prior from the unlabelled corpus. "
-        "English stopwords plus legal boilerplate removed, min. 25 occurrences.\n"
-        "One- and two-word terms are ranked in separate vocabularies: a two-word term is necessarily rarer than either of its parts, so "
-        "in a pooled ranking the prior shrinks it harder and almost none survive.\n"
-        + SOURCE
-        + " Samples of 54,651 / 59,104 / 36,299 deduplicated exclusive passages.",
+        "Bar length is how strongly a term marks out one classifier against the other two. Single words above the rule,\ntwo-word terms below, ranked separately. Grey figures are the term's rate per 10,000 words, this class vs the others.",
+        f"Log-odds ratio with an informative Dirichlet prior (Monroe, Colaresi & Quinn 2008), z-scored. Computed on every exclusive "
+        f"passage of each class, not a sample: {counts['only_Q32']:,} / {counts['only_Q911']:,} / {counts['only_Q912']:,}.",
     )
     save(fig, "01_vocabulary_fingerprint")
 
@@ -273,7 +212,7 @@ def fig_overlap() -> None:
     # A bar takes the colour of its classifier when only one fired, and stays
     # neutral when the passage carries several — the point of the grey bars is
     # that no single classifier owns them.
-    bar_colors = [COLORS[c[0][0]] if len(c[0]) == 1 else "#9a998f" for c in combos]
+    bar_colors = [COLORS[c[0][0]] if len(c[0]) == 1 else hs.NEUTRAL for c in combos]
     ax_bar.bar(x, heights, width=0.62, color=bar_colors, linewidth=0)
     for xi, (sets, n) in zip(x, combos):
         ax_bar.text(
@@ -282,7 +221,7 @@ def fig_overlap() -> None:
             f"{n:,}",
             ha="center",
             va="bottom",
-            fontsize=11.5,
+            fontsize=13.8,
             weight="bold",
             color=INK,
         )
@@ -292,12 +231,12 @@ def fig_overlap() -> None:
             f"{100 * n / total:.1f}%",
             ha="center",
             va="bottom",
-            fontsize=8.4,
+            fontsize=10.1,
             color=INK2,
             weight="bold",
         )
     ax_bar.set_ylim(0, max(heights) * 1.24)
-    ax_bar.set_ylabel("passages", fontsize=9, color=INK2)
+    ax_bar.set_ylabel("passages", fontsize=10.8, color=INK2)
     ax_bar.spines[["top", "right"]].set_visible(False)
     ax_bar.yaxis.grid(True, color=GRID, linewidth=0.7)
     ax_bar.set_axisbelow(True)
@@ -323,7 +262,7 @@ def fig_overlap() -> None:
                 [row],
                 s=170,
                 zorder=2,
-                color=COLORS[cid] if on else "#e3e2de",
+                color=COLORS[cid] if on else GRID,
                 linewidth=0,
             )
     ax_mat.set_ylim(-0.8, 2.6)
@@ -341,9 +280,9 @@ def fig_overlap() -> None:
             LABELS[cid],
             ha="left",
             va="center",
-            fontsize=10,
+            fontsize=12.0,
             weight="bold",
-            color=COLORS[cid],
+            color=text_colour(COLORS[cid]),
         )
         ax_set.text(
             tmax * 2.02,
@@ -351,7 +290,7 @@ def fig_overlap() -> None:
             f"{cid} · {totals[cid]:,} passages",
             ha="left",
             va="center",
-            fontsize=7.6,
+            fontsize=9.1,
             color=INK3,
         )
         ax_set.text(
@@ -360,22 +299,18 @@ def fig_overlap() -> None:
             f"{100 * totals[cid] / total:.0f}% of all justice passages",
             ha="left",
             va="center",
-            fontsize=7,
+            fontsize=8.4,
             color=INK3,
         )
     ax_set.set_xlim(tmax * 2.10, 0)
     ax_set.axis("off")
 
-    fig.subplots_adjust(top=0.80, bottom=0.10, left=0.045, right=0.985)
+    fig.subplots_adjust(top=0.865, bottom=0.10, left=0.045, right=0.985)
     titled(
         fig,
         "Distributive justice does most of the work, and usually works alone",
-        f"The seven ways the three classifiers can combine on a passage, across the {total:,} passages carrying at least one justice label.\n"
-        "Bars are disjoint: every justice-labelled passage falls in exactly one of these seven columns, so they sum to 100%.\n"
-        "Left-hand bars are each classifier's own total, which do overlap and so sum to more than 100%. Percentages above each bar are\n"
-        "its share of all justice-labelled passages.",
-        "Coloured bars are passages where a single classifier fired; grey bars are passages carrying more than one label.\n"
-        + SOURCE,
+        "Each bar is one of the seven ways the three classifiers can combine on a passage. Bars are disjoint and sum to 100%.\nThe smaller bars on the left are each classifier's own total, which do overlap.",
+        "Coloured bars are passages where a single classifier fired; neutral bars carry more than one label.",
     )
     save(fig, "02_classifier_overlap")
 
@@ -397,6 +332,8 @@ def fig_corpus_heatmap() -> None:
     caption says.
     """
     c = pd.read_parquet(DATA / "corpus_rates.parquet").set_index("CATEGORY")
+    # Litigation only: the classifiers were never run on it, so its zero is an
+    # absence of inference rather than an absence of justice language.
     c = c.drop(index="Litigation", errors="ignore")
     order = [
         "Multilateral Climate Fund project",
@@ -410,12 +347,13 @@ def fig_corpus_heatmap() -> None:
     cids = ["Q32", "Q911", "Q912"]
     rates = pd.DataFrame({k: 100 * c[k] / c.PASSAGES_TOTAL for k in cids})
     baseline = {k: 100 * c[k].sum() / c.PASSAGES_TOTAL.sum() for k in cids}
+    vmax = float(rates.to_numpy().max())
 
     fig, ax = plt.subplots(figsize=(11.6, 6.4))
     for i, corpus in enumerate(rates.index):
         for j, cid in enumerate(cids):
             v = rates.loc[corpus, cid]
-            col = sequential(v, float(rates[cid].max()))
+            col = sequential(v, vmax)
             ax.add_patch(Rectangle((j, i), 0.96, 0.94, facecolor=col, linewidth=0))
             ax.text(
                 j + 0.48,
@@ -423,7 +361,7 @@ def fig_corpus_heatmap() -> None:
                 f"{v:.1f}%",
                 ha="center",
                 va="center",
-                fontsize=16,
+                fontsize=19.2,
                 weight="bold",
                 color=ink_on(col),
             )
@@ -433,7 +371,7 @@ def fig_corpus_heatmap() -> None:
             corpus,
             ha="right",
             va="center",
-            fontsize=10,
+            fontsize=12.0,
             color=INK,
             weight="bold",
         )
@@ -444,7 +382,7 @@ def fig_corpus_heatmap() -> None:
             f"{int(c.loc[corpus, 'DOCS_TOTAL']):,} docs",
             ha="right",
             va="center",
-            fontsize=7.6,
+            fontsize=9.1,
             color=INK3,
         )
     for j, cid in enumerate(cids):
@@ -454,9 +392,9 @@ def fig_corpus_heatmap() -> None:
             LABELS[cid],
             ha="center",
             va="bottom",
-            fontsize=10.5,
+            fontsize=12.6,
             weight="bold",
-            color=COLORS[cid],
+            color=text_colour(COLORS[cid]),
         )
         ax.text(
             j + 0.48,
@@ -464,22 +402,19 @@ def fig_corpus_heatmap() -> None:
             f"{cid} · {baseline[cid]:.1f}% overall",
             ha="center",
             va="bottom",
-            fontsize=7.8,
+            fontsize=9.4,
             color=INK3,
         )
 
     ax.set_xlim(-2.55, 3.05)
     ax.set_ylim(-0.25, len(rates) + 0.80)
     ax.axis("off")
-    fig.subplots_adjust(top=0.78, bottom=0.10)
+    fig.subplots_adjust(top=0.855, bottom=0.10)
     titled(
         fig,
-        "Funding documents talk about justice; laws and disclosures do not",
-        "Share of each corpus's own body-text passages carrying each justice label, so corpus size is divided out.\n"
-        "Shading runs light to dark with that percentage, scaled within each column — the three classifiers have very different\n"
-        "base rates, given under each heading. Compare shades down a column, not across one.",
-        'Litigation is omitted entirely: all three classifier specs carry dont_run_on: ["sabin"] and every published Litigation document '
-        "is a Sabin record, so no inference was ever run there.\n" + SOURCE,
+        "Funding documents talk about justice; laws do not",
+        "Each cell is the share of that corpus's own passages carrying the label, so corpus size is divided out.\nOne shared colour scale across the whole table, so any two cells are directly comparable.",
+        "Litigation is excluded: the classifiers were never run on that corpus, so its zero would be an absence of inference rather than of justice language.",
     )
     save(fig, "03_corpus_heatmap")
 
@@ -519,7 +454,7 @@ def fig_regions() -> None:
                 y + offs,
                 vals,
                 height=h * 0.86,
-                color=COLORS[cid],
+                color=text_colour(COLORS[cid]),
                 linewidth=0,
                 label=LABELS[cid],
             )
@@ -530,18 +465,18 @@ def fig_regions() -> None:
                     f"{v:.1f}%",
                     va="center",
                     ha="left",
-                    fontsize=8.4,
+                    fontsize=10.1,
                     weight="bold",
                     color=INK2,
                 )
         ax.set_xlim(0, xmax)
-        ax.set_title(label, loc="left", fontsize=10.5, weight="bold", color=INK, pad=12)
+        ax.set_title(label, loc="left", fontsize=12.6, weight="bold", color=INK, pad=12)
         ax.spines[["top", "right", "left"]].set_visible(False)
         ax.xaxis.grid(True, color=GRID, linewidth=0.7)
         ax.set_axisbelow(True)
         ax.set_xlabel(
             "% of body-text passages carrying the label",
-            fontsize=8.8,
+            fontsize=10.6,
             color=INK2,
             labelpad=8,
         )
@@ -552,41 +487,34 @@ def fig_regions() -> None:
                 f"{int(r.loc[idx, 'PASSAGES_TOTAL']):,} passages",
                 ha="right",
                 va="center",
-                fontsize=6.8,
+                fontsize=8.2,
                 color=INK3,
             )
     axes[0].set_yticks(y)
-    axes[0].set_yticklabels(order, fontsize=10.2, color=INK)
+    axes[0].set_yticklabels(order, fontsize=12.2, color=INK)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(
         handles,
         labels,
         frameon=False,
-        fontsize=9.6,
+        fontsize=11.5,
         ncols=3,
         loc="upper left",
         bbox_to_anchor=(0.012, 0.845),
     )
 
-    ssa = [p[2].loc["Sub-Saharan Africa", "Q911"] for p in panels]
-    eca = [p[2].loc["Europe & Central Asia", "Q911"] for p in panels]
-    fig.subplots_adjust(top=0.755, bottom=0.13, left=0.16, wspace=0.07)
+    fig.subplots_adjust(top=0.845, bottom=0.13, left=0.16, wspace=0.07)
     titled(
         fig,
         "Removing the fund documents narrows the gap but does not close it",
-        "Share of passages carrying each justice label, by World Bank region, before and after dropping Multilateral Climate Fund projects.\n"
-        f"On distributive justice the Sub-Saharan Africa to Europe & Central Asia ratio moves only from {ssa[0] / eca[0]:.2f}× to {ssa[1] / eca[1]:.2f}×.\n"
-        "Climate justice and procedural justice shrink much more, so fund reporting was inflating those two rather than the gradient as a whole.",
-        "Litigation excluded from both panels (classifiers never ran on the Sabin corpus). Documents tagged to several regions are counted in "
-        "each, so rows do not partition the corpus.\n"
-        "The ranking also survives inside a single corpus: Sub-Saharan Africa leads Europe & Central Asia on distributive justice within UN "
-        "submissions (25.2% vs 12.0%) and within Policy (38.9% vs 28.7%).\n" + SOURCE,
+        "Share of passages carrying each label, by World Bank region. The right panel repeats the left with multilateral\nclimate fund projects removed — the corpus most likely to be driving the gradient.",
+        "Documents tagged to several regions count once in each, so rows do not partition the corpus. Litigation excluded.",
     )
     save(fig, "04_regions")
 
 
 # ---------------------------------------------------------------- figure 5
-def fig_deep_dive() -> None:
+def _deep_dive(order, name, title, how, figsize) -> None:
     """
     Where justice language sits inside six flagship documents.
 
@@ -598,24 +526,15 @@ def fig_deep_dive() -> None:
     honest reading of a run of justice-labelled paragraphs.
     """
     d = pd.read_parquet(DATA / "deep_dive_passages.parquet")
-    order = [
-        ("UNFCCC.document.i00007868.n0000", "Uganda NBSAP  (2026)"),
-        ("UNFCCC.document.i00007484.n0000", "Armenia NBSAP  (2026)"),
-        ("UNFCCC.document.i00007864.n0000", "Portugal NBSAP  (2026)"),
-        ("UNFCCC.document.i00006565.n0000", "Türkiye NDC 3.0  (Nov 2025)"),
-        ("UNFCCC.document.i00000391.n0000", "Türkiye LT-LEDS  (Nov 2024)"),
-        ("UNFCCC.document.i00004795.n0000", "Australia 2035 NDC  (Sep 2025)"),
-        ("UNFCCC.document.i00007760.n0000", "Australia LT-LEDS3  (Nov 2025)"),
-    ]
     cids = ["Q32", "Q911", "Q912"]
-    fig, axes = plt.subplots(len(order), 1, figsize=(13.8, 14.6))
+    fig, axes = plt.subplots(len(order), 1, figsize=figsize)
     for ax, (doc_id, label) in zip(axes, order):
         sub = d[d.DOCUMENT_ID == doc_id].sort_values("IDX").reset_index(drop=True)
         n = len(sub)
         slot = 100.0 / n
         width = max(slot, 0.20)  # floor so long documents stay visible
         left = np.arange(n) / n * 100.0
-        ax.add_patch(Rectangle((0, -0.42), 100, 3.3, facecolor="#f4f3f0", linewidth=0))
+        ax.add_patch(Rectangle((0, -0.42), 100, 3.3, facecolor=hs.PAPER, linewidth=0))
         for k, cid in enumerate(cids):
             row = 2 - k
             hits = sub[cid].to_numpy().astype(bool)
@@ -635,9 +554,9 @@ def fig_deep_dive() -> None:
                 f"{cnt:>3d}",
                 va="center",
                 ha="left",
-                fontsize=10,
+                fontsize=12.0,
                 weight="bold",
-                color=COLORS[cid],
+                color=text_colour(COLORS[cid]),
             )
             ax.text(
                 105.8,
@@ -645,7 +564,7 @@ def fig_deep_dive() -> None:
                 f"{pct:4.1f}%",
                 va="center",
                 ha="left",
-                fontsize=9,
+                fontsize=10.8,
                 color=INK2,
             )
             ax.text(
@@ -654,8 +573,8 @@ def fig_deep_dive() -> None:
                 LABELS[cid],
                 va="center",
                 ha="right",
-                fontsize=8.6,
-                color=COLORS[cid],
+                fontsize=10.3,
+                color=text_colour(COLORS[cid]),
                 weight="bold",
             )
         any_hit = sub[cids].to_numpy().any(axis=1)
@@ -665,7 +584,7 @@ def fig_deep_dive() -> None:
             label,
             va="center",
             ha="right",
-            fontsize=11.5,
+            fontsize=13.8,
             weight="bold",
             color=INK,
         )
@@ -676,7 +595,7 @@ def fig_deep_dive() -> None:
             f"({100 * any_hit.mean():.1f}%)",
             va="center",
             ha="left",
-            fontsize=8.2,
+            fontsize=9.8,
             color=INK2,
         )
         ax.set_xlim(-32, 116)
@@ -684,43 +603,64 @@ def fig_deep_dive() -> None:
         ax.axis("off")
         for tick in (0, 25, 50, 75, 100):
             ax.text(
-                tick, -0.85, f"{tick}%", ha="center", va="top", fontsize=6.6, color=INK3
+                tick, -0.85, f"{tick}%", ha="center", va="top", fontsize=7.9, color=INK3
             )
-    fig.subplots_adjust(top=0.855, bottom=0.075, hspace=0.45)
+    fig.subplots_adjust(top=0.845, bottom=0.115, hspace=0.45)
     titled(
         fig,
-        "Headline pledges talk about justice; the strategies behind them talk less",
-        "Each tick is one passage carrying that label, positioned by where it falls in the document and drawn one passage wide, so equal\n"
-        "ink means an equal share of the document. Both countries' current ANDCs are far denser in justice language than their own\n"
-        "long-term strategies — Türkiye 51.9% against 27.9%, Australia 45.2% against 29.1% — and procedural justice is the thinnest\n"
-        "strand nearly everywhere. Portugal's NBSAP is the exception: at 13.8% it is the most procedural document here bar one.",
-        "All passage types included, not just body text, because the classifiers ran on every passage — much of the justice language in "
-        "these documents sits in list items. Passages under 20 characters are dropped.\n"
-        "The NDC-to-strategy gap is not purely rhetorical positioning: ANDCs are short political documents (54 and 155 passages here) while "
-        "LT-LEDS are long technical ones (463 and 2,697), carrying inventory tables and sectoral detail that dilute any single theme. "
-        "Türkiye's NDC 3.0 is 54 passages, so one passage there moves its rate by 1.9 points.\n"
-        "DOCUMENTS.passage_count is not usable as a denominator here: it is rolled up from the v1 passages table and overstates the real v2 "
-        "count 7-11x for these documents.\n"
-        "Source: Climate Policy Radar, PRODUCTION.PUBLISHED.PASSAGES (Snowflake), Aug 2026.",
+        title,
+        how,
+        "All passage types included, since the classifiers ran on every passage; passages under 20 characters are dropped. Short documents move several points per passage.",
     )
-    save(fig, "05_deep_dive_documents")
+    save(fig, name)
+
+
+NBSAPS = [
+    ("UNFCCC.document.i00007868.n0000", "Uganda NBSAP  (2026)"),
+    ("UNFCCC.document.i00007484.n0000", "Armenia NBSAP  (2026)"),
+    ("UNFCCC.document.i00007864.n0000", "Portugal NBSAP  (2026)"),
+]
+PLEDGES = [
+    ("UNFCCC.document.i00006565.n0000", "Türkiye NDC 3.0  (Nov 2025)"),
+    ("UNFCCC.document.i00000391.n0000", "Türkiye LT-LEDS  (Nov 2024)"),
+    ("UNFCCC.document.i00004795.n0000", "Australia 2035 NDC  (Sep 2025)"),
+    ("UNFCCC.document.i00007760.n0000", "Australia LT-LEDS3  (Nov 2025)"),
+]
+HOW_TO_READ = (
+    "Each tick is one passage carrying that label, positioned by where it falls in the document and drawn one\n"
+    "passage wide — so equal ink means an equal share of the document."
+)
+
+
+def fig_deep_dive_nbsap() -> None:
+    _deep_dive(
+        NBSAPS,
+        "05a_deep_dive_nbsaps",
+        "Three biodiversity plans, three balances of justice",
+        HOW_TO_READ,
+        (14.6, 7.4),
+    )
+
+
+def fig_deep_dive_pledges() -> None:
+    _deep_dive(
+        PLEDGES,
+        "05b_deep_dive_pledges",
+        "Headline pledges talk about justice; the strategies behind them talk less",
+        HOW_TO_READ,
+        (14.6, 9.0),
+    )
 
 
 # ---------------------------------------------------------------- figure 6
 def fig_laws() -> None:
     """Every Australian and Turkish law, by justice density."""
-    lw_all = pd.read_parquet(DATA / "law_rates.parquet").copy()
-    lw = lw_all.copy()
+    lw = pd.read_parquet(DATA / "law_rates.parquet").copy()
     lw["pct"] = 100 * lw.ANY_JUSTICE / lw.PASSAGES_TOTAL
     lw = lw[lw.PASSAGES_TOTAL >= 30]
-    # 63 published AUS/TUR laws exist; law_rates only contains those with at
-    # least one passage, and the 30-passage floor drops a few more.
-    n_published, n_with_passages, n_shown = 63, len(lw_all), len(lw)
-    # Colour means *country* in this figure and nothing else, so it deliberately
-    # avoids the blue/orange/aqua the classifiers wear everywhere else. Violet
-    # and yellow separate at CVD ΔE 41 and normal-vision ΔE 46.
-    cc = {"Australia": "#4a3aa7", "Türkiye": "#eda100"}
-    n_laws = lw.groupby("COUNTRY").size()
+    # Colour means *country* here and nothing else, so it uses the two-colour
+    # set kept clear of the classifier trio.
+    cc = COUNTRY_COLORS
 
     fig, (ax, ax2) = plt.subplots(
         1, 2, figsize=(14.2, 8.4), gridspec_kw={"width_ratios": [2.35, 1]}
@@ -732,14 +672,14 @@ def fig_laws() -> None:
     xmax = top.pct.max() * 1.30
     for yi, (_, r) in zip(y, top.iterrows()):
         title = r.TITLE if len(r.TITLE) <= 52 else r.TITLE[:50] + "…"
-        ax.text(-0.55, yi, title, va="center", ha="right", fontsize=8.6, color=INK)
+        ax.text(-0.55, yi, title, va="center", ha="right", fontsize=10.3, color=INK)
         ax.text(
             r.pct + xmax * 0.012,
             yi,
             f"{r.pct:.1f}%",
             va="center",
             ha="left",
-            fontsize=8.8,
+            fontsize=10.6,
             weight="bold",
             color=INK2,
         )
@@ -749,20 +689,20 @@ def fig_laws() -> None:
             f"{int(r.ANY_JUSTICE)}/{int(r.PASSAGES_TOTAL)}",
             va="center",
             ha="left",
-            fontsize=7.2,
+            fontsize=8.6,
             color=INK3,
         )
     ax.set_yticks([])
     ax.set_xlim(0, xmax)
     ax.set_ylim(-0.8, len(top) - 0.2)
-    ax.set_xlabel("% of passages carrying any justice label", fontsize=8.8, color=INK2)
+    ax.set_xlabel("% of passages carrying any justice label", fontsize=10.6, color=INK2)
     ax.spines[["top", "right", "left"]].set_visible(False)
     ax.xaxis.grid(True, color=GRID, linewidth=0.7)
     ax.set_axisbelow(True)
     ax.set_title(
         "Top 20 laws by justice density",
         loc="left",
-        fontsize=10.5,
+        fontsize=12.6,
         weight="bold",
         color=INK,
         pad=10,
@@ -785,7 +725,7 @@ def fig_laws() -> None:
             x + (i - 0.5) * w,
             vals,
             width=w * 0.88,
-            color=cc[country],
+            color=text_colour(cc[country]),
             linewidth=0,
             label=country,
         )
@@ -796,7 +736,7 @@ def fig_laws() -> None:
                 f"{v:.1f}%",
                 ha="center",
                 va="bottom",
-                fontsize=9.4,
+                fontsize=11.3,
                 weight="bold",
                 color=INK2,
             )
@@ -806,48 +746,31 @@ def fig_laws() -> None:
                 f"{int(agg.loc[country, k]):,}",
                 ha="center",
                 va="bottom",
-                fontsize=7,
+                fontsize=8.4,
                 color=INK3,
             )
     ax2.set_xticks(x)
-    ax2.set_xticklabels([LABELS[c].replace(" ", "\n") for c in cids], fontsize=8.4)
+    ax2.set_xticklabels([LABELS[c].replace(" ", "\n") for c in cids], fontsize=10.1)
     ax2.set_ylim(0, 12.6)
-    ax2.set_ylabel("% of all law passages", fontsize=8.8, color=INK2)
+    ax2.set_ylabel("% of all law passages", fontsize=10.6, color=INK2)
     ax2.spines[["top", "right"]].set_visible(False)
     ax2.yaxis.grid(True, color=GRID, linewidth=0.7)
     ax2.set_axisbelow(True)
-    ax2.legend(frameon=False, fontsize=9, loc="upper right")
+    ax2.legend(frameon=False, fontsize=10.8, loc="upper right")
     ax2.set_title(
         "All laws pooled, by country",
         loc="left",
-        fontsize=10.5,
+        fontsize=12.6,
         weight="bold",
         color=INK,
         pad=10,
     )
-    summary = "   ·   ".join(
-        f"{c}: {int(agg.loc[c, 'laws'])} laws, {int(agg.loc[c, 'passages']):,} passages, "
-        f"{100 * agg.loc[c, 'anyj'] / agg.loc[c, 'passages']:.1f}% any justice"
-        for c in ("Australia", "Türkiye")
-    )
-    fig.subplots_adjust(top=0.78, bottom=0.14, left=0.24, wspace=0.28)
-    ratio = (agg.loc["Türkiye", "anyj"] / agg.loc["Türkiye", "passages"]) / (
-        agg.loc["Australia", "anyj"] / agg.loc["Australia", "passages"]
-    )
+    fig.subplots_adjust(top=0.855, bottom=0.14, left=0.24, wspace=0.28)
     titled(
         fig,
-        f"Turkish climate law carries {ratio:.0f}× Australia's justice density",
-        f"Every published Australian and Turkish law in the database with at least 30 passages: "
-        f"{int(n_laws['Australia'])} Australian, {int(n_laws['Türkiye'])} Turkish.\n"
-        "Colour marks the country here, not the classifier. Small grey figures are labelled passages over total passages.\n"
-        + summary,
-        "Composition drives much of the country gap: Türkiye's set includes the Eleventh National Development Plan (924 passages, 27.5% "
-        "justice-labelled), while Australia's largest law by volume is the Higher Education Support Act (3,526 passages, 4.1%).\n"
-        f"'Law' is the front-end category; policies are excluded by request. Of {n_published} published laws, "
-        f"{n_published - n_with_passages} have no passages at all and a further {n_with_passages - n_shown} fall below the "
-        "30-passage floor.\n"
-        "All passage types included (not just body text), matching the deep-dive panel; passages under 20 characters dropped.\n"
-        "Source: Climate Policy Radar, PRODUCTION.PUBLISHED.PASSAGES (Snowflake), Aug 2026.",
+        "Turkish climate law carries more justice language than Australian",
+        "Left: the 20 laws with the highest share of justice-labelled passages. Right: all laws pooled by country.\nColour marks the country here, not the classifier.",
+        "Laws with at least 30 passages. 'Law' is the front-end category; policies are excluded. Composition differs: Türkiye's set includes a national development plan.",
     )
     save(fig, "06_laws")
 
@@ -866,7 +789,7 @@ def fig_country_words() -> None:
     the label height for information that is in results/country_log_odds.csv.
     """
     co = pd.read_csv(RESULTS / "country_log_odds.csv")
-    cc = {"Australia": "#4a3aa7", "Türkiye": "#eda100"}
+    cc = COUNTRY_COLORS
     n_uni, n_bi = 8, 3
     concepts = ["Q32", "Q911", "Q912"]
 
@@ -890,7 +813,7 @@ def fig_country_words() -> None:
             -sides["Australia"].z.abs(),
             left=-gap,
             height=0.56,
-            color=cc["Australia"],
+            color=text_colour(cc["Australia"]),
             linewidth=0,
         )
         ax.barh(
@@ -898,7 +821,7 @@ def fig_country_words() -> None:
             sides["Türkiye"].z.abs(),
             left=gap,
             height=0.56,
-            color=cc["Türkiye"],
+            color=text_colour(cc["Türkiye"]),
             linewidth=0,
         )
         for country, sign, ha in (("Australia", -1, "right"), ("Türkiye", 1, "left")):
@@ -909,7 +832,7 @@ def fig_country_words() -> None:
                     f"{abs(r.z):.0f}",
                     va="center",
                     ha="left" if sign > 0 else "right",
-                    fontsize=7.8,
+                    fontsize=9.4,
                     weight="bold",
                     color=INK2,
                 )
@@ -919,7 +842,7 @@ def fig_country_words() -> None:
                     r.term,
                     va="center",
                     ha=ha,
-                    fontsize=9.2,
+                    fontsize=11.0,
                     color=INK,
                 )
 
@@ -938,9 +861,9 @@ def fig_country_words() -> None:
             LABELS[concept],
             ha="center",
             va="center",
-            fontsize=12,
+            fontsize=14.4,
             weight="bold",
-            color=COLORS[concept],
+            color=text_colour(COLORS[concept]),
         )
         ax.text(
             -label_x,
@@ -948,9 +871,9 @@ def fig_country_words() -> None:
             f"Australia · {n_aus:,}",
             ha="right",
             va="center",
-            fontsize=8.6,
+            fontsize=10.3,
             weight="bold",
-            color=cc["Australia"],
+            color=text_colour(cc["Australia"]),
         )
         ax.text(
             label_x,
@@ -958,9 +881,9 @@ def fig_country_words() -> None:
             f"Türkiye · {n_tur:,}",
             ha="left",
             va="center",
-            fontsize=8.6,
+            fontsize=10.3,
             weight="bold",
-            color=cc["Türkiye"],
+            color=text_colour(cc["Türkiye"]),
         )
         ax.text(
             0,
@@ -968,29 +891,312 @@ def fig_country_words() -> None:
             "single words above the rule, two-word terms below",
             ha="center",
             va="center",
-            fontsize=7,
+            fontsize=8.4,
             color=INK3,
             style="italic",
         )
 
-    fig.subplots_adjust(top=0.78, bottom=0.13, wspace=0.10)
+    fig.subplots_adjust(top=0.855, bottom=0.13, wspace=0.10)
     titled(
         fig,
         "The same two countries sound different in each kind of justice",
-        "Terms most over-represented in each country's justice-labelled passages, measured against the other country and run separately\n"
-        "within each classifier. Bar length is log-odds z; the figure beside each bar is that z. Counts beside each country are the\n"
-        "passages available in that panel. Australia's procedural language is First Nations and the states; Türkiye's is participation\n"
-        "and institutions — a contrast the pooled comparison hid behind the much larger distributive class.",
-        "Log-odds ratio with informative Dirichlet prior, z-scored, on justice-labelled body-text passages from published non-litigation "
-        "documents tagged to exactly one of the two countries, deduplicated on passage text.\n"
-        "Multilateral Climate Fund projects are excluded: Türkiye has 1,113 such passages and Australia none. Country names are removed "
-        "from the vocabulary. One- and two-word terms are ranked separately.\n"
-        "Procedural justice has the thinnest evidence of the three panels. Turkish documents here are largely machine-translated, so some "
-        "separation is translation register rather than policy substance.\n"
-        "Per-term rates per 10,000 words are in results/country_log_odds.csv.\n"
-        + SOURCE,
+        "Terms most over-represented in each country's justice passages, measured against the other country and run\nseparately within each classifier. Bar length is log-odds z; single words above the rule, two-word terms below.",
+        "Multilateral fund projects excluded — Türkiye has 1,113 such passages and Australia none. Turkish documents are largely machine-translated.",
     )
     save(fig, "07_country_vocabulary")
+
+
+# ---------------------------------------------------------------- figure 8
+JUST_TRANSITION = [
+    ("Q47", "just transition"),
+    ("Q58", "social inclusion"),
+    ("Q53", "social protection"),
+    ("Q68", "decent work"),
+    ("Q1754", "aligning skills"),
+    ("Q69", "green jobs"),
+    ("Q1744", "legal safeguards for vulnerable groups"),
+]
+IMPACTED_GROUPS = [
+    ("Q704", "women and minority genders"),
+    ("Q695", "youth"),
+    ("Q676", "marginalized ethnicity"),
+    ("Q684", "indigenous people"),
+    ("Q1167", "people with limited assets"),
+    ("Q690", "people with health conditions"),
+    ("Q701", "people on the move"),
+    ("Q708", "elderly people"),
+    ("Q1016", "sexual minority"),
+]
+
+
+def fig_concept_overlap() -> None:
+    """
+    Which neighbouring concepts each justice classifier travels with.
+
+    Lift, not raw co-occurrence: P(concept | justice) / P(concept). Raw rates
+    would mostly restate how common each concept is, so a large concept like
+    "women and minority genders" would dominate every column whether or not
+    justice passages are actually enriched for it.
+    """
+    c = pd.read_parquet(DATA / "concept_cooccurrence.parquet").set_index("CONCEPT_ID")
+    cids = ["Q32", "Q911", "Q912"]
+    n_all = float(c.N_ALL.iloc[0])
+    lift = {
+        k: (c[f"WITH_{k}"] / float(c[f"N_{k}"].iloc[0])) / (c.N_CONCEPT / n_all)
+        for k in cids
+    }
+    rate = {k: 100 * c[f"WITH_{k}"] / float(c[f"N_{k}"].iloc[0]) for k in cids}
+    vmax = max(float(lift[k].max()) for k in cids)
+
+    rows = (
+        [("family", "Impacted groups  (Q672)")]
+        + IMPACTED_GROUPS
+        + [("family", "Just transition  (Q47)")]
+        + JUST_TRANSITION
+    )[::-1]
+
+    fig, ax = plt.subplots(figsize=(12.8, 10.4))
+    y = 0.0
+    for cid, label in rows:
+        if cid == "family":
+            ax.text(
+                -0.16,
+                y + 0.30,
+                label,
+                ha="right",
+                va="center",
+                fontsize=13.2,
+                weight=700,
+                color=INK,
+            )
+            y += 0.75
+            continue
+        for j, k in enumerate(cids):
+            v = float(lift[k].get(cid, np.nan))
+            col = sequential(v, vmax)
+            ax.add_patch(Rectangle((j, y), 0.96, 0.9, facecolor=col, linewidth=0))
+            ax.text(
+                j + 0.48,
+                y + 0.58,
+                f"{v:.1f}\u00d7",
+                ha="center",
+                va="center",
+                fontsize=15.6,
+                weight=700,
+                color=ink_on(col),
+            )
+            ax.text(
+                j + 0.48,
+                y + 0.26,
+                f"{float(rate[k].get(cid, np.nan)):.1f}% of its passages",
+                ha="center",
+                va="center",
+                fontsize=7.9,
+                color=ink_on(col),
+                alpha=0.85,
+            )
+        ax.text(
+            -0.16, y + 0.58, label, ha="right", va="center", fontsize=11.5, color=INK
+        )
+        ax.text(
+            -0.16,
+            y + 0.28,
+            f"{cid} \u00b7 {int(c.N_CONCEPT.get(cid, 0)):,} passages",
+            ha="right",
+            va="center",
+            fontsize=8.4,
+            color=INK3,
+        )
+        y += 1.0
+
+    for j, k in enumerate(cids):
+        ax.text(
+            j + 0.48,
+            y + 0.36,
+            LABELS[k],
+            ha="center",
+            va="bottom",
+            fontsize=12.6,
+            weight=700,
+            color=text_colour(COLORS[k]),
+        )
+        ax.text(
+            j + 0.48, y + 0.12, k, ha="center", va="bottom", fontsize=9.4, color=INK3
+        )
+    ax.set_xlim(-3.35, 3.05)
+    ax.set_ylim(-0.25, y + 0.95)
+    ax.axis("off")
+    fig.subplots_adjust(top=0.86, bottom=0.10)
+    titled(
+        fig,
+        "Procedural justice travels with people; distributive justice travels with no one",
+        "Each cell is how much more often a concept appears in that classifier's passages than in the corpus at large.\nSmall figures are the raw share of that classifier's passages carrying the concept.",
+        "Concept families taken from the concept store hierarchy; only members with a primary classifier appear. Q911 and Q912 are formally subconcepts of Q32, so some structure is ontology, not discourse.",
+    )
+    save(fig, "08_concept_overlap")
+
+
+# ---------------------------------------------------------------- figure 9
+MULTI = hs.NEUTRAL
+
+
+def _stack(ax, sub, bands, x):
+    ax.stackplot(
+        x,
+        [sub[b].to_numpy() for b, _, _ in bands],
+        colors=[c for _, c, _ in bands],
+        linewidth=0,
+    )
+
+
+def fig_timeline() -> None:
+    """
+    Justice language over time, in absolute passages, overall and by corpus.
+
+    The aggregate share falls after 2022 while corpus composition changes
+    underneath it. The per-corpus row exists to make that visible rather than
+    letting the headline read as a decline in policy discourse.
+    """
+    t = pd.read_parquet(DATA / "justice_timeline.parquet")
+    t = t[t.YR >= 2000]
+    # Blue and Forest are the one weak pair for colour-vision deficiency, so
+    # Mustard is stacked between them and they never share an edge.
+    bands = [
+        ("ONLY_Q911", Q911, "distributive only"),
+        ("ONLY_Q912", Q912, "procedural only"),
+        ("ONLY_Q32", Q32, "climate justice only"),
+        ("MULTIPLE", MULTI, "more than one label"),
+    ]
+    cols = [b for b, _, _ in bands]
+
+    tot = t.groupby("YR")[cols + ["PASSAGES_TOTAL"]].sum().sort_index()
+    tot["JUSTICE"] = tot[cols].sum(axis=1)
+    x = tot.index.to_numpy()
+
+    fig = plt.figure(figsize=(15.4, 12.4))
+    gs = fig.add_gridspec(2, 3, height_ratios=[1.9, 1], hspace=0.30, wspace=0.16)
+    ax = fig.add_subplot(gs[0, :])
+    _stack(ax, tot, bands, x)
+
+    ax2 = ax.twinx()
+    ax2.plot(
+        x, tot.PASSAGES_TOTAL, color=INK, linewidth=2.0, linestyle=(0, (5, 2)), zorder=5
+    )
+    ax2.set_xlim(2000, 2030.5)
+    # Deliberately not the same headroom as the left axis: with equal headroom
+    # both series peak in 2024 at the same fractional height and the line
+    # appears to trace the top of the stack.
+    # Fixed maxima rather than data-driven headroom, so the corpus line sits
+    # above the stack in every year: 450k/160k = 2.8 is below the smallest
+    # total-to-justice ratio in the series (3.0, at the 2019 peak).
+    ax2.set_ylim(0, 450_000)
+    ax2.set_ylabel(
+        "all passages published that year  (dashed line)", fontsize=10.8, color=INK
+    )
+    ax2.tick_params(labelsize=8)
+    ax2.yaxis.set_major_formatter(lambda v, _: f"{int(v):,}")
+    ax2.spines[["top"]].set_visible(False)
+
+    ax.set_ylim(0, 160_000)
+    ax.set_ylabel(
+        "passages carrying a justice label  (stacked areas)", fontsize=10.8, color=INK2
+    )
+    ax.yaxis.set_major_formatter(lambda v, _: f"{int(v):,}")
+    ax.set_xlim(2000, 2030.5)
+    ax.set_xticks([2000, 2005, 2010, 2015, 2020, 2025])
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.yaxis.grid(True, color=GRID, linewidth=0.7)
+    ax.set_axisbelow(True)
+    ax.tick_params(labelsize=8.5)
+
+    # Labelled on 2025, the last complete year.
+    cum, anchors = 0, []
+    for col, colour, lab in bands:
+        v = int(tot[col].loc[2025])
+        cum += v
+        anchors.append([cum - v / 2, lab, colour, v])
+    gap = tot.JUSTICE.max() * 0.085
+    for i in range(1, len(anchors)):
+        anchors[i][0] = max(anchors[i][0], anchors[i - 1][0] + gap)
+    for ypos, lab, colour, v in anchors:
+        ax.text(
+            2026.4,
+            ypos + gap * 0.16,
+            lab,
+            va="center",
+            ha="left",
+            fontsize=10.6,
+            color=text_colour(colour),
+            weight=700,
+        )
+
+    # Share against 2016, the Paris Agreement year, set beside the y-axis.
+    def share(y):
+        return 100 * tot.JUSTICE.loc[y] / tot.PASSAGES_TOTAL.loc[y]
+
+    ax.text(
+        0.013,
+        0.93,
+        f"{share(2016):.0f}% of all passages in 2016",
+        transform=ax.transAxes,
+        fontsize=12.0,
+        weight=700,
+        color=INK2,
+    )
+    ax.text(
+        0.013,
+        0.875,
+        f"{share(2025):.0f}% in 2025",
+        transform=ax.transAxes,
+        fontsize=12.0,
+        weight=700,
+        color=INK2,
+    )
+    ax.set_title(
+        "Combined corpora", loc="left", fontsize=13.8, weight=700, color=INK, pad=10
+    )
+
+    order = ["Law + Policy", "UN submission", "MCF project"]
+    ymax = max(
+        t[t.CORPUS_GROUP == g].groupby("YR")[cols].sum().sum(axis=1).max()
+        for g in order
+    )
+    for i, grp in enumerate(order):
+        axi = fig.add_subplot(gs[1, i])
+        sub = t[t.CORPUS_GROUP == grp].groupby("YR")[cols + ["PASSAGES_TOTAL"]].sum()
+        sub = sub.reindex(x, fill_value=0)
+        _stack(axi, sub, bands, x)
+        axi.set_ylim(0, ymax * 1.24)
+        axi.set_xlim(2000, 2026)
+        axi.spines[["top", "right"]].set_visible(False)
+        axi.yaxis.grid(True, color=GRID, linewidth=0.7)
+        axi.set_axisbelow(True)
+        axi.tick_params(labelsize=7.5)
+        axi.yaxis.set_major_formatter(lambda v, _: f"{int(v / 1000)}k" if v else "0")
+        if i:
+            axi.set_yticklabels([])
+        j = sub[cols].sum(axis=1)
+        share_now = 100 * j.loc[2025] / max(sub.PASSAGES_TOTAL.loc[2025], 1)
+        share_then = 100 * j.loc[2016] / max(sub.PASSAGES_TOTAL.loc[2016], 1)
+        axi.set_title(grp, loc="left", fontsize=11.5, weight=700, color=INK, pad=8)
+        axi.text(
+            0.02,
+            0.92,
+            f"{share_then:.0f}% in 2016  \u2192  {share_now:.0f}% in 2025",
+            transform=axi.transAxes,
+            fontsize=9.6,
+            color=INK2,
+            weight=700,
+        )
+
+    fig.subplots_adjust(top=0.85, bottom=0.125, left=0.065, right=0.885)
+    titled(
+        fig,
+        "Justice language did not decline after 2022 \u2014 the corpus changed shape",
+        "Stacked areas are passages carrying each label, by year of publication. The dashed line is the size of the whole\ncorpus that year, on an independent right-hand axis — the two do not share a vertical scale.",
+        "Corporate disclosure is excluded: that dataset has not been updated this year. The remaining dip is composition — hold the 2016 corpus mix fixed and 2025 reads 37.2%, above 2016's own 33.1%. 2026 is a partial year.",
+    )
+    save(fig, "09_timeline")
 
 
 def main() -> None:
@@ -999,9 +1205,12 @@ def main() -> None:
         fig_overlap,
         fig_corpus_heatmap,
         fig_regions,
-        fig_deep_dive,
+        fig_deep_dive_nbsap,
+        fig_deep_dive_pledges,
         fig_laws,
         fig_country_words,
+        fig_concept_overlap,
+        fig_timeline,
     ):
         fn()
 
