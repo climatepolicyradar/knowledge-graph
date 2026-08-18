@@ -1039,6 +1039,10 @@ def fig_concept_overlap() -> None:
 # ---------------------------------------------------------------- figure 9
 MULTI = hs.NEUTRAL
 
+# Common ceiling for every share axis so the panels compare directly. MCF peaks
+# at 55%, the highest of any corpus in any year.
+SHARE_MAX = 60
+
 
 def _stack(ax, sub, bands, x):
     ax.stackplot(
@@ -1078,23 +1082,20 @@ def fig_timeline() -> None:
     ax = fig.add_subplot(gs[0, :])
     _stack(ax, tot, bands, x)
 
+    # The dashed line is the justice *share*, not the corpus size: it answers
+    # the question the stack cannot, and puts the same units on every panel.
+    share = 100 * tot.JUSTICE / tot.PASSAGES_TOTAL
     ax2 = ax.twinx()
-    ax2.plot(
-        x, tot.PASSAGES_TOTAL, color=INK, linewidth=2.0, linestyle=(0, (5, 2)), zorder=5
-    )
+    ax2.plot(x, share, color=INK, linewidth=2.0, linestyle=(0, (5, 2)), zorder=5)
     ax2.set_xlim(2000, 2030.5)
-    # Deliberately not the same headroom as the left axis: with equal headroom
-    # both series peak in 2024 at the same fractional height and the line
-    # appears to trace the top of the stack.
-    # Fixed maxima rather than data-driven headroom, so the corpus line sits
-    # above the stack in every year: 450k/160k = 2.8 is below the smallest
-    # total-to-justice ratio in the series (3.0, at the 2019 peak).
-    ax2.set_ylim(0, 450_000)
+    ax2.set_ylim(0, SHARE_MAX)
     ax2.set_ylabel(
-        "all passages published that year  (dashed line)", fontsize=10.8, color=INK
+        "share of that year's passages carrying a justice label  (dashed line)",
+        fontsize=10.8,
+        color=INK,
     )
     ax2.tick_params(labelsize=8)
-    ax2.yaxis.set_major_formatter(lambda v, _: f"{int(v):,}")
+    ax2.yaxis.set_major_formatter(lambda v, _: f"{int(v)}%")
     ax2.spines[["top"]].set_visible(False)
 
     ax.set_ylim(0, 160_000)
@@ -1130,28 +1131,6 @@ def fig_timeline() -> None:
             weight=700,
         )
 
-    # Share against 2016, the Paris Agreement year, set beside the y-axis.
-    def share(y):
-        return 100 * tot.JUSTICE.loc[y] / tot.PASSAGES_TOTAL.loc[y]
-
-    ax.text(
-        0.013,
-        0.93,
-        f"{share(2016):.0f}% of all passages in 2016",
-        transform=ax.transAxes,
-        fontsize=12.0,
-        weight=700,
-        color=INK2,
-    )
-    ax.text(
-        0.013,
-        0.875,
-        f"{share(2025):.0f}% in 2025",
-        transform=ax.transAxes,
-        fontsize=12.0,
-        weight=700,
-        color=INK2,
-    )
     ax.set_title(
         "Combined corpora", loc="left", fontsize=13.8, weight=700, color=INK, pad=10
     )
@@ -1175,25 +1154,33 @@ def fig_timeline() -> None:
         axi.yaxis.set_major_formatter(lambda v, _: f"{int(v / 1000)}k" if v else "0")
         if i:
             axi.set_yticklabels([])
-        j = sub[cols].sum(axis=1)
-        share_now = 100 * j.loc[2025] / max(sub.PASSAGES_TOTAL.loc[2025], 1)
-        share_then = 100 * j.loc[2016] / max(sub.PASSAGES_TOTAL.loc[2016], 1)
-        axi.set_title(grp, loc="left", fontsize=11.5, weight=700, color=INK, pad=8)
-        axi.text(
-            0.02,
-            0.92,
-            f"{share_then:.0f}% in 2016  \u2192  {share_now:.0f}% in 2025",
-            transform=axi.transAxes,
-            fontsize=9.6,
-            color=INK2,
-            weight=700,
+        axj = axi.twinx()
+        axj.plot(
+            x,
+            100 * sub[cols].sum(axis=1) / sub.PASSAGES_TOTAL.replace(0, np.nan),
+            color=INK,
+            linewidth=1.6,
+            linestyle=(0, (5, 2)),
+            zorder=5,
         )
+        axj.set_ylim(0, SHARE_MAX)
+        axj.set_xlim(2000, 2026)
+        axj.spines[["top"]].set_visible(False)
+        axj.tick_params(labelsize=7.5)
+        axj.yaxis.set_major_formatter(lambda v, _: f"{int(v)}%")
+        if i < len(order) - 1:
+            # Only the rightmost panel carries the share scale; an unlabelled
+            # spine on the others reads as a stray axis line.
+            axj.set_yticklabels([])
+            axj.tick_params(right=False)
+            axj.spines[["right"]].set_visible(False)
+        axi.set_title(grp, loc="left", fontsize=11.5, weight=700, color=INK, pad=8)
 
     fig.subplots_adjust(top=0.85, bottom=0.125, left=0.065, right=0.885)
     titled(
         fig,
         "Justice language did not decline after 2022 \u2014 the corpus changed shape",
-        "Stacked areas are passages carrying each label, by year of publication. The dashed line is the size of the whole\ncorpus that year, on an independent right-hand axis — the two do not share a vertical scale.",
+        "Stacked areas are passages carrying each label, by year of publication, on the left axis. The dashed line is the\nshare of that year's passages carrying any justice label, on the right axis — the same scale on every panel.",
         "Corporate disclosure is excluded: that dataset has not been updated this year. The remaining dip is composition — hold the 2016 corpus mix fixed and 2025 reads 37.2%, above 2016's own 33.1%. 2026 is a partial year.",
     )
     save(fig, "09_timeline")
