@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from knowledge_graph.config import WANDB_ENTITY
-from knowledge_graph.identifiers import WikibaseID
+from knowledge_graph.identifiers import Identifier, WikibaseID
 from knowledge_graph.operations.sample import run_sampling
 
 CORPUS_TYPE_COL = "document_metadata.corpus_type_name"
@@ -209,3 +209,71 @@ def test_run_sampling_returns_wandb_artifact_path_when_track_and_upload_is_true(
         )
 
     assert result == f"{WANDB_ENTITY}/Q787/labelled-passages:v3"
+
+
+def test_run_sampling_excludes_known_passage_ids_from_the_pool(patched_sample):
+    """Passages whose ID is already known never reach the classifier."""
+    _, _, kw, _ = patched_sample
+    dataset = make_dataset(n=100)
+    already_labelled: set[str] = {
+        Identifier.generate(f"passage {i}") for i in range(40)
+    }
+
+    run_sampling(
+        wikibase_id=WikibaseID("Q787"),
+        dataset=dataset,
+        exclude_passage_ids=already_labelled,
+        track_and_upload=False,
+    )
+
+    texts_used = kw.predict.call_args[0][0]
+    assert len(texts_used) == 60
+    assert not any(Identifier.generate(text) in already_labelled for text in texts_used)
+
+
+def test_run_sampling_excludes_before_truncating_to_max_size(patched_sample):
+    """Exclusion runs before the max_size truncation."""
+    _, _, kw, _ = patched_sample
+    dataset = make_dataset(n=100)
+    already_labelled: set[str] = {
+        Identifier.generate(f"passage {i}") for i in range(40)
+    }
+
+    run_sampling(
+        wikibase_id=WikibaseID("Q787"),
+        dataset=dataset,
+        exclude_passage_ids=already_labelled,
+        max_size_to_sample_from=30,
+        track_and_upload=False,
+    )
+
+    texts_used = kw.predict.call_args[0][0]
+    assert len(texts_used) == 30
+    assert texts_used[0] == "passage 40"
+
+
+def test_run_sampling_with_no_exclusions_uses_full_dataset(patched_sample):
+    _, _, kw, _ = patched_sample
+
+    run_sampling(
+        wikibase_id=WikibaseID("Q787"),
+        dataset=make_dataset(n=50),
+        exclude_passage_ids=None,
+        track_and_upload=False,
+    )
+
+    assert len(kw.predict.call_args[0][0]) == 50
+
+
+def test_run_sampling_raises_when_no_positives_are_found(patched_sample):
+    """A concept with no corpus presence must say so"""
+    _, _, kw, emb = patched_sample
+    kw.predict = Mock(side_effect=lambda texts, **kwargs: [False] * len(texts))
+    emb.predict = Mock(side_effect=lambda texts, **kwargs: [False] * len(texts))
+
+    with pytest.raises(ValueError, match="No positive passages found"):
+        run_sampling(
+            wikibase_id=WikibaseID("Q787"),
+            dataset=make_dataset(n=50),
+            track_and_upload=False,
+        )

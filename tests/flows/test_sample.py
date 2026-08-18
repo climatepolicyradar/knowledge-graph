@@ -127,6 +127,7 @@ async def test_run_sampling_task_passes_through_to_run_sampling():
     assert got["track_and_upload"] is True
     assert got["concept_overrides"] == {"definition": "x"}
     assert got["wikibase_username"] == "user"
+    assert got["exclude_passage_ids"] is None
 
 
 @pytest.mark.asyncio
@@ -203,3 +204,65 @@ async def test_sample_flow_passes_wikibase_credentials_from_config(test_config):
     assert got["wikibase_username"] == test_config.wikibase_username
     assert got["wikibase_password"] == test_config.wikibase_password.get_secret_value()
     assert got["wikibase_url"] == test_config.wikibase_url
+
+
+@pytest.mark.asyncio
+async def test_run_sampling_task_converts_exclude_passage_ids_to_a_set():
+    """The flow passes a list (JSON-serialisable); run_sampling wants a set."""
+    dataset = pd.DataFrame({"text_block.text": ["a"]})
+
+    with (
+        patch(
+            "flows.sample.run_sampling", return_value="entity/Q1/labelled-passages:v1"
+        ) as mock_run_sampling,
+        patch("flows.sample.parse_kwargs_from_strings", return_value={}),
+    ):
+        await run_sampling_task.fn(
+            wikibase_id=WikibaseID("Q1"),
+            dataset=dataset,
+            dataset_name="balanced",
+            sample_size=50,
+            min_negative_proportion=0.1,
+            corpus_types_include=None,
+            corpus_types_exclude=None,
+            max_size_to_sample_from=500_000,
+            max_negative_proportion=None,
+            track_and_upload=False,
+            concept_override=None,
+            wikibase_username="user",
+            wikibase_password="pass",
+            wikibase_url="https://wikibase.test",
+            exclude_passage_ids=["abcdefgh", "jkmnpqrs"],
+        )
+
+    assert mock_run_sampling.call_args.kwargs["exclude_passage_ids"] == {
+        "abcdefgh",
+        "jkmnpqrs",
+    }
+
+
+@pytest.mark.asyncio
+async def test_sample_flow_forwards_exclude_passage_ids(test_config):
+    with (
+        patch(
+            "flows.sample.load_dataset_from_s3",
+            new_callable=AsyncMock,
+            return_value=pd.DataFrame({"text_block.text": ["a"]}),
+        ),
+        patch(
+            "flows.sample.run_sampling_task",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as mock_run_sampling_task,
+        patch("flows.sample.login_to_wandb"),
+    ):
+        await sample(
+            wikibase_id=WikibaseID("Q1"),
+            track_and_upload=False,
+            exclude_passage_ids=["abcdefgh"],
+            config=test_config,
+        )
+
+    assert mock_run_sampling_task.call_args.kwargs["exclude_passage_ids"] == [
+        "abcdefgh"
+    ]

@@ -7,6 +7,7 @@ module only adds the Typer command used by `just sample`, which loads the datase
 local disk and resolves the optional `--from-yaml-config` before calling `run_sampling`.
 """
 
+import os
 from pathlib import Path
 from typing import Annotated
 
@@ -55,6 +56,13 @@ def main(
             click_type=click.Choice(CORPUS_TYPES),
         ),
     ] = None,
+    exclude_passages_in_argilla: Annotated[
+        bool,
+        typer.Option(
+            help="Exclude passages already in the concept's Argilla dataset from the "
+            "sampling pool, so everything sampled is new. Requires AWS auth for SSM.",
+        ),
+    ] = False,
     max_size_to_sample_from: int = typer.Option(
         500_000,
         help="Maximum number of passages to load from the dataset before sampling",
@@ -113,6 +121,19 @@ def main(
             f"  just build-dataset"
         ) from e
 
+    exclude_passage_ids: set[str] | None = None
+    if exclude_passages_in_argilla:
+        # imported here so the default path needs no Argilla credentials
+        from knowledge_graph.cloud import get_aws_ssm_param
+        from knowledge_graph.operations.extend_dataset import get_passage_ids_in_argilla
+
+        os.environ.setdefault("ARGILLA_API_URL", get_aws_ssm_param("/Argilla/APIURL"))
+        os.environ.setdefault(
+            "ARGILLA_API_KEY", get_aws_ssm_param("/Argilla/Owner/APIKey")
+        )
+        exclude_passage_ids = get_passage_ids_in_argilla(wikibase_id)
+        logger.info(f"Excluding {len(exclude_passage_ids)} passages already in Argilla")
+
     run_sampling(
         wikibase_id=wikibase_id,
         dataset=dataset,
@@ -121,6 +142,7 @@ def main(
         min_negative_proportion=min_negative_proportion,
         corpus_types_include=corpus_types_include,
         corpus_types_exclude=corpus_types_exclude,
+        exclude_passage_ids=exclude_passage_ids,
         max_size_to_sample_from=max_size_to_sample_from,
         max_negative_proportion=max_negative_proportion,
         track_and_upload=track_and_upload,

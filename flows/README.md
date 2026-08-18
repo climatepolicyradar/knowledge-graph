@@ -93,6 +93,7 @@ When migrating a remaining `scripts/` operation, follow this:
 | infer | — not yet extracted; pure helpers (`document_passages`, `is_noop_document`, `_validate_spans`, …) still live in `flows/inference.py` | `inference` (+ batch variants) | `infer` — **deployment trigger only** (no local mode) |
 | train | `run_training`, `train_classifier` (+ W&B/S3 helpers) | `train` (deployed; `train-on-cpu` / `train-on-gpu` variants) | `just train` → `scripts/train.py` CLI wraps `run_training` and dispatches the remote deployment for `--compute remote-cpu/remote-gpu` |
 | sample | `run_sampling`, `CORPUS_TYPES` | `sample` → S3 (SSM creds) | `just sample` → `scripts/sample.py` CLI wraps `run_sampling`, loading the dataset from `data/processed/` |
+| extend_dataset | `run_extend_dataset`, `extend_dataset_locally` | `extend_existing_dataset` | `scripts/argilla/extend_existing_dataset.py` |
 
 ### Known follow-ups
 

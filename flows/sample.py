@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Annotated, Optional
+from typing import Annotated
 
 import pandas as pd
 import wandb
@@ -72,6 +72,7 @@ async def run_sampling_task(
     wikibase_username: str | None,
     wikibase_password: str | None,
     wikibase_url: str | None,
+    exclude_passage_ids: list[str] | None = None,
 ) -> str | None:
     import asyncio
 
@@ -90,6 +91,9 @@ async def run_sampling_task(
             min_negative_proportion=min_negative_proportion,
             corpus_types_include=corpus_types_include,
             corpus_types_exclude=corpus_types_exclude,
+            exclude_passage_ids=set(exclude_passage_ids)
+            if exclude_passage_ids
+            else None,
             max_size_to_sample_from=max_size_to_sample_from,
             max_negative_proportion=max_negative_proportion,
             track_and_upload=track_and_upload,
@@ -138,15 +142,22 @@ async def sample(
         Field(description="The minimum proportion of negative samples to take"),
     ] = 0.1,
     corpus_types_include: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(
             description="Corpus types to include. Can be specified multiple times. If not set, all types are included.",
         ),
     ] = None,
     corpus_types_exclude: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(
             description="Corpus types to exclude. Can be specified multiple times.",
+        ),
+    ] = None,
+    exclude_passage_ids: Annotated[
+        list[str] | None,
+        Field(
+            description="LabelledPassage IDs to remove from the sampling pool before "
+            "classifying, e.g. those already in Argilla."
         ),
     ] = None,
     max_size_to_sample_from: Annotated[
@@ -156,7 +167,7 @@ async def sample(
         ),
     ] = 500_000,
     max_negative_proportion: Annotated[
-        Optional[float],
+        float | None,
         Field(
             description="Maximum proportion of the sample that can be negative. If not set, fills remaining sample_size after positives."
         ),
@@ -168,13 +179,13 @@ async def sample(
         ),
     ] = True,
     concept_override: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(
             description="Concept property overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
     aws_env: AwsEnv = AwsEnv.production,
-    config: Optional[Config] = None,
+    config: Config | None = None,
 ) -> str | None:
     """
     Evenly sample passages for concepts from a dataset stored in S3.
@@ -205,6 +216,7 @@ async def sample(
         min_negative_proportion=min_negative_proportion,
         corpus_types_include=corpus_types_include,
         corpus_types_exclude=corpus_types_exclude,
+        exclude_passage_ids=exclude_passage_ids,
         max_size_to_sample_from=max_size_to_sample_from,
         max_negative_proportion=max_negative_proportion,
         track_and_upload=track_and_upload,
