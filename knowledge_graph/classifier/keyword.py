@@ -9,6 +9,81 @@ from knowledge_graph.utils import get_logger
 
 logger = get_logger(__name__)
 
+# Strictly 1:1 character mappings, so folding preserves string length – so the classifier
+# can operate over the modified text and report spans against the original
+_NUMBER_FOLD_PAIRS: dict[str, str] = {
+    # subscript digits ₀-₉ (U+2080-U+2089)
+    **{chr(0x2080 + digit): str(digit) for digit in range(10)},
+    # superscript digits
+    "⁰": "0",
+    "¹": "1",
+    "²": "2",
+    "³": "3",
+    **{chr(0x2074 + digit - 4): str(digit) for digit in range(4, 10)},
+    # sub/superscript signs
+    "₊": "+",
+    "⁺": "+",
+    "₋": "-",
+    "⁻": "-",
+}
+
+_NUMBER_FOLD_TABLE = str.maketrans(_NUMBER_FOLD_PAIRS)
+
+
+def fold_subscript_characters(text: str) -> str:
+    """
+    Replace subscript and superscript digits and signs with their ASCII equivalents.
+
+    The mapping is 1:1, so the returned string has exactly the same length as the input
+    and indices into it are valid indices into the input.
+
+    e.g. "CO₂" -> "CO2", "m³" -> "m3"
+
+    :param str text: The text to fold
+    :return str: The folded text, of identical length
+    """
+    return text.translate(_NUMBER_FOLD_TABLE)
+
+
+_VOWELS = "aeiou"
+_ES_SUFFIX_ENDINGS = ("s", "x", "z", "sh", "ch")
+
+_S = "[sS]"
+_ES = "[eE][sS]"
+_IES = "[iI][eE][sS]"
+
+
+def make_suffix_flexible_regex(word: str, minimum_word_length_chars=3) -> str:
+    """
+    Convert a word into a regex fragment which also matches its plural form.
+
+    Only English plural inflection is handled, and only via suffix rules:
+
+    - consonant + "y" -> "polic(?:y|ies)"
+    - "s"/"x"/"z"/"sh"/"ch" -> "gas(?:es)?"
+    - anything else -> "target[sS]?"
+
+    Note: this widens singular labels to also match their plural, not the
+    other way around, so an already-plural label gains nothing. Verb suffixes (-ing,
+    -ed) and irregular plurals are deliberately not handled. Irregular forms belong in
+    the concept's alternative labels.
+
+    :param str word: The word to convert (unescaped)
+    :return str: An escaped regex fragment
+    """
+    if len(word) < minimum_word_length_chars or word[-1].isdigit():
+        return re.escape(word)
+
+    lowered = word.lower()
+
+    if lowered.endswith("y") and lowered[-2] not in _VOWELS:
+        return f"{re.escape(word[:-1])}(?:{re.escape(word[-1])}|{_IES})"
+
+    if lowered.endswith(_ES_SUFFIX_ENDINGS):
+        return f"{re.escape(word)}(?:{_ES})?"
+
+    return f"{re.escape(word)}{_S}?"
+
 
 class KeywordClassifier(Classifier, ZeroShotClassifier):
     """
@@ -45,9 +120,27 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
     but not
         "The greenhouse gas emissions are a major contributor to climate change."
 
+    Two optional relaxations of the matching are available, both off by default, and
+    they can be combined:
+
+    - fold_subscripts: matches subscript and superscript digits against their ASCII
+      equivalents, in both directions, so a "CO2" label matches "CO₂" in the text and
+      a "CO₂" label matches "CO2".
+    - match_word_forms: also matches the English plural of a label's final word, so
+      "greenhouse gas" matches "greenhouse gases" and "policy" matches "policies".
+      Uses regex rules which are imprecise but quick.
+
+    Both are applied to negative labels as well as positive ones, so that a loosened
+    positive match cannot slip past a still-strict veto. Enabling either changes the
+    classifier's id, so a relaxed variant never collides with the default
+    configuration. Spans are always reported as offsets into the original text.
+
     KeywordClassifier does not output prediction probabilities, so spans identified by
     this classifier will not have prediction_probability values set.
     """
+
+    fold_subscripts: bool = False
+    match_word_forms: bool = False
 
     valid_separator_characters = [
         r"\-",  # hyphen (escaped because we're going to use it in a regex character class)
@@ -56,7 +149,12 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
     ]
     separator_pattern = r"[\s" + "".join(valid_separator_characters) + r"]+"
 
-    def __init__(self, concept: Concept):
+    def __init__(
+        self,
+        concept: Concept,
+        fold_subscripts: bool = False,
+        match_word_forms: bool = False,
+    ):
         r"""
         Create a new KeywordClassifier instance.
 
@@ -73,8 +171,15 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         classifier.concept.negative_labels attributes.
 
         :param Concept concept: The concept which the classifier will identify in text
+        :param bool fold_subscripts: Match subscript and superscript digits against
+            their ASCII equivalents, in both directions
+        :param bool match_word_forms: Also match the English plural of each label's
+            final word
         """
         super().__init__(concept)
+
+        self.fold_subscripts = fold_subscripts
+        self.match_word_forms = match_word_forms
 
         def make_separator_flexible(label: str) -> str:
             r"""
@@ -90,10 +195,15 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
             :return str: A regex pattern string that matches the label with flexible separators
             """
             # Split by any common separator characters (space, hyphen, newline, etc.)
-            parts = re.split(self.separator_pattern, label.strip())
+            parts = [
+                part for part in re.split(self.separator_pattern, label.strip()) if part
+            ]
 
-            # Filter out empty parts and escape each word part
-            word_parts = [re.escape(part) for part in parts if part]
+            if self.match_word_forms and parts:
+                word_parts = [re.escape(part) for part in parts[:-1]]
+                word_parts.append(make_suffix_flexible_regex(parts[-1]))
+            else:
+                word_parts = [re.escape(part) for part in parts]
 
             # If the label has no separators, return the escaped label as-is
             if len(word_parts) == 1:
@@ -149,12 +259,27 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
 
             return case_sensitive_labels, case_insensitive_labels
 
+        positive_labels = self.concept.all_labels
+        negative_labels = self.concept.negative_labels
+
+        # Fold the labels before splitting them by case, so that a label like "co₂" is
+        # recognised as pure-ASCII lowercase and matched case-insensitively. Doing this
+        # the other way around would strand every folded label in the case-sensitive
+        # bucket, because of its non-ASCII characters.
+        if self.fold_subscripts:
+            positive_labels = [
+                fold_subscript_characters(label) for label in positive_labels
+            ]
+            negative_labels = [
+                fold_subscript_characters(label) for label in negative_labels
+            ]
+
         # Split labels by case sensitivity
         case_sensitive_positive, case_insensitive_positive = split_by_case_handling(
-            self.concept.all_labels
+            positive_labels
         )
         case_sensitive_negative, case_insensitive_negative = split_by_case_handling(
-            self.concept.negative_labels
+            negative_labels
         )
 
         # Apply separator flexibility to create regex patterns
@@ -191,22 +316,37 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
 
     @property
     def id(self) -> ClassifierID:
-        """Return a deterministic, human-readable identifier for the classifier."""
-        return ClassifierID.generate(self.name, self.concept.id)
+        """
+        Return a deterministic, human-readable identifier for the classifier.
 
-    def _match_spans(self, text: str, pattern: re.Pattern | None) -> list[Span]:
+        The match options are only hashed in when they are enabled, so that default
+        classifiers keep the ids they had before the introduction of these.
+        """
+        if not (self.fold_subscripts or self.match_word_forms):
+            return ClassifierID.generate(self.name, self.concept.id)
+
+        return ClassifierID.generate(
+            self.name, self.concept.id, self.fold_subscripts, self.match_word_forms
+        )
+
+    def _match_spans(
+        self, text: str, pattern: re.Pattern | None, search_text: str | None = None
+    ) -> list[Span]:
         """
         Find spans in text using the provided pattern.
 
-        :param str text: The text to search in
+        :param str text: The text the returned spans will refer to
         :param re.Pattern | None pattern: The compiled regex pattern (can be None)
+        :param str | None search_text: The text to actually search, if it differs from
+            `text`. Must be the same length as `text`, so that match offsets remain
+            valid offsets into `text`.
         :return list[Span]: List of spans found by the pattern
         """
         if not pattern:
             return []
 
         spans = []
-        for match in pattern.finditer(text):
+        for match in pattern.finditer(search_text if search_text is not None else text):
             start, end = match.span()
             if start != end:
                 spans.append(
@@ -233,6 +373,8 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         3. Case-sensitive matches are found exactly as provided
         4. Case-insensitive matches can be found regardless of casing
         5. Positive matches that overlap with negative matches are filtered out
+        6. Spans are always offsets into the supplied text, even when the text is
+           folded before searching
 
         :param str text: The text to predict on
         :param float | None threshold: Optional prediction threshold. Logs a warning if
@@ -245,13 +387,18 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
                 "prediction probabilities"
             )
 
+        # Search the folded text, but report spans as offsets into the original text.
+        # Folding is 1:1, so the two strings have identical lengths and the offsets are
+        # interchangeable.
+        search_text = fold_subscript_characters(text) if self.fold_subscripts else text
+
         # Find all positive matches (allowing overlaps for now)
         positive_spans = []
         positive_spans.extend(
-            self._match_spans(text, self.case_sensitive_positive_pattern)
+            self._match_spans(text, self.case_sensitive_positive_pattern, search_text)
         )
         positive_spans.extend(
-            self._match_spans(text, self.case_insensitive_positive_pattern)
+            self._match_spans(text, self.case_insensitive_positive_pattern, search_text)
         )
 
         # Merge overlapping positive spans
@@ -260,10 +407,10 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         # Find all negative matches (allowing overlaps for now)
         negative_spans = []
         negative_spans.extend(
-            self._match_spans(text, self.case_sensitive_negative_pattern)
+            self._match_spans(text, self.case_sensitive_negative_pattern, search_text)
         )
         negative_spans.extend(
-            self._match_spans(text, self.case_insensitive_negative_pattern)
+            self._match_spans(text, self.case_insensitive_negative_pattern, search_text)
         )
 
         # Merge overlapping negative spans
