@@ -39,6 +39,12 @@ MAX_RETRIES = 5
 RETRY_INITIAL_WAIT = 1.0
 RETRY_MAX_WAIT = 60.0
 
+# Wikibase stores labels and aliases in buckets keyed by language tag. Concepts carry
+# their English variants across several of these, eg British spellings like "licence"
+# are tagged "en-gb", so we read all of them into the concept's alternative labels.
+# "mul" is Wikibase's tag for values which apply across languages.
+ALIAS_LANGUAGES: Final[tuple[str, ...]] = ("en", "en-gb", "en-us", "mul")
+
 
 class WikibaseAuth(BaseModel):
     """For creating a WikibaseSession."""
@@ -449,11 +455,13 @@ class WikibaseSession:
             )
 
         alternative_labels = []
-        if isinstance(entity.get("aliases"), dict):
+        aliases = entity.get("aliases")
+        if isinstance(aliases, dict):
             alternative_labels = [
-                alias.get("value")
-                for alias in entity.get("aliases", {}).get("en", [])
-                if alias.get("language") == "en"
+                alias["value"]
+                for language in ALIAS_LANGUAGES
+                for alias in aliases.get(language) or []
+                if alias.get("value")
             ]
 
         description = (
