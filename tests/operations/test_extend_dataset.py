@@ -121,8 +121,8 @@ def test_warns_and_adds_fewer_when_not_enough_new_passages(mock_argilla, mock_lo
     )
 
 
-def test_raises_when_require_full_limit_and_not_enough_new(mock_argilla):
-    """With require_full_limit, a shortfall fails loudly and pushes nothing."""
+def test_raises_when_raise_on_insufficient_passages_and_not_enough_new(mock_argilla):
+    """With raise_on_insufficient_passages, a shortfall fails loudly and pushes nothing."""
     mock_argilla["dataset"].records = CountingRecords(
         [f"passage {i}" for i in range(8)]
     )
@@ -132,7 +132,7 @@ def test_raises_when_require_full_limit_and_not_enough_new(mock_argilla):
             wikibase_id=WIKIBASE_ID,
             labelled_passages=make_passages(10),
             limit=50,
-            require_full_limit=True,
+            raise_on_insufficient_passages=True,
         )
 
     mock_argilla["session"].add_labelled_passages.assert_not_called()

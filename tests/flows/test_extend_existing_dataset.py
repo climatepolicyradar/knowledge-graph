@@ -84,7 +84,7 @@ async def test_samples_when_given_no_artifact_path(
 
     kwargs = patched_extend_dependencies["sample"].call_args.kwargs
     assert kwargs["sample_size"] == 50
-    assert kwargs["exclude_passage_ids"] == sorted(EXISTING_IDS)
+    assert set(kwargs["exclude_passage_ids"]) == EXISTING_IDS
     assert kwargs["track_and_upload"] is True
     patched_extend_dependencies["load"].assert_called_once_with(wandb_path=ARTIFACT)
 
@@ -166,7 +166,7 @@ async def test_loads_candidate_passages_from_the_given_artifact(
 
 
 @pytest.mark.asyncio
-async def test_forwards_limit_workspace_and_require_full_limit(
+async def test_forwards_limit_workspace_and_raise_on_insufficient_passages(
     patched_extend_dependencies, labelled_passages, test_config
 ):
     """n_new_passages becomes the operation's limit."""
@@ -174,14 +174,14 @@ async def test_forwards_limit_workspace_and_require_full_limit(
         wikibase_id=WIKIBASE_ID,
         wandb_artifact_path=ARTIFACT,
         n_new_passages=50,
-        require_full_limit=True,
+        raise_on_insufficient_passages=True,
         workspace_name="my-workspace",
         config=test_config,
     )
 
     kwargs = patched_extend_dependencies["run_extend"].call_args.kwargs
     assert kwargs["limit"] == 50
-    assert kwargs["require_full_limit"] is True
+    assert kwargs["raise_on_insufficient_passages"] is True
     assert kwargs["workspace"] == "my-workspace"
     assert kwargs["labelled_passages"] == labelled_passages
 

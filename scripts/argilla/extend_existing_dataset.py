@@ -20,7 +20,7 @@ def main(
     limit: int | None = typer.Option(
         130, help="Limit the number of passages loaded to Argilla."
     ),
-    require_full_limit: bool = typer.Option(
+    raise_on_insufficient_passages: bool = typer.Option(
         False,
         help="Fail, rather than warn and add fewer, when fewer than --limit of the "
         "sampled passages are new.",
@@ -37,7 +37,7 @@ def main(
         wikibase_id=wikibase_id,
         workspace=workspace_name,
         limit=limit,
-        require_full_limit=require_full_limit,
+        raise_on_insufficient_passages=raise_on_insufficient_passages,
     )
 
 

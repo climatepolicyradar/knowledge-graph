@@ -1,5 +1,5 @@
 from io import BytesIO
-from typing import Annotated, Optional
+from typing import Annotated
 
 import pandas as pd
 import wandb
@@ -142,19 +142,19 @@ async def sample(
         Field(description="The minimum proportion of negative samples to take"),
     ] = 0.1,
     corpus_types_include: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(
             description="Corpus types to include. Can be specified multiple times. If not set, all types are included.",
         ),
     ] = None,
     corpus_types_exclude: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(
             description="Corpus types to exclude. Can be specified multiple times.",
         ),
     ] = None,
     exclude_passage_ids: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(
             description="LabelledPassage IDs to remove from the sampling pool before "
             "classifying, e.g. those already in Argilla."
@@ -167,7 +167,7 @@ async def sample(
         ),
     ] = 500_000,
     max_negative_proportion: Annotated[
-        Optional[float],
+        float | None,
         Field(
             description="Maximum proportion of the sample that can be negative. If not set, fills remaining sample_size after positives."
         ),
@@ -179,13 +179,13 @@ async def sample(
         ),
     ] = True,
     concept_override: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(
             description="Concept property overrides in key=value format. Can be specified multiple times.",
         ),
     ] = None,
     aws_env: AwsEnv = AwsEnv.production,
-    config: Optional[Config] = None,
+    config: Config | None = None,
 ) -> str | None:
     """
     Evenly sample passages for concepts from a dataset stored in S3.

@@ -52,7 +52,7 @@ def run_extend_dataset(
     workspace: str = "knowledge-graph",
     limit: int | None = 130,
     suggestion_model=None,
-    require_full_limit: bool = False,
+    raise_on_insufficient_passages: bool = False,
     existing_passage_ids: set[str] | None = None,
     argilla_api_url: str | None = None,
     argilla_api_key: str | None = None,
@@ -95,7 +95,7 @@ def run_extend_dataset(
     )
 
     if limit is not None and len(labelled_passages) < limit:
-        if require_full_limit:
+        if raise_on_insufficient_passages:
             raise NotEnoughNewPassagesError(
                 wikibase_id, requested=limit, available=len(labelled_passages)
             )
@@ -135,7 +135,7 @@ def extend_dataset_locally(
     wikibase_id: WikibaseID,
     workspace: str = "knowledge-graph",
     limit: int | None = 130,
-    require_full_limit: bool = False,
+    raise_on_insufficient_passages: bool = False,
 ) -> list[LabelledPassage]:
     """
     Extend an existing Argilla dataset from the local sample file.
@@ -168,5 +168,5 @@ def extend_dataset_locally(
         labelled_passages=labelled_passages,
         workspace=workspace,
         limit=limit,
-        require_full_limit=require_full_limit,
+        raise_on_insufficient_passages=raise_on_insufficient_passages,
     )

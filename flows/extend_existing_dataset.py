@@ -1,5 +1,5 @@
 import os
-from typing import Annotated, Optional
+from typing import Annotated
 
 import wandb
 from prefect import flow
@@ -28,24 +28,24 @@ async def extend_existing_dataset(
         Field(description="The Wikibase ID of the concept whose dataset to extend"),
     ],
     wandb_artifact_path: Annotated[
-        Optional[str],
+        str | None,
         Field(description="W&B artifact to take candidate passages from."),
     ] = None,
     n_new_passages: Annotated[
-        Optional[int],
+        int | None,
         Field(
             description="Number of new passages to add, applied after deduplicating "
             "against the passages already in Argilla"
         ),
     ] = 50,
     sample_size: Annotated[
-        Optional[int],
+        int | None,
         Field(
             description="Number of passages to sample. Defaults to n_new_passages; "
             "passages already in Argilla are excluded from the sampling pool"
         ),
     ] = None,
-    require_full_limit: Annotated[
+    raise_on_insufficient_passages: Annotated[
         bool,
         Field(
             description="Fail, rather than warn and add fewer, when fewer than "
@@ -68,20 +68,20 @@ async def extend_existing_dataset(
         Field(description="The minimum proportion of negative samples to take"),
     ] = 0.1,
     max_negative_proportion: Annotated[
-        Optional[float],
+        float | None,
         Field(
             description="Maximum proportion of the sample that can be negative. If not "
             "set, fills remaining sample_size after positives."
         ),
     ] = None,
     corpus_types_include: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(
             description="Corpus types to include. If not set, all types are included."
         ),
     ] = None,
     corpus_types_exclude: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(description="Corpus types to exclude."),
     ] = None,
     max_size_to_sample_from: Annotated[
@@ -92,7 +92,7 @@ async def extend_existing_dataset(
         ),
     ] = 500_000,
     concept_override: Annotated[
-        Optional[list[str]],
+        list[str] | None,
         Field(description="Concept property overrides in key=value format."),
     ] = None,
     prelabel_with_llm_ensemble: Annotated[
@@ -103,9 +103,22 @@ async def extend_existing_dataset(
         ),
     ] = False,
     aws_env: AwsEnv = AwsEnv.production,
-    config: Optional[Config] = None,
+    config: Config | None = None,
 ) -> int:
-    """Add more labelling passages to a concept's existing Argilla dataset."""
+    """
+    Add more labelling passages to a concept's existing Argilla dataset.
+
+    Samples fresh passages when no `wandb_artifact_path` is given, so extending a dataset
+    is one command rather than two.
+
+    The passages already in the dataset are read from Argilla up front and excluded from
+    the sampling pool, so everything sampled is new and `sample_size` defaults to
+    `n_new_passages` with no need for over sampling. Identity is the passage ID
+    (`Identifier.generate(text)`). The same ID set is then passed to
+    `run_extend_dataset`, whose deduplication becomes a fallback rather than the primary
+    filter, and which therefore doesn't re-read Argilla.
+    """
+
     logger = get_logger()
 
     if not config:
@@ -157,7 +170,7 @@ async def extend_existing_dataset(
             corpus_types_include=corpus_types_include,
             corpus_types_exclude=corpus_types_exclude,
             max_size_to_sample_from=max_size_to_sample_from,
-            exclude_passage_ids=sorted(existing_passage_ids),
+            exclude_passage_ids=list(existing_passage_ids),
             track_and_upload=True,
             concept_override=concept_override,
             aws_env=aws_env,
@@ -193,7 +206,7 @@ async def extend_existing_dataset(
         workspace=workspace_name,
         limit=n_new_passages,
         suggestion_model=suggestion_model,
-        require_full_limit=require_full_limit,
+        raise_on_insufficient_passages=raise_on_insufficient_passages,
         existing_passage_ids=existing_passage_ids,
         argilla_api_url=argilla_api_url,
         argilla_api_key=argilla_api_key,
