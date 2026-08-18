@@ -211,9 +211,8 @@ def run_sampling(
             raise ValueError(
                 f"No positive passages found for {wikibase_id} in {len(dataset)} "
                 f"candidates: neither the keyword nor the embedding classifier matched "
-                f"anything, so there is nothing worth labelling. Try "
-                f'dataset_name="combined" for a much larger pool, or check the '
-                f"concept's labels in Wikibase."
+                f'anything. Try dataset_name="combined" for a much larger pool, or '
+                f"check the concept's labels in Wikibase."
             )
         positive_samples = pd.concat(positive_samples_list, ignore_index=True)
         positive_samples = positive_samples.drop_duplicates(subset=["text_block.text"])

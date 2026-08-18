@@ -2,8 +2,7 @@
 Extend-dataset operation: reusable, Prefect-free domain logic.
 
 Adds more labelled passages to a dataset which already exists in Argilla,
-deduplicating the input passages against the text already in the dataset so that
-annotators never see the same passage twice.
+deduplicating the input passages by the passage text's Identifier against what's already in Argilla (existing passages are excluded at sample).
 """
 
 from knowledge_graph.config import processed_data_dir
@@ -110,9 +109,7 @@ def run_extend_dataset(
         labelled_passages = labelled_passages[:limit]
 
     if not labelled_passages:
-        logger.warning(
-            f"No new passages to add to dataset '{dataset.name}', doing nothing"
-        )
+        logger.warning(f"No new passages to add to dataset '{dataset.name}'")
         return []
 
     logger.info(f"Adding {len(labelled_passages)} passages to dataset")
@@ -144,8 +141,7 @@ def extend_dataset_locally(
     Extend an existing Argilla dataset from the local sample file.
 
     Local counterpart to `run_extend_dataset`, reading the JSONL that the sample
-    operation writes to `data/processed/sampled_passages/` instead of taking passages
-    from a W&B artifact.
+    operation writes to `data/processed/sampled_passages/`.
     """
     logger = get_logger()
 
