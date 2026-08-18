@@ -39,10 +39,7 @@ MAX_RETRIES = 5
 RETRY_INITIAL_WAIT = 1.0
 RETRY_MAX_WAIT = 60.0
 
-# Wikibase stores labels and aliases in buckets keyed by language tag. Concepts carry
-# their English variants across several of these, eg British spellings like "licence"
-# are tagged "en-gb", so we read all of them into the concept's alternative labels.
-# "mul" is Wikibase's tag for values which apply across languages.
+# Aliases are bucketed by language tag, eg "licence" sits under "en-gb" not "en".
 ALIAS_LANGUAGES: Final[tuple[str, ...]] = ("en", "en-gb", "en-us", "mul")
 
 
