@@ -225,3 +225,6 @@ conflicts = [[{ extra = "transformers" }, { extra = "transformers_gpu" }]]
 [tool.typos.default.extend-words]
 fpr = "fpr"
 FPR = "FPR"
+# Substring prefixes used as lexicon terms, not misspellings.
+allocat = "allocat"
+participat = "participat"
