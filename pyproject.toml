@@ -221,7 +221,3 @@ members = []
 
 [tool.uv]
 conflicts = [[{ extra = "transformers" }, { extra = "transformers_gpu" }]]
-
-[tool.typos.default.extend-words]
-fpr = "fpr"
-FPR = "FPR"
