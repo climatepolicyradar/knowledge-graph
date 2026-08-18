@@ -363,29 +363,50 @@ def pull_justice_timeline(conn) -> pd.DataFrame:
     """
     Justice-labelled passages per publication year and corpus group.
 
-    Rows are disjoint on the exclusivity classes, so only_* plus multiple sums to
-    the justice total. Malformed years (a handful of documents carry values like
-    22 and 223) and null dates are dropped; 2026 is a partial year.
+    Rows are disjoint on the exclusivity classes, so only_* plus multiple sums
+    to the justice total. The dist/proc columns are a second, independent
+    cross-tab that ignores Q32 entirely, for the distributive-versus-procedural
+    view.
+
+    National greenhouse gas inventory reports and common reporting tables are
+    split out of UN submissions into their own group rather than dropped. They
+    are emissions accounting rather than policy discourse: they enter the corpus
+    at scale from 2023 (12k passages in 2022, 87k in 2023) and carry justice
+    language on about 1% of passages, so pooled into UN submissions they mask a
+    rise everywhere else. The title match is confined to UN submissions, since a
+    handful of laws and policies *about* inventories are real policy text.
+
+    Corporate disclosure is excluded: that dataset has not been refreshed this
+    year, so its passages all sit in the past and would bend any trend.
+
+    Malformed years (a few documents carry values like 22 and 223) and null
+    dates are dropped; 2026 is a partial year.
     """
+    inventory = (
+        "(d.title ilike '%inventory%' or d.title ilike '%CRT%' "
+        "or d.title ilike '%common reporting table%')"
+    )
     sql = f"""
         select year(d.published_date) as yr,
-               case when d.category in ('Law', 'Policy') then 'Law + Policy'
+               case when d.category = 'UN submission' and {inventory}
+                         then 'Technical reporting'
+                    when d.category in ('Law', 'Policy') then 'Law + Policy'
                     when d.category = 'UN submission' then 'UN submission'
-                    when d.category = 'Multilateral Climate Fund project' then 'MCF project'
-                    end as corpus_group,
+                    else 'MCF project' end as corpus_group,
                count(*) as passages_total,
                sum(iff({has("Q32")} and not {has("Q911")} and not {has("Q912")}, 1, 0)) as only_q32,
                sum(iff(not {has("Q32")} and {has("Q911")} and not {has("Q912")}, 1, 0)) as only_q911,
                sum(iff(not {has("Q32")} and not {has("Q911")} and {has("Q912")}, 1, 0)) as only_q912,
                sum(iff(iff({has("Q32")}, 1, 0) + iff({has("Q911")}, 1, 0)
-                       + iff({has("Q912")}, 1, 0) > 1, 1, 0)) as multiple
+                       + iff({has("Q912")}, 1, 0) > 1, 1, 0)) as multiple,
+               sum(iff({has("Q911")} and not {has("Q912")}, 1, 0)) as dist_only,
+               sum(iff({has("Q912")} and not {has("Q911")}, 1, 0)) as proc_only,
+               sum(iff({has("Q911")} and {has("Q912")}, 1, 0)) as dist_and_proc
         from PRODUCTION.PUBLISHED.PASSAGES p
         join PRODUCTION.PUBLISHED.DOCUMENTS d on d.id = p.document_id
         where {PASSAGE_FILTER}
           and not d.is_principal and not d.is_collection
           and d.document_status = 'published'
-          -- Only the three regularly-updated corpora. Corporate disclosure has
-          -- not been refreshed this year, and Report is too small to read.
           and d.category in ('Law', 'Policy', 'UN submission',
                              'Multilateral Climate Fund project')
           and d.published_date is not null

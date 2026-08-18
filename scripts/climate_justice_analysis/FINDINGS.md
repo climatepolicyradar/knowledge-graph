@@ -23,7 +23,7 @@ excluded throughout: all three specs carry `dont_run_on: ["sabin"]` and every
 published Litigation document is a Sabin record (17,347 of 17,347), so there is
 no inference there to report.
 
-Ten figures in `figures/`, all numbers reproducible from `pull_data.py` →
+Eleven figures in `figures/`, all numbers reproducible from `pull_data.py` →
 `text_stats.py` / `specificity.py` → `viz.py`.
 
 ---
@@ -272,33 +272,69 @@ Caveat: both Q911 and Q912 are formally `subconcept_of` Q32 in the concept
 store, and Q47 lists Q32 as a related concept, so part of this structure is
 ontology design rather than independent discourse.
 
-## 7. Over time (fig 9)
+## 7. Over time (figs 9 and 10)
 
-The series covers the three regularly-updated corpora. Corporate disclosure is
-excluded because that dataset has not been refreshed this year, so its passages
-all sit in the past and would distort any trend drawn through them; Report is
-excluded as too small to read at this scale.
+The raw share of the corpus carrying a justice label peaks at 33.1% in 2016 —
+the Paris Agreement year — holds near a third through 2022, then drops sharply
+to 22.9% in 2023 and sits around a quarter since.
 
-Across those three corpora the justice share runs 33.1% in 2016 — the Paris
-Agreement year — and 26.9% in 2025. Standardising on the 2016 corpus mix, 2025
-would read **37.2%**, above 2016's own 33.1%. The dip is composition, not a
-retreat from justice language.
+**That drop is one specific thing: national greenhouse gas inventory reports.**
+They are emissions accounting — page after page of source-category tables — and
+they carry justice language on about 1% of passages. They enter the corpus at
+scale in 2023:
 
-| corpus | justice rate 2016 | 2025 | share of corpus 2016 | 2025 |
-|---|---:|---:|---:|---:|
-| Law + Policy | 33.4% | 30.9% | 37.4% | 24.6% |
-| MCF project | 36.3% | **55.3%** | 37.6% | 13.2% |
-| UN submission | 28.1% | 19.3% | 25.0% | **62.3%** |
+| | 2022 | 2023 | 2025 |
+|---|---:|---:|---:|
+| emissions inventories, passages | 11,967 | **87,486** | 87,003 |
+| emissions inventories, justice rate | 1.3% | 1.0% | 1.2% |
 
-The mechanism is a straight swap between two corpora. Multilateral fund
-projects — the densest at 55.3% and rising — fell from 37.6% of volume to
-13.2%, while UN submissions, the least dense of the three and falling, went
-from 25.0% to 62.3% as national inventory reporting grew. Law and
-Policy held roughly flat on both rate and share of attention.
+A 7× jump in one year, at a rate near zero, is enough to pull the whole corpus
+down eight points. Split them out and every other corpus is flat or rising:
 
-**This is the finding most likely to be misread if published as a bare time
-series.** A raw share line shows justice language falling six points since
-Paris; holding corpus mix fixed shows it rising four.
+| corpus | 2016 | 2022 | 2025 |
+|---|---:|---:|---:|
+| Law + Policy | 33.4% | 33.2% | 30.9% |
+| UN submission, excluding inventories | 28.3% | 29.0% | **40.9%** |
+| MCF project | 36.3% | 47.3% | **55.3%** |
+| Emissions inventories | 4.1% | 1.3% | 1.2% |
+
+UN submissions are the striking one. Pooled with inventory reporting they look
+like a corpus losing interest in justice; separated, they are the fastest-rising
+of the three substantive corpora, from 28.3% to 40.9%.
+
+These reports are kept in the figure rather than filtered out, shown as a
+second UN submission panel so the parent-child relation is visible, and the
+small panels carry a pale band for total volume — without it the panel plots
+only the ~1% that is labelled and the 87,000 passages doing the diluting are
+invisible. The point is not that the corpus is contaminated — it is that a share
+computed over everything CPR ingests is not a measure of policy discourse, and
+the composition has changed faster than the discourse has.
+
+Corporate disclosure is excluded from this series for a different reason: that
+dataset has not been refreshed this year, so all its passages sit in the past
+and would bend a trend rather than inform it.
+
+### Distributive and procedural, without the umbrella (fig 10)
+
+The "more than one label" band in fig 9 hides how the two subconcepts move
+together, so fig 10 re-cuts the same data as an independent cross-tab of Q911
+and Q912, ignoring Q32 entirely.
+
+| | 2016 | 2021 | 2025 |
+|---|---:|---:|---:|
+| distributive only | 22,307 | 51,542 | 46,283 |
+| both | 6,695 | 10,006 | **14,224** |
+| procedural only | 3,718 | 4,811 | 4,154 |
+
+**Procedural justice barely grows on its own.** Passages carrying only
+procedural language are essentially flat across a decade, from 3,718 to 4,154,
+while passages carrying both more than double. As a share of all procedural
+passages, those co-occurring with distributive language rise from 64% to 77%.
+
+Procedural justice is increasingly something policy text does *while* making a
+distributive claim, rather than a separate register of its own — consistent
+with §6, where procedural justice is also the classifier most enriched for
+named impacted groups.
 
 ---
 

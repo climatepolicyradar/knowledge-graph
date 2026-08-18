@@ -1053,44 +1053,49 @@ def _stack(ax, sub, bands, x):
     )
 
 
-def fig_timeline() -> None:
-    """
-    Justice language over time, in absolute passages, overall and by corpus.
+ORDER = ["Law + Policy", "UN submission", "Technical reporting", "MCF project"]
+PANEL_LABEL = {
+    "Law + Policy": "Law + Policy",
+    "UN submission": "UN submission — policy & pledges",
+    "Technical reporting": "UN submission — emissions inventories",
+    "MCF project": "MCF project",
+}
 
-    The aggregate share falls after 2022 while corpus composition changes
-    underneath it. The per-corpus row exists to make that visible rather than
-    letting the headline read as a decline in policy discourse.
+
+def _timeline(bands, name, title, note, left_max, small_max, annot=None) -> None:
+    """
+    Stacked absolute counts with a share line, overall and per corpus.
+
+    The dashed line is the share of that year's passages carrying any of the
+    labels in `bands`, on a 0-60% axis shared by every panel, so the small
+    multiples can be read against each other and against the whole.
     """
     t = pd.read_parquet(DATA / "justice_timeline.parquet")
     t = t[t.YR >= 2000]
-    # Blue and Forest are the one weak pair for colour-vision deficiency, so
-    # Mustard is stacked between them and they never share an edge.
-    bands = [
-        ("ONLY_Q911", Q911, "distributive only"),
-        ("ONLY_Q912", Q912, "procedural only"),
-        ("ONLY_Q32", Q32, "climate justice only"),
-        ("MULTIPLE", MULTI, "more than one label"),
-    ]
     cols = [b for b, _, _ in bands]
 
     tot = t.groupby("YR")[cols + ["PASSAGES_TOTAL"]].sum().sort_index()
-    tot["JUSTICE"] = tot[cols].sum(axis=1)
+    tot["LABELLED"] = tot[cols].sum(axis=1)
     x = tot.index.to_numpy()
 
     fig = plt.figure(figsize=(15.4, 12.4))
-    gs = fig.add_gridspec(2, 3, height_ratios=[1.9, 1], hspace=0.30, wspace=0.16)
+    gs = fig.add_gridspec(2, 4, height_ratios=[1.9, 1], hspace=0.30, wspace=0.16)
     ax = fig.add_subplot(gs[0, :])
     _stack(ax, tot, bands, x)
 
-    # The dashed line is the justice *share*, not the corpus size: it answers
-    # the question the stack cannot, and puts the same units on every panel.
-    share = 100 * tot.JUSTICE / tot.PASSAGES_TOTAL
     ax2 = ax.twinx()
-    ax2.plot(x, share, color=INK, linewidth=2.0, linestyle=(0, (5, 2)), zorder=5)
+    ax2.plot(
+        x,
+        100 * tot.LABELLED / tot.PASSAGES_TOTAL,
+        color=INK,
+        linewidth=2.0,
+        linestyle=(0, (5, 2)),
+        zorder=5,
+    )
     ax2.set_xlim(2000, 2030.5)
     ax2.set_ylim(0, SHARE_MAX)
     ax2.set_ylabel(
-        "share of that year's passages carrying a justice label  (dashed line)",
+        "share of that year's passages carrying a label  (dashed line)",
         fontsize=10.8,
         color=INK,
     )
@@ -1098,9 +1103,9 @@ def fig_timeline() -> None:
     ax2.yaxis.set_major_formatter(lambda v, _: f"{int(v)}%")
     ax2.spines[["top"]].set_visible(False)
 
-    ax.set_ylim(0, 160_000)
+    ax.set_ylim(0, left_max)
     ax.set_ylabel(
-        "passages carrying a justice label  (stacked areas)", fontsize=10.8, color=INK2
+        "passages carrying a label  (stacked areas)", fontsize=10.8, color=INK2
     )
     ax.yaxis.set_major_formatter(lambda v, _: f"{int(v):,}")
     ax.set_xlim(2000, 2030.5)
@@ -1110,19 +1115,18 @@ def fig_timeline() -> None:
     ax.set_axisbelow(True)
     ax.tick_params(labelsize=8.5)
 
-    # Labelled on 2025, the last complete year.
     cum, anchors = 0, []
     for col, colour, lab in bands:
         v = int(tot[col].loc[2025])
         cum += v
-        anchors.append([cum - v / 2, lab, colour, v])
-    gap = tot.JUSTICE.max() * 0.085
+        anchors.append([cum - v / 2, lab, colour])
+    gap = left_max * 0.055
     for i in range(1, len(anchors)):
         anchors[i][0] = max(anchors[i][0], anchors[i - 1][0] + gap)
-    for ypos, lab, colour, v in anchors:
+    for ypos, lab, colour in anchors:
         ax.text(
             2026.4,
-            ypos + gap * 0.16,
+            ypos,
             lab,
             va="center",
             ha="left",
@@ -1130,22 +1134,39 @@ def fig_timeline() -> None:
             color=text_colour(colour),
             weight=700,
         )
-
+    if annot:
+        # The combined dip contradicts the headline unless the reader is told
+        # what causes it; the per-corpus row below is the proof. Axes fractions,
+        # not a blended data transform — the latter made tight-bbox layout hang.
+        ax.annotate(
+            annot,
+            xy=(0.762, 0.365),
+            xytext=(0.055, 0.80),
+            xycoords="axes fraction",
+            textcoords="axes fraction",
+            fontsize=10,
+            color=INK2,
+            weight=700,
+            arrowprops=dict(
+                arrowstyle="->",
+                color=INK3,
+                linewidth=0.9,
+                connectionstyle="arc3,rad=-0.18",
+            ),
+        )
     ax.set_title(
         "Combined corpora", loc="left", fontsize=13.8, weight=700, color=INK, pad=10
     )
 
-    order = ["Law + Policy", "UN submission", "MCF project"]
-    ymax = max(
-        t[t.CORPUS_GROUP == g].groupby("YR")[cols].sum().sum(axis=1).max()
-        for g in order
-    )
-    for i, grp in enumerate(order):
+    for i, grp in enumerate(ORDER):
         axi = fig.add_subplot(gs[1, i])
         sub = t[t.CORPUS_GROUP == grp].groupby("YR")[cols + ["PASSAGES_TOTAL"]].sum()
         sub = sub.reindex(x, fill_value=0)
+        axi.fill_between(
+            x, sub.PASSAGES_TOTAL, color=hs.RECYCLED_PAPER, linewidth=0, zorder=0
+        )
         _stack(axi, sub, bands, x)
-        axi.set_ylim(0, ymax * 1.24)
+        axi.set_ylim(0, small_max)
         axi.set_xlim(2000, 2026)
         axi.spines[["top", "right"]].set_visible(False)
         axi.yaxis.grid(True, color=GRID, linewidth=0.7)
@@ -1168,22 +1189,64 @@ def fig_timeline() -> None:
         axj.spines[["top"]].set_visible(False)
         axj.tick_params(labelsize=7.5)
         axj.yaxis.set_major_formatter(lambda v, _: f"{int(v)}%")
-        if i < len(order) - 1:
+        if i < len(ORDER) - 1:
             # Only the rightmost panel carries the share scale; an unlabelled
             # spine on the others reads as a stray axis line.
             axj.set_yticklabels([])
             axj.tick_params(right=False)
             axj.spines[["right"]].set_visible(False)
-        axi.set_title(grp, loc="left", fontsize=11.5, weight=700, color=INK, pad=8)
+        axi.set_title(
+            PANEL_LABEL[grp], loc="left", fontsize=10.6, weight=700, color=INK, pad=8
+        )
 
     fig.subplots_adjust(top=0.85, bottom=0.125, left=0.065, right=0.885)
     titled(
         fig,
-        "Justice language did not decline after 2022 \u2014 the corpus changed shape",
-        "Stacked areas are passages carrying each label, by year of publication, on the left axis. The dashed line is the\nshare of that year's passages carrying any justice label, on the right axis — the same scale on every panel.",
-        "Corporate disclosure is excluded: that dataset has not been updated this year. The remaining dip is composition — hold the 2016 corpus mix fixed and 2025 reads 37.2%, above 2016's own 33.1%. 2026 is a partial year.",
+        title,
+        "Stacked areas are passages carrying each label, by year of publication, on the left axis; the pale band behind them in\nthe small panels is every passage published that year. The dashed line is the share carrying any label, right axis.",
+        note,
     )
-    save(fig, "09_timeline")
+    save(fig, name)
+
+
+TIMELINE_NOTE = (
+    "Emissions inventories are UN submissions whose title mentions an inventory or a common reporting table.\n"
+    "They go from 5.9% of the corpus in 2022 to 27.1% in 2023 at about 1% justice density, which is the whole of the dip.\n"
+    "Corporate disclosure is excluded: that dataset has not been refreshed this year. 2026 is a partial year."
+)
+
+
+def fig_timeline() -> None:
+    _timeline(
+        [
+            ("ONLY_Q911", Q911, "distributive only"),
+            ("ONLY_Q912", Q912, "procedural only"),
+            ("ONLY_Q32", Q32, "climate justice only"),
+            ("MULTIPLE", MULTI, "more than one label"),
+        ],
+        "09_timeline",
+        "Justice language steadily increases \u2014 except in emissions inventories",
+        TIMELINE_NOTE,
+        160_000,
+        110_000,
+        annot="the combined dip is technical reporting\narriving, not a fall in policy discourse",
+    )
+
+
+def fig_timeline_dist_proc() -> None:
+    _timeline(
+        [
+            ("PROC_ONLY", Q912, "procedural only"),
+            ("DIST_AND_PROC", MULTI, "both"),
+            ("DIST_ONLY", Q911, "distributive only"),
+        ],
+        "10_timeline_distributive_procedural",
+        "Procedural justice barely grows alone \u2014 it grows alongside distributive",
+        "Climate justice (Q32) is ignored here: this is an independent cross-tab of the two subconcepts, so a passage counts once as "
+        "distributive only, procedural only, or both.\n" + TIMELINE_NOTE,
+        120_000,
+        110_000,
+    )
 
 
 def main() -> None:
@@ -1198,6 +1261,7 @@ def main() -> None:
         fig_country_words,
         fig_concept_overlap,
         fig_timeline,
+        fig_timeline_dist_proc,
     ):
         fn()
 
