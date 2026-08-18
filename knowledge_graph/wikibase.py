@@ -39,6 +39,9 @@ MAX_RETRIES = 5
 RETRY_INITIAL_WAIT = 1.0
 RETRY_MAX_WAIT = 60.0
 
+# Aliases are bucketed by language tag, eg "licence" sits under "en-gb" not "en".
+ALIAS_LANGUAGES: Final[tuple[str, ...]] = ("en", "en-gb", "en-us", "mul")
+
 
 class WikibaseAuth(BaseModel):
     """For creating a WikibaseSession."""
@@ -449,11 +452,13 @@ class WikibaseSession:
             )
 
         alternative_labels = []
-        if isinstance(entity.get("aliases"), dict):
+        aliases = entity.get("aliases")
+        if isinstance(aliases, dict):
             alternative_labels = [
-                alias.get("value")
-                for alias in entity.get("aliases", {}).get("en", [])
-                if alias.get("language") == "en"
+                alias["value"]
+                for language in ALIAS_LANGUAGES
+                for alias in aliases.get(language) or []
+                if alias.get("value")
             ]
 
         description = (
