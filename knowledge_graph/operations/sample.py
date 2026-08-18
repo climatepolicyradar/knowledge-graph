@@ -220,6 +220,14 @@ def run_sampling(
         positive_samples = pd.concat(positive_samples_list, ignore_index=True)
         positive_samples = positive_samples.drop_duplicates(subset=["text_block.text"])
 
+        # Calculate the number of negative samples we need to take
+        negative_sample_size = sample_size - len(positive_samples)
+        if max_negative_proportion is not None:
+            negative_sample_size = min(
+                negative_sample_size,
+                math.floor(sample_size * max_negative_proportion),
+            )
+
         # Get negative samples (passages not identified by any classifier)
         negative_indices = ~dataset[[model.name for model in models]].any(axis=1)
         negative_candidates = dataset[negative_indices]
