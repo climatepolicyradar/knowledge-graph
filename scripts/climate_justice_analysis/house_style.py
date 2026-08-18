@@ -66,7 +66,12 @@ NEUTRAL = CARDBOARD  # "more than one label" / non-specific series
 # Mustard and Green are legible as *fills* but fail as text on white (2.1:1 and
 # 2.6:1). Text set in a series colour uses these darkened cousins instead; fills
 # stay the brand values.
-TEXT_ON_WHITE = {MUSTARD: "#8A7C00", GREEN: "#5F6E28", CARDBOARD: "#7A7259"}
+TEXT_ON_WHITE = {
+    MUSTARD: "#8A7C00",
+    GREEN: "#5F6E28",
+    CARDBOARD: "#7A7259",
+    "#8CB4CF": "#356F97",
+}
 
 
 def text_colour(fill: str) -> str:
@@ -74,9 +79,10 @@ def text_colour(fill: str) -> str:
     return TEXT_ON_WHITE.get(fill, fill)
 
 
-# Two-colour set where colour means country rather than classifier. Kept well
-# clear of the trio above so the two encodings are never confused.
-COUNTRY_A, COUNTRY_B = INKY_NAVY, CARDBOARD
+# Two-colour set where colour means country rather than classifier. Two shades
+# of the brand blue rather than two hues: a second hue reads as a second
+# meaning, and these figures already spend hue on the classifiers.
+COUNTRY_A, COUNTRY_B = INKY_NAVY, "#8CB4CF"
 
 # Sequential ramp, Light Blue -> Inky Blue -> Inky Navy.
 BLUE_RAMP = [
@@ -174,6 +180,43 @@ def sequential(value: float, vmax: float) -> str:
         return BLUE_RAMP[0]
     i = int(round((value / vmax) ** 0.75 * (len(BLUE_RAMP) - 1)))
     return BLUE_RAMP[max(0, min(len(BLUE_RAMP) - 1, i))]
+
+
+# Diverging ramp for ratios: red (depleted) through white (parity) to blue
+# (enriched). Symmetric, six steps either side of white. Red sits outside the
+# brand palette deliberately — mustard reads as the procedural-justice series
+# and would collide with the column headers.
+DIVERGING_RAMP = [
+    "#B02418",
+    "#C24A3D",
+    "#D26F64",
+    "#E0948C",
+    "#EBB9B4",
+    "#F6DFDC",
+    "#FFFFFF",
+    "#E4EFF6",
+    "#C0DAEA",
+    "#93BEDC",
+    "#629FC9",
+    "#3577AE",
+    "#1A4F8C",
+]
+
+
+def diverging_ratio(ratio: float, max_log2: float) -> str:
+    """
+    Colour for a ratio on a log2 scale, so 0.5x is as far from 1 as 2x.
+
+    A linear ramp would put 0.5 and 2.0 at wildly different distances from
+    parity, which is wrong for a lift table: both are a factor of two.
+    """
+    import math
+
+    if ratio <= 0 or max_log2 <= 0:
+        return DIVERGING_RAMP[len(DIVERGING_RAMP) // 2]
+    t = max(-1.0, min(1.0, math.log2(ratio) / max_log2))
+    i = int(round((t + 1) / 2 * (len(DIVERGING_RAMP) - 1)))
+    return DIVERGING_RAMP[i]
 
 
 def ink_on(hexcolor: str) -> str:

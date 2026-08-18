@@ -99,6 +99,30 @@ IMPACTED_GROUPS = {
 }
 RELATED_CONCEPTS = {**JUST_TRANSITION, **IMPACTED_GROUPS}
 
+# Economic sectors (Q709). 19 of its 24 children carry a primary classifier and
+# so reach `topics`; Q756, Q758, Q772, Q777 and Q778 do not and are omitted.
+SECTORS = {
+    "Q786": "agriculture",
+    "Q762": "energy supply",
+    "Q766": "transportation and logistics",
+    "Q779": "finance and insurance",
+    "Q764": "construction",
+    "Q775": "public",
+    "Q763": "environmental management",
+    "Q774": "education",
+    "Q765": "trade",
+    "Q818": "water management",
+    "Q761": "manufacturing",
+    "Q787": "forestry",
+    "Q788": "fishing",
+    "Q760": "extractive",
+    "Q769": "information and communication technology",
+    "Q767": "hospitality",
+    "Q768": "media",
+    "Q856": "healthcare",
+    "Q757": "informal",
+}
+
 
 def has(cid: str, col: str = "p.concept_ids") -> str:
     return f"array_contains('{cid}'::variant, {col})"
@@ -317,14 +341,14 @@ def pull_country_rates(conn) -> pd.DataFrame:
     return query(conn, sql)
 
 
-def pull_concept_cooccurrence(conn) -> pd.DataFrame:
+def _cooccurrence(conn, concepts) -> pd.DataFrame:
     """
-    Co-occurrence of each justice classifier with the related concept families.
+    Co-occurrence of each justice classifier with a set of other concepts.
 
-    Returns per-concept co-occurrence counts plus the three justice marginals and
-    the corpus total, so lift can be computed without a second query.
+    Returns per-concept co-occurrence counts plus the three justice marginals
+    and the corpus total, so lift can be computed without a second query.
     """
-    ids = ", ".join(f"'{c}'" for c in RELATED_CONCEPTS)
+    ids = ", ".join(f"'{c}'" for c in concepts)
     sql = f"""
         with base as (
             select p.concept_ids,
@@ -357,6 +381,44 @@ def pull_concept_cooccurrence(conn) -> pd.DataFrame:
         group by 1
     """
     return query(conn, sql)
+
+
+def pull_concept_cooccurrence(conn) -> pd.DataFrame:
+    return _cooccurrence(conn, RELATED_CONCEPTS)
+
+
+def pull_sector_cooccurrence(conn) -> pd.DataFrame:
+    return _cooccurrence(conn, SECTORS)
+
+
+# Six sectors, six policy instruments and six adaptation concepts, chosen for
+# contrast rather than coverage: the full 19-sector table was too flat to read.
+# Sectors span the social / land / industrial gradient; instruments span fiscal
+# to regulatory; adaptation spans the domains where harm actually lands.
+MIXED_CONCEPTS = {
+    "Q774": "education",
+    "Q787": "forestry",
+    "Q786": "agriculture",
+    "Q779": "finance and insurance",
+    "Q762": "energy supply",
+    "Q761": "manufacturing",
+    "Q715": "tax",
+    "Q1274": "subsidy",
+    "Q1277": "fees and charges",
+    "Q1280": "tradable permit",
+    "Q1273": "loan",
+    "Q1281": "codes and standards",
+    "Q1833": "health adaptation",
+    "Q1836": "societal and economic adaptation",
+    "Q1834": "infrastructure and settlements adaptation",
+    "Q1835": "coastal and marine adaptation",
+    "Q1286": "early warning system",
+    "Q1345": "adaptation finance",
+}
+
+
+def pull_mixed_cooccurrence(conn) -> pd.DataFrame:
+    return _cooccurrence(conn, MIXED_CONCEPTS)
 
 
 def pull_justice_timeline(conn) -> pd.DataFrame:
@@ -517,6 +579,8 @@ def main() -> None:
         "corpus_rates": pull_corpus_rates,
         "overlap": pull_overlap,
         "concept_cooccurrence": pull_concept_cooccurrence,
+        "sector_cooccurrence": pull_sector_cooccurrence,
+        "mixed_cooccurrence": pull_mixed_cooccurrence,
         "justice_timeline": pull_justice_timeline,
         "region_rates": pull_region_rates,
         "region_rates_by_corpus": pull_region_rates_by_corpus,

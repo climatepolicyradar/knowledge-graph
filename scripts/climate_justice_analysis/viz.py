@@ -25,6 +25,7 @@ Every figure still carries its exact values as text so it can be rebuilt in a
 design tool without going back to the data.
 """
 
+import math
 from pathlib import Path
 
 import house_style as hs
@@ -36,6 +37,7 @@ from house_style import (
     INK,
     INK2,
     INK3,
+    diverging_ratio,
     ink_on,
     sequential,
     text_colour,
@@ -125,17 +127,6 @@ def fig_vocabulary() -> None:
                 color=INK2,
                 weight="bold",
             )
-        gap_y = max(rows) - n_uni + 0.5
-        ax.text(
-            -zmax * 1.26,
-            gap_y,
-            "two-word terms, ranked separately",
-            fontsize=8.6,
-            color=INK3,
-            va="center",
-            ha="left",
-            style="italic",
-        )
         ax.set_yticks([])
         ax.set_xticks([])
         ax.set_ylim(-1.1, max(y) + 0.6)
@@ -162,7 +153,7 @@ def fig_vocabulary() -> None:
     titled(
         fig,
         "Three justice classifiers, three vocabularies",
-        "Bar length is how strongly a term marks out one classifier against the other two. Single words above the rule,\ntwo-word terms below, ranked separately. Grey figures are the term's rate per 10,000 words, this class vs the others.",
+        "Bar length is how strongly a term marks out one classifier against the other two. Grey figures are the term's\nrate per 10,000 words, in this class versus the other two combined.",
         f"Log-odds ratio with an informative Dirichlet prior (Monroe, Colaresi & Quinn 2008), z-scored. Computed on every exclusive "
         f"passage of each class, not a sample: {counts['only_Q32']:,} / {counts['only_Q911']:,} / {counts['only_Q912']:,}.",
     )
@@ -349,7 +340,7 @@ def fig_corpus_heatmap() -> None:
     baseline = {k: 100 * c[k].sum() / c.PASSAGES_TOTAL.sum() for k in cids}
     vmax = float(rates.to_numpy().max())
 
-    fig, ax = plt.subplots(figsize=(11.6, 6.4))
+    fig, ax = plt.subplots(figsize=(13.4, 6.8))
     for i, corpus in enumerate(rates.index):
         for j, cid in enumerate(cids):
             v = rates.loc[corpus, cid]
@@ -388,7 +379,7 @@ def fig_corpus_heatmap() -> None:
     for j, cid in enumerate(cids):
         ax.text(
             j + 0.48,
-            len(rates) + 0.30,
+            len(rates) + 0.52,
             LABELS[cid],
             ha="center",
             va="bottom",
@@ -398,7 +389,7 @@ def fig_corpus_heatmap() -> None:
         )
         ax.text(
             j + 0.48,
-            len(rates) + 0.14,
+            len(rates) + 0.30,
             f"{cid} · {baseline[cid]:.1f}% overall",
             ha="center",
             va="bottom",
@@ -406,14 +397,14 @@ def fig_corpus_heatmap() -> None:
             color=INK3,
         )
 
-    ax.set_xlim(-2.55, 3.05)
-    ax.set_ylim(-0.25, len(rates) + 0.80)
+    ax.set_xlim(-2.95, 3.35)
+    ax.set_ylim(-0.25, len(rates) + 1.05)
     ax.axis("off")
     fig.subplots_adjust(top=0.855, bottom=0.10)
     titled(
         fig,
         "Funding documents talk about justice; laws do not",
-        "Each cell is the share of that corpus's own passages carrying the label, so corpus size is divided out.\nOne shared colour scale across the whole table, so any two cells are directly comparable.",
+        "Each cell is the share of that corpus's own passages carrying the label, so corpus size is divided out.",
         "Litigation is excluded: the classifiers were never run on that corpus, so its zero would be an absence of inference rather than of justice language.",
     )
     save(fig, "03_corpus_heatmap")
@@ -769,7 +760,7 @@ def fig_laws() -> None:
     titled(
         fig,
         "Turkish climate law carries more justice language than Australian",
-        "Left: the 20 laws with the highest share of justice-labelled passages. Right: all laws pooled by country.\nColour marks the country here, not the classifier.",
+        "Left: the 20 laws with the highest share of justice-labelled passages. Right: all laws pooled by country.",
         "Laws with at least 30 passages. 'Law' is the front-end category; policies are excluded. Composition differs: Türkiye's set includes a national development plan.",
     )
     save(fig, "06_laws")
@@ -885,23 +876,13 @@ def fig_country_words() -> None:
             weight="bold",
             color=text_colour(cc["Türkiye"]),
         )
-        ax.text(
-            0,
-            -0.95,
-            "single words above the rule, two-word terms below",
-            ha="center",
-            va="center",
-            fontsize=8.4,
-            color=INK3,
-            style="italic",
-        )
 
     fig.subplots_adjust(top=0.855, bottom=0.13, wspace=0.10)
     titled(
         fig,
         "The same two countries sound different in each kind of justice",
-        "Terms most over-represented in each country's justice passages, measured against the other country and run\nseparately within each classifier. Bar length is log-odds z; single words above the rule, two-word terms below.",
-        "Multilateral fund projects excluded — Türkiye has 1,113 such passages and Australia none. Turkish documents are largely machine-translated.",
+        "Terms most over-represented in each country's justice passages, measured against the other country and run\nseparately within each classifier. Bar length is log-odds z.",
+        "Multilateral fund projects are excluded: Türkiye has 1,113 such passages and Australia none, because these are stored by recipient country.",
     )
     save(fig, "07_country_vocabulary")
 
@@ -929,7 +910,9 @@ IMPACTED_GROUPS = [
 ]
 
 
-def fig_concept_overlap() -> None:
+def _overlap_heatmap(
+    source, groups, name, title, how, note, figsize, label_x, ratio_scale=False
+) -> None:
     """
     Which neighbouring concepts each justice classifier travels with.
 
@@ -938,7 +921,7 @@ def fig_concept_overlap() -> None:
     "women and minority genders" would dominate every column whether or not
     justice passages are actually enriched for it.
     """
-    c = pd.read_parquet(DATA / "concept_cooccurrence.parquet").set_index("CONCEPT_ID")
+    c = pd.read_parquet(DATA / source).set_index("CONCEPT_ID")
     cids = ["Q32", "Q911", "Q912"]
     n_all = float(c.N_ALL.iloc[0])
     lift = {
@@ -947,15 +930,15 @@ def fig_concept_overlap() -> None:
     }
     rate = {k: 100 * c[f"WITH_{k}"] / float(c[f"N_{k}"].iloc[0]) for k in cids}
     vmax = max(float(lift[k].max()) for k in cids)
+    # Only meaningful when ratio_scale is set, but bound either way so the
+    # colour call never depends on a conditionally-defined name.
+    max_log2 = max(
+        (abs(math.log2(v)) for k in cids for v in lift[k] if v > 0), default=1.0
+    )
 
-    rows = (
-        [("family", "Impacted groups  (Q672)")]
-        + IMPACTED_GROUPS
-        + [("family", "Just transition  (Q47)")]
-        + JUST_TRANSITION
-    )[::-1]
+    rows = [r for g in groups for r in ([("family", g[0])] + g[1])][::-1]
 
-    fig, ax = plt.subplots(figsize=(12.8, 10.4))
+    fig, ax = plt.subplots(figsize=figsize)
     y = 0.0
     for cid, label in rows:
         if cid == "family":
@@ -973,7 +956,7 @@ def fig_concept_overlap() -> None:
             continue
         for j, k in enumerate(cids):
             v = float(lift[k].get(cid, np.nan))
-            col = sequential(v, vmax)
+            col = diverging_ratio(v, max_log2) if ratio_scale else sequential(v, vmax)
             ax.add_patch(Rectangle((j, y), 0.96, 0.9, facecolor=col, linewidth=0))
             ax.text(
                 j + 0.48,
@@ -1023,20 +1006,87 @@ def fig_concept_overlap() -> None:
         ax.text(
             j + 0.48, y + 0.12, k, ha="center", va="bottom", fontsize=9.4, color=INK3
         )
-    ax.set_xlim(-3.35, 3.05)
+    ax.set_xlim(label_x, 3.05)
     ax.set_ylim(-0.25, y + 0.95)
     ax.axis("off")
     fig.subplots_adjust(top=0.86, bottom=0.10)
     titled(
         fig,
-        "Procedural justice travels with people; distributive justice travels with no one",
-        "Each cell is how much more often a concept appears in that classifier's passages than in the corpus at large.\nSmall figures are the raw share of that classifier's passages carrying the concept.",
-        "Concept families taken from the concept store hierarchy; only members with a primary classifier appear. Q911 and Q912 are formally subconcepts of Q32, so some structure is ontology, not discourse.",
+        title,
+        how,
+        note,
     )
-    save(fig, "08_concept_overlap")
+    save(fig, name)
 
 
-# ---------------------------------------------------------------- figure 9
+# Six sectors, six instruments and six adaptation concepts, each block ordered
+# by mean lift. Chosen for contrast rather than coverage: the full 19-sector
+# table was too flat to carry a figure.
+PICKED_SECTORS = [
+    ("Q774", "education"),
+    ("Q787", "forestry"),
+    ("Q779", "finance and insurance"),
+    ("Q786", "agriculture"),
+    ("Q762", "energy supply"),
+    ("Q761", "manufacturing"),
+]
+INSTRUMENTS = [
+    ("Q1274", "subsidy"),
+    ("Q1273", "loan"),
+    ("Q1281", "codes and standards"),
+    ("Q1277", "fees and charges"),
+    ("Q1280", "tradable permit"),
+    ("Q715", "tax"),
+]
+ADAPTATION = [
+    ("Q1836", "societal and economic adaptation"),
+    ("Q1345", "adaptation finance"),
+    ("Q1286", "early warning system"),
+    ("Q1835", "coastal and marine adaptation"),
+    ("Q1834", "infrastructure and settlements adaptation"),
+    ("Q1833", "health adaptation"),
+]
+
+HOW_TO_READ_LIFT = (
+    "Each cell is how much more often a concept appears in that classifier's passages than in the corpus at large.\n"
+    "Small figures are the raw share of that classifier's passages carrying the concept."
+)
+
+
+def fig_concept_overlap() -> None:
+    _overlap_heatmap(
+        "concept_cooccurrence.parquet",
+        [
+            ("Impacted groups  (Q672)", IMPACTED_GROUPS),
+            ("Just transition  (Q47)", JUST_TRANSITION),
+        ],
+        "08_concept_overlap",
+        "Procedural justice travels with people; distributive justice travels with no one",
+        HOW_TO_READ_LIFT,
+        "Concept families taken from the concept store hierarchy; only members with a primary classifier appear. Q911 and Q912 are formally subconcepts of Q32, so some structure is ontology, not discourse.",
+        (12.8, 10.4),
+        -3.35,
+    )
+
+
+def fig_sector_overlap() -> None:
+    _overlap_heatmap(
+        "mixed_cooccurrence.parquet",
+        [
+            ("Selected policy instruments", INSTRUMENTS),
+            ("Selected economic sectors", PICKED_SECTORS),
+            ("Selected adaptation concepts", ADAPTATION),
+        ],
+        "11_sector_overlap",
+        "Justice language concentrates in adaptation, not in policy instruments",
+        HOW_TO_READ_LIFT,
+        "White is the corpus average; blue is enriched, red is scarcer than usual. The scale is log2, so 0.5x sits as far from parity as 2x. Concepts are chosen for contrast, not coverage; each block is ordered by mean lift and a passage can carry several.",
+        (15.4, 12.4),
+        -4.2,
+        ratio_scale=True,
+    )
+
+
 MULTI = hs.NEUTRAL
 
 # Common ceiling for every share axis so the panels compare directly. MCF peaks
@@ -1260,6 +1310,7 @@ def main() -> None:
         fig_laws,
         fig_country_words,
         fig_concept_overlap,
+        fig_sector_overlap,
         fig_timeline,
         fig_timeline_dist_proc,
     ):

@@ -23,7 +23,7 @@ excluded throughout: all three specs carry `dont_run_on: ["sabin"]` and every
 published Litigation document is a Sabin record (17,347 of 17,347), so there is
 no inference there to report.
 
-Eleven figures in `figures/`, all numbers reproducible from `pull_data.py` →
+Twelve figures in `figures/`, all numbers reproducible from `pull_data.py` →
 `text_stats.py` / `specificity.py` → `viz.py`.
 
 ---
@@ -335,6 +335,38 @@ Procedural justice is increasingly something policy text does *while* making a
 distributive claim, rather than a separate register of its own — consistent
 with §6, where procedural justice is also the classifier most enriched for
 named impacted groups.
+
+### Adaptation, sectors and instruments (fig 11)
+
+The same lift measure against three hand-picked families of six. Chosen for
+contrast rather than coverage: the full 19-sector table was too flat to carry a
+figure.
+
+**Every adaptation concept is enriched for all three classifiers** — the only
+block in the table where that holds. Societal and economic adaptation runs
+4.2× / 3.7× / 4.7×, adaptation finance 4.1× / 4.0× / 2.5×, early warning
+systems 3.0× / 2.7× / 3.8×; the weakest is coastal and marine at 1.7× for
+climate justice.
+
+**Policy instruments are the opposite.** Most sit at or below the corpus
+average: tax 0.6× / 1.2× / 0.4×, tradable permit 0.5× / 1.4× / 0.4×, fees and
+charges below 1.0× on all three. The instruments that would actually
+redistribute are not where justice language lives.
+
+Two qualifications. Distributive justice is the highest of the three on *every*
+instrument — subsidy 2.6×, tradable permit 1.4×, tax 1.2× — so it is doing
+something recognisably distributive, just weakly in absolute terms; subsidy is
+the one instrument with a real lift, which fits, since subsidies name their
+beneficiaries. And the sector block is genuinely mixed rather than telling one
+story: education 3.4× for climate justice against manufacturing 0.2× for
+procedural, with energy supply below average for two of the three despite
+`energy` being distributive justice's single most distinctive term (§1). That
+apparent contradiction resolves once you note that §1's log-odds is measured
+against the other two justice classes, not against the corpus.
+
+Adaptation finance is only 2,757 passages and is the least stable row; the
+others run 12k–199k.
+
 
 ---
 

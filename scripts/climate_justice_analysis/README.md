@@ -102,6 +102,6 @@ house_style.py    CPR palette, typography, logo, caption conventions
 pull_data.py      Snowflake -> data/*.parquet
 text_stats.py     log-odds + TF-IDF distinctiveness -> results/
 specificity.py    lexicon yardstick for each classifier -> results/
-viz.py            all eleven figures -> figures/  (PEP 723, isolated env)
+viz.py            all twelve figures -> figures/  (PEP 723, isolated env)
 FINDINGS.md       write-up
 ```
