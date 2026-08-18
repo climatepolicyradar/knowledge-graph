@@ -260,6 +260,70 @@ def test_wikibase__create_concept__minimal(MockedWikibaseSession):
     assert isinstance(new_id, WikibaseID)
 
 
+def _entity_with_aliases(aliases: dict[str, list[str]]) -> dict:
+    """Build a minimal Wikibase entity whose aliases span the given language tags."""
+    return {
+        "labels": {"en": {"language": "en", "value": "license"}},
+        "aliases": {
+            language: [{"language": language, "value": value} for value in values]
+            for language, values in aliases.items()
+        },
+    }
+
+
+def test_wikibase__parse_entity_reads_all_english_alias_languages(
+    MockedWikibaseSession,
+):
+    """British spellings are tagged en-gb in Wikibase, so they must be read too."""
+    wikibase = MockedWikibaseSession()
+
+    concept = wikibase._parse_wikibase_entity(
+        WikibaseID("Q1432"),
+        _entity_with_aliases(
+            {
+                "en": ["licenses", "licensing"],
+                "en-gb": ["licence", "licencing"],
+                "en-us": ["license fee"],
+                "mul": ["CO2"],
+            }
+        ),
+    )
+
+    assert concept.preferred_label == "license"
+    assert set(concept.alternative_labels) == {
+        "licenses",
+        "licensing",
+        "licence",
+        "licencing",
+        "license fee",
+        "CO2",
+    }
+
+
+def test_wikibase__parse_entity_ignores_non_english_alias_languages(
+    MockedWikibaseSession,
+):
+    wikibase = MockedWikibaseSession()
+
+    concept = wikibase._parse_wikibase_entity(
+        WikibaseID("Q1432"),
+        _entity_with_aliases({"en": ["licenses"], "fr": ["licence d'exploitation"]}),
+    )
+
+    assert concept.alternative_labels == ["licenses"]
+
+
+def test_wikibase__parse_entity_without_aliases(MockedWikibaseSession):
+    wikibase = MockedWikibaseSession()
+
+    concept = wikibase._parse_wikibase_entity(
+        WikibaseID("Q1432"),
+        {"labels": {"en": {"language": "en", "value": "license"}}},
+    )
+
+    assert concept.alternative_labels == []
+
+
 def test_wikibase__add_claim(MockedWikibaseSession):
     wikibase = MockedWikibaseSession()
     # Should not raise
