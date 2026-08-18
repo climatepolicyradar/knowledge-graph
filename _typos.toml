@@ -15,3 +15,8 @@ extend-ignore-re = [
   # block-scoped: `# spellchecker:off` ... `# spellchecker:on`
   "(?s)(#|//)\\s*spellchecker:off.*?(#|//)\\s*spellchecker:on",
 ]
+
+# Domain abbreviations which typos would otherwise "correct".
+[default.extend-words]
+fpr = "fpr"
+FPR = "FPR"
