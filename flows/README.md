@@ -92,8 +92,8 @@ When migrating a remaining `scripts/` operation, follow this:
 | predict | `run_prediction`, `load_passages_from_snowflake`, `deduplicate_labelled_passages` | `predict_adhoc` (deployed), `predict_document_passages` (deployed, on-demand) | `just predict` / `predict-documents` → calls the operation directly (no Prefect) |
 | infer | — not yet extracted; pure helpers (`document_passages`, `is_noop_document`, `_validate_spans`, …) still live in `flows/inference.py` | `inference` (+ batch variants) | `infer` — **deployment trigger only** (no local mode) |
 | train | `run_training`, `train_classifier` (+ W&B/S3 helpers) | `train` (deployed; `train-on-cpu` / `train-on-gpu` variants) | `just train` → `scripts/train.py` CLI wraps `run_training` and dispatches the remote deployment for `--compute remote-cpu/remote-gpu` |
-| sample | `run_sampling`, `CORPUS_TYPES` | `sample` → S3 (SSM creds) | `just sample` → `scripts/sample.py` CLI wraps `run_sampling`, loading the dataset from `data/processed/` |
-| extend_dataset | `run_extend_dataset`, `extend_dataset_locally` | `extend_existing_dataset` | `scripts/argilla/extend_existing_dataset.py` |
+| sample | `run_sampling`, `CORPUS_TYPES` | `sample` — reads the feather dataset from S3 (SSM creds), writes passages to `data/processed/` and a W&B artifact, returning its path | `scripts/sample.py` CLI wraps `run_sampling`, loading the dataset from `data/processed/` |
+| extend_dataset | `run_extend_dataset`, `get_passage_ids_in_argilla`, `extend_dataset_locally`, `NotEnoughNewPassagesError` | `extend_existing_dataset` — calls the `sample` subflow itself when given no `wandb_artifact_path` | `scripts/argilla/extend_existing_dataset.py`, from a sample already on disk (no pool exclusion — see below) |
 
 ### Known follow-ups
 
