@@ -12,14 +12,6 @@ import boto3
 import pytest
 import pytest_asyncio
 from botocore.config import Config as BotoCoreConfig
-from cpr_sdk.parser_models import (
-    BaseParserOutput,
-    BlockType,
-    HTMLData,
-    HTMLTextBlock,
-    PDFData,
-    PDFTextBlock,
-)
 from moto import mock_aws
 from prefect import Flow, State
 from prefect.client.schemas import StateType
@@ -31,6 +23,14 @@ from types_aiobotocore_s3.client import S3Client
 
 from flows.config import Config
 from flows.inference import S3_BLOCK_RESULTS_CACHE
+from flows.models import (
+    BaseParserOutput,
+    BlockType,
+    HTMLData,
+    HTMLTextBlock,
+    PDFData,
+    PDFTextBlock,
+)
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from knowledge_graph.cloud import AwsEnv
@@ -297,10 +297,6 @@ def local_classifier_id(mock_classifiers_dir):
 def parser_output() -> Generator[BaseParserOutput, None, None]:
     yield BaseParserOutput(
         document_id="test id",
-        document_metadata={},
-        document_name="test name",
-        document_slug="test slug",
-        document_description="test description",
     )
 
 
