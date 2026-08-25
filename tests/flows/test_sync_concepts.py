@@ -4,7 +4,6 @@ from unittest.mock import AsyncMock, patch
 import polars as pl
 import pytest
 from botocore.exceptions import ClientError
-from vespa.io import VespaResponse
 
 from flows.sync_concepts import (
     concepts_to_dataframe,
@@ -14,7 +13,6 @@ from flows.sync_concepts import (
 )
 from flows.utils import S3Uri
 from knowledge_graph.cloud import AwsEnv
-from knowledge_graph.concept import Concept
 from knowledge_graph.wikibase import WikibaseAuth
 
 
@@ -24,36 +22,6 @@ def wikibase_auth_fixture(mock_wikibase_url: str) -> WikibaseAuth:
         username="test_user",
         password="test_password",
         url=mock_wikibase_url,
-    )
-
-
-@pytest.fixture
-def concept_with_vespa_fields(concept) -> Concept:
-    concept_dict = concept.model_dump()
-    concept_dict["wikibase_revision"] = 12345
-    concept_dict["wikibase_url"] = "https://test.wikibase.org/wiki/Item:Q787"
-    return Concept.model_validate(concept_dict)
-
-
-@pytest.fixture
-def mock_vespa_response_success() -> VespaResponse:
-    return VespaResponse(
-        status_code=200,
-        operation_type="update",
-        json={
-            "pathId": "/document/v1/family-document-passage/concept/docid/Q10.test_id"
-        },
-        url="http://localhost:8080",
-    )
-
-
-@pytest.fixture
-def mock_vespa_response_failure() -> VespaResponse:
-    return VespaResponse(
-        status_code=500,
-        operation_type="update",
-        json={"error": "Internal server error", "message": "Failed to update document"},
-        url="http://localhost:8080",
     )
 
 
