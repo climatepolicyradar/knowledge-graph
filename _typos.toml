@@ -1,0 +1,22 @@
+# Configuration for the `typos` spell checker (crate-ci/typos), run via pre-commit.
+#
+# Enables the `spellchecker:off` / `spellchecker:on` block markers, so that deliberate
+# misspellings can be fenced off in place rather than corrected.
+#
+# This matters more than it looks: typos *errors* on ambiguous corrections but silently
+# rewrites unambiguous ones. Tests which assert that a wrong spelling is NOT matched
+# were therefore being edited by the hook until the assertion no longer tested
+# anything - e.g. ("branch", matches=["branches"], does_not_match=["branchs"]) was
+# rewritten to does_not_match=["branches"], contradicting the line above it.
+[default]
+extend-ignore-re = [
+  # line-scoped: trailing `# spellchecker:disable-line`
+  "(?Rm)^.*(#|//)\\s*spellchecker:disable-line$",
+  # block-scoped: `# spellchecker:off` ... `# spellchecker:on`
+  "(?s)(#|//)\\s*spellchecker:off.*?(#|//)\\s*spellchecker:on",
+]
+
+# Domain abbreviations which typos would otherwise "correct".
+[default.extend-words]
+fpr = "fpr"
+FPR = "FPR"
