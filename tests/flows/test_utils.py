@@ -33,7 +33,6 @@ from flows.utils import (
     get_run_name,
     map_as_local,
     map_as_sub_flow,
-    remove_translated_suffix,
     s3_file_exists,
     sanitise_artifact_key_component,
 )
@@ -140,21 +139,6 @@ def test_slack_notify_knowledge_graph_block_name(env: AwsEnv, expected_block_nam
         )
 
     assert block_name == expected_block_name
-
-
-@pytest.mark.parametrize(
-    "file_name, expected",
-    [
-        ("CCLW.executive.1.1_translated_en", "CCLW.executive.1.1"),
-        ("CCLW.executive.1.1", "CCLW.executive.1.1"),
-        ("CCLW.executive.10083.rtl_190_translated_en", "CCLW.executive.10083.rtl_190"),
-        ("CCLW.executive.10083.rtl_190_translated_fr", "CCLW.executive.10083.rtl_190"),
-    ],
-)
-def test_remove_translated_suffix(file_name: str, expected: str) -> None:
-    """Test that we can remove the translated suffix from a file name."""
-
-    assert remove_translated_suffix(file_name) == expected
 
 
 @pytest.mark.parametrize(

@@ -22,7 +22,6 @@ dependencies = [
   "cpr-sdk==4.3.0",
   "wandb>=0.22.3",
   "boto3>=1.35.31",
-  "pyvespa>=0.54.0",
   "pyyaml>=6.0.2",
   "nltk>=3.9.1",
   "datasets>=2.18.0",
@@ -125,7 +124,7 @@ env = [
   "ARGILLA_API_KEY=argilla.apikey",
   "WANDB_API_KEY=test_wandb_api_key",
 ]
-markers = ["vespa", "transformers", "no_xdist: tests that are flaky under pytest-xdist and must run without parallelism"]
+markers = ["transformers", "no_xdist: tests that are flaky under pytest-xdist and must run without parallelism"]
 asyncio_default_fixture_loop_scope = "function"
 
 [build-system]
