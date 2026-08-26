@@ -120,8 +120,8 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
     but not
         "The greenhouse gas emissions are a major contributor to climate change."
 
-    Two optional relaxations of the matching are available, both off by default, and
-    they can be combined:
+    Two relaxations of the matching are available, both on by default, and they can be
+    disabled independently:
 
     - fold_subscripts: matches subscript and superscript digits against their ASCII
       equivalents, in both directions, so a "CO2" label matches "CO₂" in the text and
@@ -131,14 +131,18 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
       Uses regex rules which are imprecise but quick.
 
     Both are applied to negative labels as well as positive ones, so that a loosened
-    positive match cannot slip past a still-strict veto. Enabling either changes the
-    classifier's id, so a relaxed variant never collides with the default
-    configuration. Spans are always reported as offsets into the original text.
+    positive match cannot slip past a still-strict veto. Only the strict configuration
+    (both off) keeps the ids that keyword classifiers had before these options existed,
+    so a relaxed classifier never collides with a strict one. Spans are always reported
+    as offsets into the original text.
 
     KeywordClassifier does not output prediction probabilities, so spans identified by
     this classifier will not have prediction_probability values set.
     """
 
+    # Deliberately the opposite of the constructor's defaults: these are only read
+    # for classifiers pickled before the options existed. Flipping them would relax -
+    # and change the id of - every keyword classifier already in W&B and S3.
     fold_subscripts: bool = False
     match_word_forms: bool = False
 
@@ -152,8 +156,8 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
     def __init__(
         self,
         concept: Concept,
-        fold_subscripts: bool = False,
-        match_word_forms: bool = False,
+        fold_subscripts: bool = True,
+        match_word_forms: bool = True,
     ):
         r"""
         Create a new KeywordClassifier instance.
@@ -172,9 +176,9 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
 
         :param Concept concept: The concept which the classifier will identify in text
         :param bool fold_subscripts: Match subscript and superscript digits against
-            their ASCII equivalents, in both directions
+            their ASCII equivalents, in both directions. On by default.
         :param bool match_word_forms: Also match the English plural of each label's
-            final word
+            final word. On by default.
         """
         super().__init__(concept)
 
@@ -319,8 +323,8 @@ class KeywordClassifier(Classifier, ZeroShotClassifier):
         """
         Return a deterministic, human-readable identifier for the classifier.
 
-        The match options are only hashed in when they are enabled, so that default
-        classifiers keep the ids they had before the introduction of these.
+        The match options are only hashed in when they are enabled, so that strictly
+        matching classifiers keep the ids they had before the introduction of these.
         """
         if not (self.fold_subscripts or self.match_word_forms):
             return ClassifierID.generate(self.name, self.concept.id)

@@ -21,8 +21,8 @@ class KeywordExpansionClassifier(KeywordClassifier):
         self,
         concept: Concept,
         model: str = "claude-3-5-haiku-20241022",
-        fold_subscripts: bool = False,
-        match_word_forms: bool = False,
+        fold_subscripts: bool = True,
+        match_word_forms: bool = True,
     ):
         self.original_concept = concept
         self.concept = concept

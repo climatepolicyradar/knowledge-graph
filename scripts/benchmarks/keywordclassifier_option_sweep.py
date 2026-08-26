@@ -1,9 +1,10 @@
 r"""
 Sweep the optional KeywordClassifier matching relaxations across many concepts.
 
-KeywordClassifier gained two optional relaxations - subscript folding and plural word
-forms - both off by default. This script measures what each one actually buys, per
-concept, against the human-labelled passages in Argilla.
+KeywordClassifier has two matching relaxations - subscript folding and plural word
+forms - both on by default. This script measures what each one actually buys, per
+concept, against the human-labelled passages in Argilla, with the strict configuration
+as the control.
 
 For every concept listed in ``vibe-checker/config.yml`` it builds one classifier per
 option combination, evaluates it against that concept's gold passages, and appends the
@@ -51,9 +52,10 @@ DEFAULT_OUTPUT_DIR = Path("scripts/benchmarks/keywordclassifier_option_sweep_res
 AGREEMENT_LEVELS = ["Passage level", "Span level (0.5)"]
 
 # The option combinations under test. "default" is the control, and must stay first so
-# that every other variant can be compared against it.
+# that every other variant can be compared against it. Its kwargs are spelled out
+# because the classifier's own defaults now have both options on.
 VARIANTS: dict[str, dict[str, Any]] = {
-    "default": {},
+    "default": {"fold_subscripts": False, "match_word_forms": False},
     "fold_subscripts": {"fold_subscripts": True},
     "match_word_forms": {"match_word_forms": True},
     "all_on": {"fold_subscripts": True, "match_word_forms": True},
