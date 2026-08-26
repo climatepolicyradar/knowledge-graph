@@ -1,3 +1,5 @@
+import json
+
 import pulumi
 import pulumi_aws as aws
 
@@ -26,6 +28,55 @@ knowledge_graph_ecr_repository = aws.ecr.Repository(
 )
 
 pulumi.export("ecr_repository_url", knowledge_graph_ecr_repository.repository_url)
+
+# Every build pushes the same manifest under three tags (the package version, the
+# commit sha and `latest`), and re-pushing those mutable tags orphans the previous
+# manifest. That is why the vast majority of images in these repositories are
+# untagged, so expiring them is where nearly all of the reclaimed storage comes
+# from.
+#
+# Deliberately no rule matches tags by pattern: because the version tag shares a
+# manifest with the commit sha, a rule aimed at sha tags would take the version
+# tag with it, and the Prefect deployments run from the version tag (see
+# deployments.py). Retaining by count is safe instead, as the version tag in use
+# is always on the most recently pushed manifest.
+aws.ecr.LifecyclePolicy(
+    f"{stack}-knowledge-graph-ecr-lifecycle-policy",
+    repository=knowledge_graph_ecr_repository.name,
+    policy=json.dumps(
+        {
+            "rules": [
+                {
+                    "rulePriority": 1,
+                    "description": "Expire untagged images after 7 days",
+                    "selection": {
+                        "tagStatus": "untagged",
+                        "countType": "sinceImagePushed",
+                        "countUnit": "days",
+                        "countNumber": 7,
+                    },
+                    "action": {"type": "expire"},
+                },
+                {
+                    "rulePriority": 2,
+                    "description": "Keep only the 50 most recently pushed tagged images",
+                    "selection": {
+                        "tagStatus": "tagged",
+                        # A lone wildcard matches every tag, so this covers the
+                        # version, sha, `latest` and `buildcache` tags alike. The
+                        # first three share the newest manifest and `buildcache` is
+                        # rewritten on every build, so all of them stay well inside
+                        # the retained 50.
+                        "tagPatternList": ["*"],
+                        "countType": "imageCountMoreThan",
+                        "countNumber": 50,
+                    },
+                    "action": {"type": "expire"},
+                },
+            ]
+        }
+    ),
+)
 
 # The feather files bucket only exists in production, where it is read by model
 # training and (cross-account) by the vibe checker in labs.
