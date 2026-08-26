@@ -3,15 +3,9 @@ import json
 import pulumi
 import pulumi_aws as aws
 
-# One stack per AWS environment, named after that environment. Each stack must be
-# run against the matching account's credentials, eg `AWS_PROFILE=labs pulumi up
-# -s labs`.
 stack = pulumi.get_stack()
 
 # ECR repository holding the images that the Prefect flow deployments run from.
-# It exists in every environment, and is named after this GitHub repo because
-# that is where the deployment tooling gets the repository name from (see
-# .github/workflows/prefect_deploy.yml).
 knowledge_graph_ecr_repository = aws.ecr.Repository(
     f"{stack}-knowledge-graph-ecr-repository",
     name="knowledge-graph",
@@ -29,17 +23,6 @@ knowledge_graph_ecr_repository = aws.ecr.Repository(
 
 pulumi.export("ecr_repository_url", knowledge_graph_ecr_repository.repository_url)
 
-# Every build pushes the same manifest under three tags (the package version, the
-# commit sha and `latest`), and re-pushing those mutable tags orphans the previous
-# manifest. That is why the vast majority of images in these repositories are
-# untagged, so expiring them is where nearly all of the reclaimed storage comes
-# from.
-#
-# Deliberately no rule matches tags by pattern: because the version tag shares a
-# manifest with the commit sha, a rule aimed at sha tags would take the version
-# tag with it, and the Prefect deployments run from the version tag (see
-# deployments.py). Retaining by count is safe instead, as the version tag in use
-# is always on the most recently pushed manifest.
 aws.ecr.LifecyclePolicy(
     f"{stack}-knowledge-graph-ecr-lifecycle-policy",
     repository=knowledge_graph_ecr_repository.name,
@@ -62,11 +45,6 @@ aws.ecr.LifecyclePolicy(
                     "description": "Keep only the 50 most recently pushed tagged images",
                     "selection": {
                         "tagStatus": "tagged",
-                        # A lone wildcard matches every tag, so this covers the
-                        # version, sha, `latest` and `buildcache` tags alike. The
-                        # first three share the newest manifest and `buildcache` is
-                        # rewritten on every build, so all of them stay well inside
-                        # the retained 50.
                         "tagPatternList": ["*"],
                         "countType": "imageCountMoreThan",
                         "countNumber": 50,
