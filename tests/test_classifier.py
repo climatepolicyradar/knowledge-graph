@@ -220,7 +220,6 @@ def test_whether_classifier_hashes_are_generated_correctly(
     classifier_class: Type[Classifier], concept: Concept
 ):
     classifier = classifier_class(concept)
-    assert classifier.id == ClassifierID.generate(classifier.name, concept.id)
     assert classifier == classifier_class(concept)
 
 
@@ -734,16 +733,31 @@ def test_whether_suffix_flexible_escapes_regex_metacharacters():
 
 
 @pytest.mark.xdist_group(name="classifier")
-def test_whether_keyword_matching_relaxations_are_off_by_default():
+def test_whether_keyword_matching_relaxations_are_on_by_default():
     concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
     classifier = KeywordClassifier(concept)
 
-    assert classifier.fold_subscripts is False
-    assert classifier.match_word_forms is False
+    assert classifier.fold_subscripts is True
+    assert classifier.match_word_forms is True
 
-    # The default configuration must keep the id it has always had, so that existing
-    # artifacts, model paths and classifier spec entries stay valid.
+    assert classifier.predict("greenhouse gases were measured")
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_the_strict_configuration_keeps_its_original_id():
+    """
+    Turning the relaxations off must reproduce the pre-relaxation id exactly.
+
+    This is what lets an already-trained classifier be rebuilt at the id its artifact,
+    model path and classifier spec entry were recorded under.
+    """
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
+    classifier = KeywordClassifier(
+        concept, fold_subscripts=False, match_word_forms=False
+    )
+
     assert classifier.id == ClassifierID.generate(classifier.name, concept.id)
+    assert classifier.id != KeywordClassifier(concept).id
 
 
 @given(concept=concept_strategy(), text_data=st.data())
@@ -800,10 +814,12 @@ def test_whether_folding_subscripts_matches_across_scripts(
 
 
 @pytest.mark.xdist_group(name="classifier")
-def test_whether_folding_subscripts_is_required_to_match_across_scripts():
+def test_whether_folding_subscripts_can_be_disabled():
     concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="CO2")
 
-    assert not KeywordClassifier(concept).predict("CO₂ emissions rose")
+    assert not KeywordClassifier(concept, fold_subscripts=False).predict(
+        "CO₂ emissions rose"
+    )
 
 
 @pytest.mark.xdist_group(name="classifier")
@@ -830,10 +846,12 @@ def test_whether_matching_word_forms_matches_plurals(
 
 
 @pytest.mark.xdist_group(name="classifier")
-def test_whether_matching_word_forms_is_required_to_match_plurals():
+def test_whether_matching_word_forms_can_be_disabled():
     concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
 
-    assert not KeywordClassifier(concept).predict("greenhouse gases were measured")
+    assert not KeywordClassifier(concept, match_word_forms=False).predict(
+        "greenhouse gases were measured"
+    )
 
 
 @pytest.mark.xdist_group(name="classifier")
@@ -855,9 +873,9 @@ def test_whether_match_options_change_the_classifier_id():
     concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
 
     variants = [
-        KeywordClassifier(concept),
-        KeywordClassifier(concept, fold_subscripts=True),
-        KeywordClassifier(concept, match_word_forms=True),
+        KeywordClassifier(concept, fold_subscripts=False, match_word_forms=False),
+        KeywordClassifier(concept, fold_subscripts=True, match_word_forms=False),
+        KeywordClassifier(concept, fold_subscripts=False, match_word_forms=True),
         KeywordClassifier(concept, fold_subscripts=True, match_word_forms=True),
     ]
 
@@ -865,10 +883,7 @@ def test_whether_match_options_change_the_classifier_id():
     assert len(set(ids)) == len(ids), f"ids collided: {ids}"
 
     # Passing the defaults explicitly is still the default configuration
-    explicit_default = KeywordClassifier(
-        concept, fold_subscripts=False, match_word_forms=False
-    )
-    assert explicit_default.id == variants[0].id
+    assert KeywordClassifier(concept).id == variants[-1].id
 
 
 @pytest.mark.xdist_group(name="classifier")
@@ -916,7 +931,7 @@ def test_whether_keyword_classifiers_pickled_before_match_options_still_work(tmp
         preferred_label="greenhouse gas",
         negative_labels=["natural gas"],
     )
-    original = KeywordClassifier(concept)
+    original = KeywordClassifier(concept, fold_subscripts=False, match_word_forms=False)
     expected_id = original.id
 
     # Simulate a classifier pickled before the match options existed
