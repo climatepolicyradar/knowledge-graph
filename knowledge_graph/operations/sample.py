@@ -111,6 +111,12 @@ def run_sampling(
             f"Excluded {before - len(dataset)} passages already in the labelling "
             f"dataset: {len(dataset)} candidates remain"
         )
+    else:
+        logger.warning(
+            "⚠️ No exclusion list provided - every candidate passage is eligible, "
+            "including any already in the labelling dataset. If you expected existing "
+            "passages to be excluded, stop and investigate."
+        )
 
     # Limit dataset size if needed
     if len(dataset) > max_size_to_sample_from:

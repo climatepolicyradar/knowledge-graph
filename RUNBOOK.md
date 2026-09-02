@@ -5,11 +5,11 @@ fails.
 
 ## Contents
 
-- [Sample for evaluation set](#sample-for-evaluation-set)
+- [Labelled datasets in Argilla](#labelled-datasets-in-argilla)
 - [Classifiers](#classifiers)
 - [Deploys and pipelines](#deploys-and-pipelines)
 
-## Sample for evaluation set
+## Labelled datasets in Argilla
 
 Human annotators label passages in Argilla. Datasets are named after the concept's Wikibase ID
 (e.g. `Q287`) in the `knowledge-graph` workspace. This is the data classifiers are trained and
@@ -50,7 +50,7 @@ print(sorted(d.name for d in ArgillaSession().get_all_datasets('knowledge-graph'
 Needs `ARGILLA_API_URL` / `ARGILLA_API_KEY`; both are in `.env`, which `uv run` will not load on its
 own - hence the `source`.
 
-### Add more labelling passages to a concept that already has an evaluation set
+### Add more labelling passages to a concept that already has a dataset
 
 One command - the flow samples fresh passages itself, excluding everything already in the dataset
 from the sampling pool, so every passage an annotator sees is new:
@@ -71,7 +71,7 @@ Expect, in order:
 | log line | meaning |
 | --- | --- |
 | `✅ Found N passages already in dataset '<WIKIBASE_ID>'` | current record count |
-| `Excluded N passages already in the labelling dataset` | the pool filter worked. **If this line is missing entirely, the exclusion list was empty - stop and investigate** |
+| `Excluded N passages already in the labelling dataset` | the pool filter worked. If exclusion is skipped, the flow logs a `⚠️ No exclusion list provided …` warning instead |
 | `📊 Sampled X positive passages, Y negative passages` | the split actually drawn |
 | `<n>/<n>> input passages remaining after deduplication` | more passages as intended |
 | `✅ Successfully added <n>> passages to dataset '<WIKIBASE_ID>'` | done |
@@ -130,121 +130,37 @@ bucket. If AWS calls fail with `TokenRetrievalError`, re-run `aws sso login --pr
 ## Classifiers
 
 Training uses the passages labelled in Argilla for the concept, so if a concept has too little
-training data, [Add more labelling passages to a concept that already has an evaluation set](#add-more-labelling-passages-to-a-concept-that-already-has-an-evaluation-set).
+training data, [Add more labelling passages to a concept that already has a dataset](#add-more-labelling-passages-to-a-concept-that-already-has-a-dataset).
 
 ### Train a classifier
 
-Uploads the classifier to S3 and links it from its W&B project.
+​```bash
+uv run train --wikibase-id <WIKIBASE_ID> --compute <local|remote-cpu|remote-gpu>
+​```
 
-```bash
-# non-BERT classifiers (keyword, LLM, embedding)
-uv run prefect deployment run 'train-on-cpu/kg-train-on-cpu-prod' \
-  -p wikibase_id=<WIKIBASE_ID>
+`--compute local` runs in-process; `remote-cpu` / `remote-gpu` dispatch the `train-on-cpu` /
+`train-on-gpu` Prefect deployments (the model won't be available locally afterwards). Use
+`remote-gpu` for BERT classifiers and `remote-cpu` / `local` for the rest — the `--compute` help
+says the same. Uploads to S3 and links from W&B when `--track-and-upload` (the default) is on.
 
-# BERT classifiers, which need a GPU
-uv run prefect deployment run 'train-on-gpu/kg-train-on-gpu-prod' \
-  -p wikibase_id=<WIKIBASE_ID>
-```
+Local training needs an active AWS session with S3 access (`AWS_PROFILE=…` with
+`USE_AWS_PROFILES=true`, or equivalent creds). `--aws-env prod` and `--track-and-upload` are
+the defaults; `--no-track-and-upload` skips W&B tracking and the S3 upload.
 
-Pick the deployment to match the classifier: `train-on-cpu` runs on ECS and is for classifiers that
-don't need a GPU, `train-on-gpu` spins up a Coiled GPU cluster. Both take `classifier_type`,
-`training_data_wandb_path`, `limit_training_samples`, `evaluate` and `track_and_upload`.
+### Training pipeline
 
-To train locally instead:
+![Training pipeline](training_pipeline.png)
 
-```bash
-uv run train --wikibase-id <WIKIBASE_ID>
-```
-
-Needs an active AWS session with S3 access - either an SSO profile (`AWS_PROFILE=…` with
-`USE_AWS_PROFILES=true`) or equivalent credentials. `--aws-env prod` and `--track-and-upload` are
-already the defaults; `--no-track-and-upload` skips W&B tracking and the S3 upload. `--compute
-remote-cpu` / `--compute remote-gpu` dispatches the deployments above rather than running
-in-process.
-
-### Train a BertBasedClassifier
-
-`train → vibe check → sample → predict → train → vibe check`. Each step hands off to the next by
-W&B artifact path - there is no wrapper doing it for you, so copy the paths out as you go.
-
-**1. Train an initial classifier** on a GPU. `--classifier-type` overrides whatever
-`ClassifierFactory` would pick:
-
-```bash
-uv run train \
-  --wikibase-id <WIKIBASE_ID> \
-  --classifier-type BertBasedClassifier \
-  --compute remote-gpu
-```
-
-Note the classifier's W&B artifact path from the output - step 4 needs it.
-
-**2. Vibe check the concept.** Runs inference over passages chosen by semantic similarity to the
-concept and pushes predictions to S3 for review in the vibe-checker webapp:
-
-```bash
-uv run prefect deployment run \
-  'vibe-check-inference/kg-vibe-check-inference-prod' \
-  -p wikibase_ids='["<WIKIBASE_ID>"]'
-```
-
-> [!WARNING]
-> **This does not evaluate the classifier you trained in step 1.** The flow builds a classifier from
-> `ClassifierFactory` defaults every time and never downloads a trained model from W&B, so for
-> almost every concept it vibe-checks a `KeywordClassifier` — whether or not you ran step 1. The
-> exceptions are the four concepts with bespoke factory entries (Q1651, Q1652, Q1653, Q1829). Treat
-> this step as a check on the *concept* — are these passages plausibly about the right thing? — not
-> on your model. To see your BERT model's predictions, use step 4.
-
-Omit `wikibase_ids` to process every concept in `vibe-checker/config.yml`.
-
-**3. Sample fresh passages** to find cases the classifier hasn't seen:
-
-```bash
-uv run prefect deployment run \
-  'sample/kg-sample-prod' \
-  -p wikibase_id=<WIKIBASE_ID> \
-  -p sample_size=<N>
-```
-
-Returns the passages artifact path, `climatepolicyradar/<WIKIBASE_ID>/labelled-passages:vN`.
-
-**4. Predict over them** using the classifier from step 1 and the passages from step 3:
-
-```bash
-uv run prefect deployment run \
-  'predict-adhoc/kg-predict-adhoc-prod' \
-  -p wikibase_id=<WIKIBASE_ID> \
-  -p classifier_wandb_path=<CLASSIFIER_WANDB_PATH> \
-  -p labelled_passages_wandb_path=<PASSAGES_WANDB_PATH>
-```
-
-Predicted passages are uploaded as a W&B artifact. `exclude_training_data` defaults to on, so
-passages the classifier already trained on are dropped, which is what makes the loop find new cases
-rather than re-scoring old ones. Use `stop_after_n_positives` and `prediction_threshold`.
-
-Same thing locally, without Prefect, if you'd rather iterate fast:
-
-```bash
-just predict <WIKIBASE_ID> <CLASSIFIER_WANDB_PATH> <PASSAGES_WANDB_PATH>
-```
-
-That recipe passes only those three arguments through, so it exposes neither `prediction_threshold`
-nor `stop_after_n_positives` - call `run_prediction` directly if you need them, or a `.jsonl` on
-disk via its `labelled_passages_path`. (`labelled_passages_path` is a deployment parameter too, but
-it resolves inside the container, so it's no use on a remote run.) For predicting over specific
-Snowflake documents rather than a sampled artifact, use the `predict-document-passages` deployment
-or `just predict-documents` instead.
-
-**5. Get the interesting cases labelled.** Review the predictions and push what needs human
-labelling into Argilla, then have annotators label it - see [Sample for evaluation set](#sample-for-evaluation-set) for adding passages to a concept's dataset.
-
-**6. Retrain** on the enlarged labelled set and vibe check again. Training pulls labelled passages
-from Argilla for the concept, so once labelling is done step 1 picks them up with no extra argument.
-To train from a specific artifact instead, pass `--training-data-wandb-path`, and
-`--limit-training-samples` to cap the count while keeping class balance as even as possible.
-
-Repeat until the predictions look acceptable, then [promote](#promote-demote-and-update-specs).
+1. **Train an `LLMClassifier`** for the concept, a prompt-based classifier
+   (`knowledge_graph/classifier/large_language_model.py`).
+2. **Iterate the prompt with `AutoLLMClassifier`** (`knowledge_graph/classifier/autollm.py`). Its
+   `fit()` runs `n_trials` optimisation trials against the concept's labelled passages, using an
+   optimiser model to rewrite the labelling guidelines and keeping the best trial by f-beta score.
+3. **Generate training data** — run the tuned LLM classifier over unlabelled passages (the predict
+   flow / `run_prediction`) to produce LLM-labelled passages, uploaded as a W&B artifact.
+4. **Train a BERT classifier on that data** — point a per-concept YAML config's
+   `training_data_wandb_path` (`BERTClassifierConfig`) at that artifact, then
+   `uv run train --from-yaml-config <config> --classifier-type BertBasedClassifier --compute remote-gpu`.
 
 ### Promote, demote and update specs
 
