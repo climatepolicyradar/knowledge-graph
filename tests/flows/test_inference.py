@@ -12,13 +12,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from botocore.client import ClientError
-from cpr_sdk.parser_models import (
-    BaseParserOutput,
-    BaseParserOutputV2,
-    BlockType,
-    PDFData,
-    PDFTextBlock,
-)
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext
 from prefect.states import Completed, Running
@@ -54,6 +47,13 @@ from flows.inference import (
     run_classifier_inference_on_document,
     store_inference_result,
     store_metadata,
+)
+from flows.models import (
+    BaseParserOutput,
+    BaseParserOutputV2,
+    BlockType,
+    PDFData,
+    PDFTextBlock,
 )
 from flows.utils import (
     DocumentImportId,
@@ -364,10 +364,6 @@ async def test_load_classifier__existing_classifier(
 
 _BASE_DOC_KWARGS = dict(
     document_id="test",
-    document_metadata={},
-    document_name="test",
-    document_slug="test",
-    document_description="test",
 )
 _STUB_PDF_DATA = PDFData(page_metadata=[], md5sum="", text_blocks=[])
 
@@ -456,7 +452,7 @@ def test_stringify():
 
 def test_document_passages__blocked_types(parser_output_pdf):
     # Add a page number block that should be filtered out
-    from cpr_sdk.parser_models import TextBlock
+    from flows.models import TextBlock
 
     parser_output_pdf.pdf_data.text_blocks.append(
         TextBlock(
@@ -686,16 +682,8 @@ async def test_run_classifier_inference_on_document(
         labelled_passages=[],
         document=BaseParserOutput(
             document_id=document_stem,
-            document_metadata={},
-            document_name="test document",
-            document_description="test description",
-            document_source_url=None,
-            document_cdn_object=None,
             document_content_type="text/html",
-            document_md5_sum=None,
-            document_slug=document_stem,
             languages=None,
-            translated=False,
             html_data=None,
             pdf_data=PDFData(
                 page_metadata=[],
@@ -713,7 +701,6 @@ async def test_run_classifier_inference_on_document(
                     )
                 ],
             ),
-            pipeline_metadata={},
         ),
         classifier_spec=classifier_spec,
     )

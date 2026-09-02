@@ -9,7 +9,11 @@ from hypothesis import strategies as st
 
 from knowledge_graph.classifier.bert_based import BertBasedClassifier
 from knowledge_graph.classifier.classifier import Classifier
-from knowledge_graph.classifier.keyword import KeywordClassifier
+from knowledge_graph.classifier.keyword import (
+    KeywordClassifier,
+    fold_subscript_characters,
+    make_suffix_flexible_regex,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.span import Span
@@ -216,7 +220,6 @@ def test_whether_classifier_hashes_are_generated_correctly(
     classifier_class: Type[Classifier], concept: Concept
 ):
     classifier = classifier_class(concept)
-    assert classifier.id == ClassifierID.generate(classifier.name, concept.id)
     assert classifier == classifier_class(concept)
 
 
@@ -651,6 +654,304 @@ def test_whether_classifier_handles_non_ascii_labels_across_separators(
     classifier = KeywordClassifier(concept)
     spans = classifier.predict(variant_text)
     assert spans
+
+
+_SUBSCRIPT_DIGITS = {str(digit): chr(0x2080 + digit) for digit in range(10)}
+
+
+def _to_subscripts(text: str) -> str:
+    """Rewrite every ASCII digit in the text as its subscript equivalent."""
+    return "".join(_SUBSCRIPT_DIGITS.get(character, character) for character in text)
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("CO₂", "CO2"),
+        ("CO₂ emissions", "CO2 emissions"),
+        ("N₂O and CH₄", "N2O and CH4"),
+        ("m³", "m3"),
+        ("x⁴", "x4"),
+        ("10⁻⁶", "10-6"),
+        ("no scripts here", "no scripts here"),
+        ("", ""),
+    ],
+)
+def test_fold_subscript_characters(text: str, expected: str):
+    assert fold_subscript_characters(text) == expected
+
+
+@given(text=st.text())
+@settings(max_examples=200, database=None)
+def test_whether_folding_preserves_length(text: str):
+    """
+    The whole span-offset argument rests on folding being length-preserving.
+
+    If any mapping were ever 1:many, offsets into the folded text would silently stop
+    lining up with the original text.
+    """
+    assert len(fold_subscript_characters(text)) == len(text)
+
+
+def test_whether_folding_is_idempotent():
+    once = fold_subscript_characters("CO₂ and 10⁻⁶")
+    assert fold_subscript_characters(once) == once
+
+
+# spellchecker:off
+@pytest.mark.parametrize(
+    "word,matches,does_not_match",
+    [
+        ("gas", ["gas", "gases"], ["ga", "gasses"]),
+        ("policy", ["policy", "policies"], ["polic", "policys"]),
+        ("target", ["target", "targets"], ["targe"]),
+        ("box", ["box", "boxes"], ["boxs"]),
+        ("branch", ["branch", "branches"], ["branchs"]),
+        ("day", ["day", "days"], ["daies"]),  # vowel + y, so not the -ies rule
+        ("NDC", ["NDC", "NDCs", "NDCS"], ["ND"]),
+        ("co2", ["co2"], ["co2s"]),  # trailing digit, left alone
+        ("EU", ["EU"], ["EUs"]),  # under the length floor
+        # Already-plural labels gain nothing: the rule only widens singular to plural
+        ("emissions", ["emissions"], ["emission"]),
+    ],
+)
+# spellchecker:on
+def test_suffix_flexible(word: str, matches: list[str], does_not_match: list[str]):
+    pattern = re.compile(rf"(?<!\w)(?:{make_suffix_flexible_regex(word)})(?!\w)")
+
+    for candidate in matches:
+        assert pattern.search(candidate), f"{word!r} should match {candidate!r}"
+
+    for candidate in does_not_match:
+        assert not pattern.search(candidate), f"{word!r} should not match {candidate!r}"
+
+
+def test_whether_suffix_flexible_escapes_regex_metacharacters():
+    pattern = re.compile(rf"^(?:{make_suffix_flexible_regex('c++')})$")
+    assert pattern.search("c++")
+    assert not pattern.search("cxx")
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_keyword_matching_relaxations_are_on_by_default():
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
+    classifier = KeywordClassifier(concept)
+
+    assert classifier.fold_subscripts is True
+    assert classifier.match_word_forms is True
+
+    assert classifier.predict("greenhouse gases were measured")
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_the_strict_configuration_keeps_its_original_id():
+    """
+    Turning the relaxations off must reproduce the pre-relaxation id exactly.
+
+    This is what lets an already-trained classifier be rebuilt at the id its artifact,
+    model path and classifier spec entry were recorded under.
+    """
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
+    classifier = KeywordClassifier(
+        concept, fold_subscripts=False, match_word_forms=False
+    )
+
+    assert classifier.id == ClassifierID.generate(classifier.name, concept.id)
+    assert classifier.id != KeywordClassifier(concept).id
+
+
+@given(concept=concept_strategy(), text_data=st.data())
+@settings(max_examples=100, database=None)
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_relaxed_classifier_spans_index_into_the_original_text(
+    concept: Concept, text_data: st.DataObject
+):
+    """
+    Spans must always be offsets into the text that was passed in.
+
+    This is the guard for subscript folding being length-preserving: the classifier
+    searches folded text, so if the fold ever changed a string's length the offsets
+    would silently stop lining up with the original.
+    """
+    text = _to_subscripts(
+        text_data.draw(
+            positive_text_strategy(
+                labels=concept.all_labels, negative_labels=concept.negative_labels
+            )
+        )
+    )
+    classifier = KeywordClassifier(concept, fold_subscripts=True, match_word_forms=True)
+
+    for span in classifier.predict(text):
+        assert 0 <= span.start_index < span.end_index <= len(text)
+        assert span.labelled_text == text[span.start_index : span.end_index]
+        assert span.concept_id == concept.wikibase_id
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize(
+    "label,text,expected_match",
+    [
+        ("CO2", "CO₂ emissions rose", "CO₂"),
+        ("CO₂", "CO2 emissions rose", "CO2"),
+        ("CO2", "CO2 emissions rose", "CO2"),
+        ("CO₂", "CO₂ emissions rose", "CO₂"),
+        ("co2", "the CO₂ emissions rose", "CO₂"),
+        ("CH4", "(CH₄) is a potent gas", "CH₄"),
+    ],
+)
+def test_whether_folding_subscripts_matches_across_scripts(
+    label: str, text: str, expected_match: str
+):
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label=label)
+    classifier = KeywordClassifier(concept, fold_subscripts=True)
+
+    spans = classifier.predict(text)
+
+    assert len(spans) == 1
+    # The span must quote the original text, not the folded version of it
+    assert spans[0].labelled_text == expected_match
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_folding_subscripts_can_be_disabled():
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="CO2")
+
+    assert not KeywordClassifier(concept, fold_subscripts=False).predict(
+        "CO₂ emissions rose"
+    )
+
+
+@pytest.mark.xdist_group(name="classifier")
+@pytest.mark.parametrize(
+    "label,text,should_match",
+    [
+        ("gas", "the gases were measured", True),
+        ("policy", "adaptation policies were adopted", True),
+        ("greenhouse gas", "greenhouse gases were measured", True),
+        ("greenhouse gas", "greenhouse-gases were measured", True),
+        ("target", "the targets were missed", True),
+        ("gas", "the gas was measured", True),
+        ("gas", "the gasify plant", False),
+        ("policy", "the polices were adopted", False),
+    ],
+)
+def test_whether_matching_word_forms_matches_plurals(
+    label: str, text: str, should_match: bool
+):
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label=label)
+    classifier = KeywordClassifier(concept, match_word_forms=True)
+
+    assert bool(classifier.predict(text)) == should_match
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_matching_word_forms_can_be_disabled():
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
+
+    assert not KeywordClassifier(concept, match_word_forms=False).predict(
+        "greenhouse gases were measured"
+    )
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_word_forms_apply_to_negative_labels_too():
+    """A relaxed positive match must not slip past a still-strict negative veto."""
+    concept = Concept(
+        wikibase_id=WikibaseID("Q123"),
+        preferred_label="gas",
+        negative_labels=["greenhouse gas"],
+    )
+    classifier = KeywordClassifier(concept, match_word_forms=True)
+
+    assert classifier.predict("the gases were measured")
+    assert not classifier.predict("greenhouse gases were measured")
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_match_options_change_the_classifier_id():
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
+
+    variants = [
+        KeywordClassifier(concept, fold_subscripts=False, match_word_forms=False),
+        KeywordClassifier(concept, fold_subscripts=True, match_word_forms=False),
+        KeywordClassifier(concept, fold_subscripts=False, match_word_forms=True),
+        KeywordClassifier(concept, fold_subscripts=True, match_word_forms=True),
+    ]
+
+    ids = [classifier.id for classifier in variants]
+    assert len(set(ids)) == len(ids), f"ids collided: {ids}"
+
+    # Passing the defaults explicitly is still the default configuration
+    assert KeywordClassifier(concept).id == variants[-1].id
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_match_options_ids_are_deterministic():
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
+    kwargs = {"fold_subscripts": True, "match_word_forms": True}
+
+    assert (
+        KeywordClassifier(concept, **kwargs).id
+        == KeywordClassifier(concept, **kwargs).id
+    )
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_a_relaxed_keyword_classifier_survives_a_pickle_round_trip(tmp_path):
+    """Classifiers are saved with plain pickle, including their compiled patterns."""
+    concept = Concept(wikibase_id=WikibaseID("Q123"), preferred_label="greenhouse gas")
+    original = KeywordClassifier(concept, fold_subscripts=True, match_word_forms=True)
+    text = "greenhouse gases and CO₂ were measured"
+
+    path = tmp_path / "keyword_classifier.pickle"
+    original.save(path)
+    loaded = Classifier.load(path)
+
+    assert isinstance(loaded, KeywordClassifier)
+    assert loaded.fold_subscripts is True
+    assert loaded.match_word_forms is True
+    assert loaded.id == original.id
+    assert [(span.start_index, span.end_index) for span in loaded.predict(text)] == [
+        (span.start_index, span.end_index) for span in original.predict(text)
+    ]
+
+
+@pytest.mark.xdist_group(name="classifier")
+def test_whether_keyword_classifiers_pickled_before_match_options_still_work(tmp_path):
+    """
+    Old pickles predate the match options and must still load, predict and keep their id.
+
+    Every KeywordClassifier already saved to W&B and S3 was pickled without these
+    attributes, so falling back to the class-level defaults is what stops those
+    artifacts breaking on their first predict after this change.
+    """
+    concept = Concept(
+        wikibase_id=WikibaseID("Q123"),
+        preferred_label="greenhouse gas",
+        negative_labels=["natural gas"],
+    )
+    original = KeywordClassifier(concept, fold_subscripts=False, match_word_forms=False)
+    expected_id = original.id
+
+    # Simulate a classifier pickled before the match options existed
+    for attribute in ["fold_subscripts", "match_word_forms"]:
+        del original.__dict__[attribute]
+
+    path = tmp_path / "old_keyword_classifier.pickle"
+    original.save(path)
+    loaded = Classifier.load(path)
+
+    assert isinstance(loaded, KeywordClassifier)
+    assert "fold_subscripts" not in loaded.__dict__
+    assert loaded.fold_subscripts is False
+    assert loaded.match_word_forms is False
+    assert loaded.id == expected_id
+    assert [
+        span.labelled_text for span in loaded.predict("greenhouse gas emissions")
+    ] == ["greenhouse gas"]
+    # The negative labels must still veto
+    assert not loaded.predict("natural gas prices rose")
 
 
 def test_classifier_load_reinitializes_bert_based_classifier(tmp_path):

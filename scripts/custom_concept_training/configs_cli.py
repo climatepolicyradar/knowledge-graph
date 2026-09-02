@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import Any
+from types import UnionType
+from typing import Any, Union, get_args, get_origin
 
 import typer
 import yaml
@@ -83,6 +84,12 @@ def to_example_dict(model_class: type[BaseModel]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for field_name, field_info in model_class.model_fields.items():
         annotation = field_info.annotation
+        # Unwrap `X | None` so optional sections are templated out in full rather
+        # than left as a bare null
+        if get_origin(annotation) in (UnionType, Union):
+            annotation = next(
+                (arg for arg in get_args(annotation) if arg is not type(None)), None
+            )
         if isinstance(annotation, type) and issubclass(annotation, BaseModel):
             result[field_name] = to_example_dict(annotation)
         elif field_info.is_required():

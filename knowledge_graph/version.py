@@ -86,9 +86,19 @@ def get_latest_model_version(
     aws_env: AwsEnv,
 ) -> Version:
     """Get the latest wandb model version for a given AWS environment from a list of artifacts."""
-    current_env_versions = [
-        Version(artifact.version)
-        for artifact in artifacts
-        if artifact.metadata.get("aws_env") == aws_env.name
-    ]
+    current_env_versions = []
+    all_envs = set()
+    for artifact in artifacts:
+        artifact_env = artifact.metadata.get("aws_env")
+        all_envs.add(artifact_env)
+        if artifact_env == aws_env.name:
+            current_env_versions.append(Version(artifact.version))
+
+    if not current_env_versions:
+        raise ValueError(
+            f"No model found in {aws_env.name}. Only found versions for: {all_envs}. "
+            "Was the model trained in the right environment? Consider moving it with: "
+            "`scripts/move_model_to_prod.py` if needed."
+        )
+
     return max(current_env_versions)

@@ -1,10 +1,7 @@
 import asyncio
 import json
 import os
-import subprocess
-import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
-from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Any, AsyncGenerator, Generator
@@ -15,16 +12,6 @@ import boto3
 import pytest
 import pytest_asyncio
 from botocore.config import Config as BotoCoreConfig
-from cpr_sdk.models.search import Passage as VespaPassage
-from cpr_sdk.parser_models import (
-    BaseParserOutput,
-    BlockType,
-    HTMLData,
-    HTMLTextBlock,
-    PDFData,
-    PDFTextBlock,
-)
-from cpr_sdk.search_adaptors import VespaSearchAdapter
 from moto import mock_aws
 from prefect import Flow, State
 from prefect.client.schemas import StateType
@@ -32,13 +19,18 @@ from prefect.logging import disable_run_logger
 from prefect.testing.utilities import prefect_test_harness
 from prefect_aws.s3 import S3Bucket
 from pydantic import SecretStr
-from requests.exceptions import ConnectionError
 from types_aiobotocore_s3.client import S3Client
-from vespa.application import Vespa
-from vespa.io import VespaQueryResponse
 
 from flows.config import Config
 from flows.inference import S3_BLOCK_RESULTS_CACHE
+from flows.models import (
+    BaseParserOutput,
+    BlockType,
+    HTMLData,
+    HTMLTextBlock,
+    PDFData,
+    PDFTextBlock,
+)
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
 from knowledge_graph.cloud import AwsEnv
@@ -131,123 +123,6 @@ def mock_ssm_client(mock_aws_creds) -> Generator:
     """Mocked boto3 ssm client."""
     with mock_aws():
         yield boto3.client("ssm", region_name="eu-west-1")
-
-
-@pytest.fixture
-def mock_vespa_credentials() -> dict[str, str]:
-    """Mocked vespa credentials."""
-    return {
-        "VESPA_INSTANCE_URL": "http://localhost:8080",
-        "VESPA_PUBLIC_CERT_FULL_ACCESS": "UHVibGljIGNlcnQgY29udGVudAo=",  # "Public cert content"
-        "VESPA_PRIVATE_KEY_FULL_ACCESS": "UHJpdmF0ZSBrZXkgY29udGVudAo=",  # "Private key content"
-    }
-
-
-@pytest.fixture
-def create_vespa_params(mock_ssm_client, mock_vespa_credentials) -> None:
-    """Creates the vespa parameters in the mock ssm client."""
-    mock_ssm_client.put_parameter(
-        Name="VESPA_INSTANCE_URL",
-        Description="A test parameter for the vespa instance.",
-        Value=mock_vespa_credentials["VESPA_INSTANCE_URL"],
-        Type="SecureString",
-    )
-    mock_ssm_client.put_parameter(
-        Name="VESPA_PUBLIC_CERT_FULL_ACCESS",
-        Description="A test parameter for a vespa public cert",
-        Value=mock_vespa_credentials["VESPA_PUBLIC_CERT_FULL_ACCESS"],
-        Type="SecureString",
-    )
-    mock_ssm_client.put_parameter(
-        Name="VESPA_PRIVATE_KEY_FULL_ACCESS",
-        Description="A test parameter for a vespa private key",
-        Value=mock_vespa_credentials["VESPA_PRIVATE_KEY_FULL_ACCESS"],
-        Type="SecureString",
-    )
-
-
-@pytest.fixture(scope="function")
-def vespa_app(
-    mock_vespa_credentials,
-):
-    # Connection
-    print("\nSetting up Vespa connection...")
-    app = Vespa(mock_vespa_credentials["VESPA_INSTANCE_URL"])
-
-    subprocess.run(
-        ["just", "vespa_feed_data"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=600,  # Seconds
-    )
-
-    yield app  # This is where the test function will be executed
-
-    # Teardown
-    print("\nTearing down Vespa connection...")
-    subprocess.run(
-        ["just", "vespa_delete_data"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,  # Seconds
-    )
-
-
-@pytest.fixture(scope="function")
-def vespa_large_app(
-    mock_vespa_credentials,
-):
-    # Connection
-    print("\nSetting up Vespa connection...")
-    app = Vespa(mock_vespa_credentials["VESPA_INSTANCE_URL"])
-
-    subprocess.run(
-        ["just", "vespa_feed_large_data"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=600,  # Seconds
-    )
-
-    yield app  # This is where the test function will be executed
-
-    # Teardown
-    print("\nTearing down Vespa connection...")
-    subprocess.run(
-        ["just", "vespa_delete_data"],
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,  # Seconds
-    )
-
-
-@pytest.fixture
-def local_vespa_search_adapter(
-    create_vespa_params, mock_vespa_credentials, tmp_path
-) -> Generator[VespaSearchAdapter, None, None]:
-    """VespaSearchAdapter instantiated from mocked SSM params."""
-    instance_url = "http://localhost:8080"
-    adapter = VespaSearchAdapter(
-        instance_url=instance_url,
-    )
-
-    # We can't currently optionally use certs with our search adapter.
-    #
-    # Instead, overwrite it here.
-    adapter.client = Vespa(url=instance_url, cert=None)
-
-    try:
-        adapter.client.get_application_status()
-    except ConnectionError:
-        pytest.fail(
-            "Can't connect to a local vespa instance. See guidance here: "
-            "`tests/local_vespa/README.md`"
-        )
-
-    yield adapter
 
 
 async def clean_up_bucket(mock_s3_async_client, mock_async_bucket):
@@ -422,10 +297,6 @@ def local_classifier_id(mock_classifiers_dir):
 def parser_output() -> Generator[BaseParserOutput, None, None]:
     yield BaseParserOutput(
         document_id="test id",
-        document_metadata={},
-        document_name="test name",
-        document_slug="test slug",
-        document_description="test description",
     )
 
 
@@ -631,42 +502,6 @@ async def mock_bucket_labelled_passages_large(
 
 
 @pytest.fixture
-def document_passages_test_data_file_path() -> str:
-    """Returns the path to the document passages test data file."""
-    return "tests/local_vespa/test_documents/document_passage.json"
-
-
-@pytest.fixture
-def example_vespa_concepts() -> list[VespaPassage.Concept]:
-    """Vespa concepts for testing."""
-    return [
-        VespaPassage.Concept(
-            id="1457",
-            name="wood industry",
-            parent_concepts=None,
-            parent_concept_ids_flat=None,
-            model='KeywordClassifier("wood industry")',
-            end=100,
-            start=0,
-            timestamp=datetime.now(),
-        ),
-        VespaPassage.Concept(
-            id="1273",
-            name="manufacturing sector",
-            parent_concepts=[
-                {"name": "manufacturing", "id": "Q200"},
-                {"name": "processing industry", "id": "Q300"},
-            ],
-            parent_concept_ids_flat="Q200,Q300",
-            model="KeywordClassifier('manufacturing sector')",
-            end=100,
-            start=0,
-            timestamp=datetime.now(),
-        ),
-    ]
-
-
-@pytest.fixture
 def example_labelled_passages(labelled_passage_fixture_files) -> list[LabelledPassage]:
     """Returns a list of example labelled passages."""
     labelled_passages = []
@@ -786,121 +621,6 @@ def mock_flow_run():
     mock_flow_run.state.type = StateType.COMPLETED
 
     yield mock_flow_run
-
-
-def mock_grouped_text_block_vespa_query_response_json() -> dict:
-    """Mock Vespa query response JSON"""
-
-    with open(
-        "tests/flows/fixtures/query_responses/grouped_text_block_by_family_document_ref.json"
-    ) as f:
-        data = json.load(f)
-
-    return data
-
-
-@pytest.fixture
-def mock_vespa_query_response(mock_vespa_credentials: dict) -> VespaQueryResponse:
-    """Mock Vespa query response"""
-
-    return VespaQueryResponse(
-        json=mock_grouped_text_block_vespa_query_response_json(),
-        status_code=200,
-        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
-        request_body={},
-    )
-
-
-@pytest.fixture
-def mock_vespa_query_response_with_malformed_group(
-    mock_vespa_credentials: dict,
-) -> VespaQueryResponse:
-    """Mock Vespa query response with a malformed group"""
-
-    group_with_malformed_hit = {
-        "id": "group:string:986",
-        "relevance": 0.0017429193899782135,
-        "value": "986",
-        "children": [
-            {
-                "id": "hitlist:hits",
-                "relevance": 1.0,
-                "label": "hits",
-                "children": [
-                    {
-                        "id": "id:doc_search:document_passage::CCLW.executive.10014.4470.986",
-                        "relevance": 0.0017429193899782135,
-                        "source": "family-document-passage",
-                        "fields_malformed": {},
-                    }
-                ],
-            }
-        ],
-    }
-
-    response_with_malformed_group_json = (
-        mock_grouped_text_block_vespa_query_response_json()
-    )
-
-    response_with_malformed_group_json["root"]["children"][0]["children"][0][
-        "children"
-    ] += [group_with_malformed_hit]
-
-    vespa_query_response_with_malformed_group = VespaQueryResponse(
-        json=response_with_malformed_group_json,
-        status_code=200,
-        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
-        request_body={},
-    )
-
-    return vespa_query_response_with_malformed_group
-
-
-@pytest.fixture
-def mock_vespa_query_response_no_continuation_token(
-    mock_vespa_credentials: dict,
-) -> VespaQueryResponse:
-    """Mock Vespa query response with no hits"""
-
-    json_data = mock_grouped_text_block_vespa_query_response_json()
-    json_data["root"]["children"][0]["children"][0]["continuation"] = {
-        "prev": "BGAAABEBCBC"
-    }
-
-    return VespaQueryResponse(
-        json=json_data,
-        status_code=200,
-        url=mock_vespa_credentials["VESPA_INSTANCE_URL"],
-        request_body={},
-    )
-
-
-@pytest.fixture
-def vespa_lower_max_hit_limit_query_profile_name() -> str:
-    """The name of the query profile to use for the lower max hits limit."""
-    return "lower_max_hits"
-
-
-@pytest.fixture
-def vespa_lower_max_hit_limit(vespa_lower_max_hit_limit_query_profile_name: str) -> int:
-    """Mock Vespa max hit limit"""
-
-    tree = ET.parse(
-        "tests/local_vespa/additional_query_profiles/"
-        f"{vespa_lower_max_hit_limit_query_profile_name}.xml"
-    )
-    root = tree.getroot()
-
-    lower_max_hits_limit = None
-    for field in root.findall("field"):
-        name = field.get("name")
-        if name == "maxHits":
-            lower_max_hits_limit = field.text
-            break
-
-    if not lower_max_hits_limit:
-        raise ValueError("Lower max hits limit not found in XML file.")
-    return int(lower_max_hits_limit)
 
 
 @asynccontextmanager

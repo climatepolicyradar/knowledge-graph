@@ -87,3 +87,24 @@ def test_get_latest_model_version():
 
     latest_version_prod = get_latest_model_version(artifacts, AwsEnv.production)
     assert str(latest_version_prod) == "v8"
+
+
+def test_get_latest_model_version__raises():
+    class MockArtifact:
+        def __init__(self, version, aws_env):
+            self.version = version
+            self.metadata = {"aws_env": aws_env.name}
+
+    artifacts = [
+        MockArtifact("v1", AwsEnv("labs")),
+        MockArtifact("v2", AwsEnv("labs")),
+        MockArtifact("v1", AwsEnv("staging")),
+        MockArtifact("v2", AwsEnv("staging")),
+    ]
+
+    with pytest.raises(ValueError) as value_error:
+        get_latest_model_version(artifacts, AwsEnv.production)
+        assert value_error == (
+            "ValueError: No model found in production. Only found versions for: "
+            "{'labs', 'staging'}"
+        )

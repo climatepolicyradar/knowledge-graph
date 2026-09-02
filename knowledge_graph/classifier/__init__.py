@@ -101,7 +101,12 @@ def create_classifier(
     """
 
     try:
-        classifier_class = __getattr__(classifier_type)
+        # Classifiers which are imported at the top of this module never reach the
+        # lazy __getattr__ hook, so look in the module globals first. Without this,
+        # `--classifier-type KeywordClassifier` fails.
+        classifier_class = globals().get(classifier_type) or __getattr__(
+            classifier_type
+        )
         return classifier_class(concept=concept, **classifier_kwargs)
 
     except (ImportError, AttributeError) as e:

@@ -11,7 +11,6 @@ from typing import Any, Final, Literal, NamedTuple, Optional, TypeAlias, cast, o
 import wandb
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
-from cpr_sdk.parser_models import BaseParserOutput, BaseParserOutputV2, BlockType
 from mypy_boto3_s3.type_defs import (
     PutObjectOutputTypeDef,
 )
@@ -40,6 +39,7 @@ from flows.classifier_specs.spec_interface import (
     should_skip_doc,
 )
 from flows.config import Config, validate_s3_prefix
+from flows.models import BaseParserOutput, BaseParserOutputV2, BlockType
 from flows.utils import (
     DocumentImportId,
     DocumentStem,

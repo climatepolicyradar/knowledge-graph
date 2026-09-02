@@ -29,7 +29,6 @@ from flows.create_evaluation_dataset_in_argilla import (
 from flows.data_backup import data_backup
 from flows.deploy_static_sites import deploy_static_sites
 from flows.extend_existing_dataset import extend_existing_dataset
-from flows.index import index, index_batch_of_documents
 from flows.inference import (
     inference,
     inference_batch_of_documents_cpu,
@@ -329,20 +328,6 @@ async def main() -> None:
     await create_deployment(
         flow=aggregate,
         description="Aggregate inference results, through coordinating batches of documents",
-        extra_tags=["type:entry"],
-    )
-
-    # Index
-
-    await create_deployment(
-        flow=index_batch_of_documents,
-        description="Run passage indexing for a batch of documents from S3 to Vespa",
-        extra_tags=["type:sub"],
-    )
-
-    await create_deployment(
-        flow=index,
-        description="Run passage indexing for documents from S3 to Vespa",
         extra_tags=["type:entry"],
     )
 
