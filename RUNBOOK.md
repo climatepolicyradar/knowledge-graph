@@ -52,7 +52,7 @@ own - hence the `source`.
 
 ### Add more labelling passages to a concept that already has a dataset
 
-One command - the flow samples fresh passages itself, excluding everything already in the dataset
+The flow samples fresh passages itself, excluding everything already in the dataset
 from the sampling pool, so every passage an annotator sees is new:
 
 ```bash
@@ -65,19 +65,6 @@ uv run prefect deployment run \
 `n_new_passages` defaults to `50` and is the number of new passages added. There is also a
 `sample_size`, which defaults to `n_new_passages` - you only need it if you want to draw from a
 larger pool than you intend to add.
-
-Expect, in order:
-
-| log line | meaning |
-| --- | --- |
-| `✅ Found N passages already in dataset '<WIKIBASE_ID>'` | current record count |
-| `Excluded N passages already in the labelling dataset` | the pool filter worked. If exclusion is skipped, the flow logs a `⚠️ No exclusion list provided …` warning instead |
-| `📊 Sampled X positive passages, Y negative passages` | the split actually drawn |
-| `<n>/<n>> input passages remaining after deduplication` | more passages as intended |
-| `✅ Successfully added <n>> passages to dataset '<WIKIBASE_ID>'` | done |
-
-The middle two come from the `sample` flow's own run logs, not the parent
-`extend-existing-dataset` run - you'll need to open the `sample` flow to see them.
 
 #### When fewer new passages are available than requested
 
