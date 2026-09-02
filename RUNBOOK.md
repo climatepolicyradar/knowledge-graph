@@ -136,18 +136,10 @@ the defaults; `--no-track-and-upload` skips W&B tracking and the S3 upload.
 
 ### Training pipeline
 
-![Training pipeline](training_pipeline.png)
+The [Training pipeline diagram](https://whimsical.com/climate-policy-radar/kg-training-pipeline-83TPn2YZocfbEYdEUnViph)
+illustrates the process and how to construct the commands to run.
 
-1. **Train an `LLMClassifier`** for the concept, a prompt-based classifier
-   (`knowledge_graph/classifier/large_language_model.py`).
-2. **Iterate the prompt with `AutoLLMClassifier`** (`knowledge_graph/classifier/autollm.py`). Its
-   `fit()` runs `n_trials` optimisation trials against the concept's labelled passages, using an
-   optimiser model to rewrite the labelling guidelines and keeping the best trial by f-beta score.
-3. **Generate training data** — run the tuned LLM classifier over unlabelled passages (the predict
-   flow / `run_prediction`) to produce LLM-labelled passages, uploaded as a W&B artifact.
-4. **Train a BERT classifier on that data** — point a per-concept YAML config's
-   `training_data_wandb_path` (`BERTClassifierConfig`) at that artifact, then
-   `uv run train --from-yaml-config <config> --classifier-type BertBasedClassifier --compute remote-gpu`.
+For a programmes perspective of the process, please refer to [this](https://app.notion.com/p/climatepolicyradar/Concept-development-LLM-classifiers-31f9109609a480c89a81ed4a7169ccb7) guide.
 
 ### Promote, demote and update specs
 
