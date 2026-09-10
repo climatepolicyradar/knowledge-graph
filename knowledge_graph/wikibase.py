@@ -42,6 +42,22 @@ RETRY_MAX_WAIT = 60.0
 # Aliases are bucketed by language tag, eg "licence" sits under "en-gb" not "en".
 ALIAS_LANGUAGES: Final[tuple[str, ...]] = ("en", "en-gb", "en-us", "mul")
 
+# SPARQL reports statement ranks as wikibase ontology URIs, rather than the
+# lowercase strings used by the Wikibase API (and held by StatementRank).
+SPARQL_RANK_TO_STATEMENT_RANK: Final[dict[str, StatementRank]] = {
+    "PreferredRank": StatementRank.PREFERRED,
+    "NormalRank": StatementRank.NORMAL,
+    "DeprecatedRank": StatementRank.DEPRECATED,
+}
+
+
+class ConceptWithClassifiers(NamedTuple):
+    """A concept's label and classifier statements, without the rest of the concept."""
+
+    wikibase_id: WikibaseID
+    preferred_label: str
+    classifier_ids: list[tuple[StatementRank, ClassifierID]]
+
 
 class WikibaseAuth(BaseModel):
     """For creating a WikibaseSession."""
@@ -109,6 +125,10 @@ class WikibaseSession:
         self.sparql_url = f"{self.base_url}/query/sparql"
         self.sparql_entity_prefix = f"{self.base_url}/entity/"
         self.sparql_property_prefix = f"{self.base_url}/prop/direct/"
+        # Only exposes best-rank statements
+        self.sparql_prop_prefix = f"{self.base_url}/prop/"
+        # Returns each statement's rank
+        self.sparql_statement_prefix = f"{self.base_url}/prop/statement/"
 
         if not self.username or not self.password or not self.base_url:
             raise ValueError(
@@ -1104,6 +1124,138 @@ class WikibaseSession:
     async def get_concept_ids_with_property(self, property_id: str) -> list[WikibaseID]:
         """Get the IDs of all concepts that have at least one statement for a property."""
         return await self.get_concept_ids_with_property_async(property_id)
+
+    async def _query_sparql_bindings(self, sparql_query: str) -> list[dict]:
+        """Run a SPARQL query and return its result bindings."""
+        client = await self._get_client()
+
+        response = await client.get(
+            url=self.sparql_url,
+            params={
+                "query": sparql_query,
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            logger.error("❌ Invalid JSON response for SPARQL query: %s", response.text)
+            raise
+
+        return data.get("results", {}).get("bindings", [])
+
+    async def get_concepts_with_classifiers_async(
+        self,
+    ) -> list[ConceptWithClassifiers]:
+        """
+        Get every concept which has at least one classifier ID statement.
+
+        Each concept is returned with its English label and its (rank, classifier ID)
+        pairs. Unlike get_concepts_async, this doesn't hydrate full Concept objects, so
+        the whole set costs a single request rather than one request per concept.
+        """
+        property_id = self.classifier_id_property_id
+        if not re.fullmatch(r"P\d+", property_id):
+            raise ValueError(f"Invalid property ID: {property_id}")
+
+        bindings = await self._query_sparql_bindings(f"""
+        PREFIX p: <{self.sparql_prop_prefix}>
+        PREFIX ps: <{self.sparql_statement_prefix}>
+        PREFIX wikibase: <http://wikiba.se/ontology#>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+        SELECT ?entity ?label ?classifier_id ?rank WHERE {{
+          ?entity p:{property_id} ?statement .
+          ?statement ps:{property_id} ?classifier_id ;
+                     wikibase:rank ?rank .
+          OPTIONAL {{ ?entity rdfs:label ?label . FILTER(lang(?label) = "en") }}
+        }}
+        """)
+
+        labels: dict[WikibaseID, str] = {}
+        classifier_ids: dict[WikibaseID, list[tuple[StatementRank, ClassifierID]]] = {}
+
+        for binding in bindings:
+            concept_uri = binding.get("entity", {}).get("value", "")
+            wikibase_id = self._resolve_redirect(WikibaseID(concept_uri.split("/")[-1]))
+
+            # A concept without an English label is invalid elsewhere in this class,
+            # so it's skipped here too rather than returned half-formed.
+            label = binding.get("label", {}).get("value")
+            if not label:
+                logger.warning("Skipping %s: no English label", wikibase_id)
+                continue
+
+            rank_str = binding.get("rank", {}).get("value", "").split("#")[-1]
+            statement_rank = SPARQL_RANK_TO_STATEMENT_RANK.get(rank_str)
+            if statement_rank is None:
+                logger.error(
+                    "Invalid statement rank for wikibase item %s: '%s'",
+                    wikibase_id,
+                    rank_str,
+                )
+                continue
+
+            classifier_id_str = binding.get("classifier_id", {}).get("value", "")
+            try:
+                classifier_id = ClassifierID(classifier_id_str)
+            except ValueError as e:
+                logger.error(
+                    "Invalid classifier ID format for wikibase item %s: '%s' - %s",
+                    wikibase_id,
+                    classifier_id_str,
+                    str(e),
+                )
+                continue
+
+            labels[wikibase_id] = label
+            # Redirects can collapse two entities onto one ID, so merge their
+            # statements rather than letting the last one win.
+            classifier_ids.setdefault(wikibase_id, []).append(
+                (statement_rank, classifier_id)
+            )
+
+        return [
+            ConceptWithClassifiers(
+                wikibase_id=wikibase_id,
+                preferred_label=labels[wikibase_id],
+                classifier_ids=classifier_ids[wikibase_id],
+            )
+            for wikibase_id in sorted(classifier_ids)
+        ]
+
+    async def get_concept_labels_with_property_async(
+        self, property_id: str
+    ) -> list[tuple[WikibaseID, str]]:
+        """
+        Get the IDs and English labels of all concepts with a statement for a property.
+
+        Like get_concept_ids_with_property_async, but also returns each concept's label,
+        so callers which only need a summary don't have to hydrate full Concepts.
+        """
+        if not re.fullmatch(r"P\d+", property_id):
+            raise ValueError(f"Invalid property ID: {property_id}")
+
+        bindings = await self._query_sparql_bindings(f"""
+        PREFIX dp: <{self.sparql_property_prefix}>
+        PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+
+        SELECT DISTINCT ?entity ?label WHERE {{
+          ?entity dp:{property_id} ?value .
+          OPTIONAL {{ ?entity rdfs:label ?label . FILTER(lang(?label) = "en") }}
+        }}
+        """)
+
+        labels: dict[WikibaseID, str] = {}
+        for binding in bindings:
+            concept_uri = binding.get("entity", {}).get("value", "")
+            wikibase_id = self._resolve_redirect(WikibaseID(concept_uri.split("/")[-1]))
+            if label := binding.get("label", {}).get("value"):
+                labels.setdefault(wikibase_id, label)
+
+        return [(wikibase_id, labels[wikibase_id]) for wikibase_id in sorted(labels)]
 
     async def close(self):
         """Close the async client"""
