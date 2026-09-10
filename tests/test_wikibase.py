@@ -231,6 +231,59 @@ async def test_get_concept_ids_with_property__parses_dedupes_and_sorts(
     assert "P20" in mock_get.call_args.kwargs["params"]["query"]
 
 
+@pytest.mark.asyncio
+async def test_get_concepts_with_classifiers__parses_and_groups(
+    MockedWikibaseSession,
+):
+    """Test that classifiers of different ranks in different concepts are returned as expected."""
+    wikibase = MockedWikibaseSession()
+    entity_prefix = wikibase.sparql_entity_prefix
+
+    def binding(concept_id, label, classifier_id, rank):
+        return {
+            "entity": {"type": "uri", "value": f"{entity_prefix}{concept_id}"},
+            "label": {"type": "literal", "value": label},
+            "classifier_id": {"type": "literal", "value": classifier_id},
+            "rank": {"type": "uri", "value": f"http://wikiba.se/ontology#{rank}"},
+        }
+
+    sparql_json = {
+        "head": {"vars": ["entity", "label", "classifier_id", "rank"]},
+        "results": {
+            "bindings": [
+                binding("Q58", "loan", "9aezptyn", "PreferredRank"),
+                # Two statements on one concept, at different ranks
+                binding("Q10", "tax advantage", "ruzvuy9d", "PreferredRank"),
+                binding("Q10", "tax advantage", "78tewr6s", "NormalRank"),
+            ]
+        },
+    }
+
+    sparql_response = httpx.Response(
+        200,
+        json=sparql_json,
+        request=httpx.Request("GET", wikibase.sparql_url),
+    )
+    client = await wikibase._get_client()
+    with patch.object(client, "get", new=AsyncMock(return_value=sparql_response)):
+        concepts = await wikibase.get_concepts_with_classifiers_async()
+
+    # One entry per concept, sorted by ID
+    assert [concept.wikibase_id for concept in concepts] == [
+        WikibaseID("Q10"),
+        WikibaseID("Q58"),
+    ]
+    assert concepts[0].preferred_label == "tax advantage"
+    # Both of the concept's statements are kept, with their ranks mapped
+    assert concepts[0].classifier_ids == [
+        (StatementRank.PREFERRED, ClassifierID("ruzvuy9d")),
+        (StatementRank.NORMAL, ClassifierID("78tewr6s")),
+    ]
+    assert concepts[1].classifier_ids == [
+        (StatementRank.PREFERRED, ClassifierID("9aezptyn"))
+    ]
+
+
 @pytest.mark.skip(reason="Not implemented")
 def test_wikibase__get_statements(MockedWikibaseSession):
     raise NotImplementedError
