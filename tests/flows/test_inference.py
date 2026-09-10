@@ -2326,13 +2326,12 @@ async def test_inference_with_caching_enabled(
         )
     )
 
-    test_config.skip_existing_inference_results = True
-
     with mock_deployment(state) as mock_inference_run_deployment:
         _ = await inference(
             classifier_specs=[classifier_spec],
             document_ids=input_doc_ids,
             config=test_config,
+            skip_existing_inference_results=True,
         )
 
         # Verify only the un-cached document was processed
@@ -2403,13 +2402,12 @@ async def test_inference_with_caching_disabled(
         )
     )
 
-    test_config.skip_existing_inference_results = False
-
     with mock_deployment(state) as mock_inference_run_deployment:
         _ = await inference(
             classifier_specs=[classifier_spec],
             document_ids=input_doc_ids,
             config=test_config,
+            skip_existing_inference_results=False,
         )
 
         # Verify all documents were processed despite existing results
