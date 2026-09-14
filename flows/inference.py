@@ -125,6 +125,14 @@ class BatchInferenceResult(BaseModel):
     """Whether every runnable document in the batch failed."""
 
 
+class S3Download(BaseModel):
+    """Content & Relevant Metadata for a file downloaded from S3."""
+
+    content: str
+    etag: str
+    last_modified: datetime
+
+
 def did_inference_fail(
     batch_inference_results: list[BatchInferenceResult],
     requested_document_stems: set[DocumentStem],
@@ -418,7 +426,8 @@ async def get_document_ids_from_file(
     )
     async with session.client("s3") as s3_client:
         try:
-            data = await download_s3_file(config, s3_uri.key, s3_client)
+            s3_file = await download_s3_file(config, s3_uri.key, s3_client)
+            data = s3_file.content
         except ClientError as e:
             error_code = e.response.get("Error", {}).get("Code")
             if error_code == "NoSuchKey":
@@ -537,7 +546,7 @@ def parse_client_error_details(e: ClientError) -> Optional[str]:
             return f"Request-Server time discrepancy: {' & '.join(e.args)} - {skew.seconds=}"
 
 
-async def download_s3_file(config: Config, key: str, s3_client: S3Client):
+async def download_s3_file(config: Config, key: str, s3_client: S3Client) -> S3Download:
     """Retrieve an S3 file from the pipeline cache"""
     try:
         response = await s3_client.get_object(
@@ -550,7 +559,11 @@ async def download_s3_file(config: Config, key: str, s3_client: S3Client):
         raise
 
     body = await response["Body"].read()
-    return body.decode("utf-8")
+    return S3Download(
+        content=body.decode("utf-8"),
+        etag=response["ETag"],
+        last_modified=response["LastModified"],
+    )
 
 
 def generate_document_source_key(config: Config, document_stem: DocumentStem) -> S3Uri:
@@ -746,12 +759,12 @@ async def load_document(
         config=config,
         document_stem=document_result.document_stem,
     ).key
-    content = await download_s3_file(config=config, key=file_key, s3_client=s3_client)
+    s3_file = await download_s3_file(config=config, key=file_key, s3_client=s3_client)
 
     if input_schema == "v1":
-        document = BaseParserOutput.model_validate_json(content)
+        document = BaseParserOutput.model_validate_json(s3_file.content)
     elif input_schema == "v2":
-        document = BaseParserOutputV2.model_validate_json(content)
+        document = BaseParserOutputV2.model_validate_json(s3_file.content)
     else:
         raise ValueError(f"Invalid input_schema: {input_schema}")
 
