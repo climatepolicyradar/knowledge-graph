@@ -447,21 +447,14 @@ async def list_concepts_with_property(
     try:
         wikibase = WikibaseSession()
         property_id = getattr(wikibase, _PROPERTY_ATTR[property])
-        concept_ids = await wikibase.get_concept_ids_with_property_async(property_id)
-
-        concepts = (
-            await wikibase.get_concepts_async(wikibase_ids=concept_ids)
-            if concept_ids
-            else []
-        )
+        concepts = await wikibase.get_concept_labels_with_property_async(property_id)
 
         summaries = [
             ConceptSummary(
-                wikibase_id=concept.wikibase_id,
-                preferred_label=concept.preferred_label,
+                wikibase_id=wikibase_id,
+                preferred_label=preferred_label,
             )
-            for concept in concepts
-            if concept.wikibase_id is not None
+            for wikibase_id, preferred_label in concepts
         ]
 
         return ConceptsWithPropertyResult(
@@ -508,15 +501,7 @@ async def list_concepts_with_classifiers(
 
     try:
         wikibase = WikibaseSession()
-        concept_ids = await wikibase.get_concept_ids_with_property_async(
-            wikibase.classifier_id_property_id
-        )
-
-        concepts = (
-            await wikibase.get_concepts_async(wikibase_ids=concept_ids)
-            if concept_ids
-            else []
-        )
+        concepts = await wikibase.get_concepts_with_classifiers_async()
 
         results: list[ConceptWithClassifiers] = []
         for concept in concepts:
