@@ -158,6 +158,11 @@ def main(
     if cfg is not None:
         concept_overrides = cfg.concept_overrides.as_overrides()
         if classifier_type == "LLMClassifier":
+            if cfg.llm is None:
+                raise typer.BadParameter(
+                    f"{from_yaml_config} has no 'llm' section, which "
+                    "--classifier-type LLMClassifier requires."
+                )
             related = cfg.llm.related_definitions
             session = WikibaseSession() if related else None
             defs = (
@@ -173,9 +178,12 @@ def main(
             classifier_kwargs = cfg.bert.to_classifier_kwargs()
             training_data_wandb_path = cfg.bert.training_data_wandb_path
             limit_training_samples = cfg.bert.limit_training_samples
+        elif classifier_type == "KeywordClassifier":
+            classifier_kwargs = cfg.keyword.to_classifier_kwargs()
         else:
             raise typer.BadParameter(
-                "--classifier-type must be LLMClassifier or BertBasedClassifier"
+                "--classifier-type must be LLMClassifier, BertBasedClassifier or "
+                "KeywordClassifier"
             )
 
     if compute is not ComputeTarget.local:

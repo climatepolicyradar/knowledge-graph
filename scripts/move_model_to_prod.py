@@ -170,7 +170,7 @@ def main(
         console.log(
             f"[green]✓[/green] Successfully promoted classifier from {source_env.value} to {target_env.value}"
         )
-        console.log(f"[green]✓[/green] New artifact: {artifact.name}:{next_version}")
+        console.log(f"[green]✓[/green] New artifact: {artifact.name}")
         console.log(f"[green]✓[/green] S3 location: s3://{bucket}/{key}")
 
 

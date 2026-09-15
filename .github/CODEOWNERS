@@ -1,13 +1,21 @@
-tests/flows/    @climatepolicyradar/deng
-flows/          @climatepolicyradar/deng
-automations.py  @climatepolicyradar/deng
-deployments.py  @climatepolicyradar/deng
-*               @climatepolicyradar/deng @climatepolicyradar/fusion
+# Ownership per [RFC] Ownership of code and services
+# https://www.notion.so/3a49109609a480c4ae38f1f5b2672675
+#
+# Razor: orchestration, deployment and build plumbing is Enrichment-only;
+# modelling and concept code also gets data science review (Fusion).
 
-# Dependency updates - only require deng team
-pyproject.toml             @climatepolicyradar/deng
-uv.lock                    @climatepolicyradar/deng
-.github/workflows/*.yml    @climatepolicyradar/deng
-Dockerfile                 @climatepolicyradar/deng
-mcp/Dockerfile             @climatepolicyradar/deng
-docker-compose.yml         @climatepolicyradar/deng
+*               @climatepolicyradar/enrichment @climatepolicyradar/fusion
+
+# Orchestration and deployment — Enrichment only
+flows/          @climatepolicyradar/enrichment
+tests/flows/    @climatepolicyradar/enrichment
+automations.py  @climatepolicyradar/enrichment
+deployments.py  @climatepolicyradar/enrichment
+
+# Dependency updates and build plumbing — Enrichment only
+pyproject.toml             @climatepolicyradar/enrichment
+uv.lock                    @climatepolicyradar/enrichment
+.github/workflows/*.yml    @climatepolicyradar/enrichment
+Dockerfile                 @climatepolicyradar/enrichment
+mcp/Dockerfile             @climatepolicyradar/enrichment
+docker-compose.yml         @climatepolicyradar/enrichment

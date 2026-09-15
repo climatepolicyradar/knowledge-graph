@@ -13,6 +13,7 @@ import boto3
 import httpx
 import pandas as pd
 import pytest
+from argilla import Settings
 from moto import mock_aws
 
 from knowledge_graph.classifier.classifier import Classifier
@@ -500,6 +501,7 @@ def mock_dataset():
     def _create_dataset(name="Q123", records=None):
         mock_ds = MagicMock()
         mock_ds.name = name
+        mock_ds.settings = Settings()
         if records is not None:
             mock_ds.records.return_value = records
         return mock_ds

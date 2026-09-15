@@ -16,7 +16,6 @@ INFERENCE_RESULTS_PREFIX = "inference_results/"
 INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input/"
 INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages/"
 AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages/"
-INDEX_RESULTS_PREFIX: str = "index_concepts/"
 
 # SSM
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
@@ -72,10 +71,6 @@ class Config(BaseModel):
     inference_document_target_prefix: S3Prefix = Field(
         default=INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT,
         description="S3 prefix for where inference targets are written to",
-    )
-    index_results_prefix: S3Prefix = Field(
-        default=INDEX_RESULTS_PREFIX,
-        description="S3 prefix for index results are written to",
     )
 
     bucket_region: str = Field(
@@ -156,11 +151,6 @@ class Config(BaseModel):
     dataset_s3_bucket: str = Field(
         default="cpr-kg-feather-files",
         description="S3 bucket containing feather datasets produced by build_dataset",
-    )
-
-    skip_existing_inference_results: bool = Field(
-        default=True,
-        description="Skip documents that already have inference results in S3. Set to False to force re-processing.",
     )
 
     @classmethod
@@ -278,5 +268,4 @@ class Config(BaseModel):
             "wandb_entity": self.wandb_entity,
             "aws_env": self.aws_env,
             "s3_concurrency_limit": self.s3_concurrency_limit,
-            "skip_existing_inference_results": self.skip_existing_inference_results,
         }

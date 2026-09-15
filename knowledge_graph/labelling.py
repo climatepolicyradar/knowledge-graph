@@ -16,6 +16,7 @@ from argilla import (
     SpanQuestion,
     Suggestion,
     TaskDistribution,
+    TermsMetadataProperty,
     TextField,
     User,
     Workspace,
@@ -41,6 +42,11 @@ from knowledge_graph.span import Span
 logger = getLogger(__name__)
 
 load_dotenv(find_dotenv())
+
+# Key for Argilla records metadata that says whether a record has been LLM-prelabelled.
+# This is needed to be able to tell a prelabelled passage with 0 spans from one that
+# hasn't been prelabelled.
+LLM_PRELABELLED_METADATA_KEY = "llm_prelabelled"
 
 
 def create_llm_ensemble_for_prelabelling_validation_dataset(
@@ -243,6 +249,16 @@ class ArgillaSession:
         )
         return datasets
 
+    def _llm_prelabelled_metadata_property(self) -> TermsMetadataProperty:
+        """Build the metadata property recording whether a record was pre-labelled."""
+        return TermsMetadataProperty(
+            name=LLM_PRELABELLED_METADATA_KEY,
+            options=["true", "false"],
+            title="Pre-labelled by LLM ensemble",
+            visible_for_annotators=True,
+            client=self.client,
+        )
+
     def create_dataset(
         self,
         concept: Concept,
@@ -284,6 +300,7 @@ class ArgillaSession:
                     allow_overlapping=False,
                 )
             ],
+            metadata=[self._llm_prelabelled_metadata_property()],
             distribution=TaskDistribution(min_submitted=2),
             allow_extra_metadata=True,
         )
@@ -711,6 +728,21 @@ class ArgillaSession:
             for spans in suggestion_model.predict(texts, batch_size=batch_size)
         ]
 
+    def _ensure_llm_prelabelled_metadata_property(self, dataset: Dataset) -> None:
+        """Declare the pre-labelling metadata property on a dataset which lacks it."""
+        if LLM_PRELABELLED_METADATA_KEY in {
+            metadata_property.name for metadata_property in dataset.settings.metadata
+        }:
+            return
+
+        logger.info(
+            "Adding the '%s' metadata property to dataset: %s",
+            LLM_PRELABELLED_METADATA_KEY,
+            dataset.name,
+        )
+        dataset.settings.metadata.add(self._llm_prelabelled_metadata_property())
+        dataset.update()
+
     def add_labelled_passages(
         self,
         labelled_passages: list[LabelledPassage],
@@ -735,6 +767,10 @@ class ArgillaSession:
         Suggestions are kept separate from the passages' own spans, so model predictions
         are never mistaken for submitted human responses.
 
+        Every record also records whether it was pre-labelled under the
+        `llm_prelabelled` metadata key, which Argilla exposes in its metadata filter
+        and sort controls.
+
         :param labelled_passages: List of LabelledPassage objects to add.
         :param wikibase_id: Wikibase ID of the dataset to add passages to
         :param workspace: Name of the workspace to add passages to. If not provided,
@@ -752,6 +788,7 @@ class ArgillaSession:
         :raises ResourceDoesNotExistError: If the dataset or workspace does not exist
         """
         dataset = self.get_dataset(wikibase_id, workspace)
+        self._ensure_llm_prelabelled_metadata_property(dataset)
         logger.info(
             "Pushing %d labelled passages to dataset: %s",
             len(labelled_passages),
@@ -811,12 +848,17 @@ class ArgillaSession:
                     )
                 ]
 
+            metadata = self._format_metadata_keys_for_argilla(passage.metadata)
+            metadata[LLM_PRELABELLED_METADATA_KEY] = (
+                "true" if suggested_spans_and_score is not None else "false"
+            )
+
             record = Record(
                 id=str(uuid.uuid4()),
                 fields=fields,  # type: ignore
                 responses=responses,
                 suggestions=suggestions,
-                metadata=self._format_metadata_keys_for_argilla(passage.metadata),
+                metadata=metadata,
             )
             records.append(record)
 

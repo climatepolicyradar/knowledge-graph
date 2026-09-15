@@ -47,14 +47,6 @@ class ConceptCountUpdateError(Exception):
         self.status_code = status_code
 
 
-class QueryError(Exception):
-    """Exception raised when concept count updates fail"""
-
-    def __init__(self, status_code: int):
-        super().__init__(f"Failed to query Vespa. Received status code: {status_code}")
-        self.status_code = status_code
-
-
 class PartialUpdateError(Exception):
     """Exception raised when partial updates of concepts fail."""
 

@@ -1,13 +1,9 @@
 {
     "document_id": "GEF.document.0.1",
-    "document_name": "",
-    "document_description": "",
-    "document_slug": "",
     "document_content_type": "application/pdf",
-    "document_metadata": {
-        "import_id": "GEF.document.0.1"
-    },
-    "languages": ["en"],
+    "languages": [
+        "en"
+    ],
     "html_data": null,
     "pdf_data": {
         "page_metadata": [],

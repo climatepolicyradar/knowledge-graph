@@ -14,6 +14,7 @@ from knowledge_graph.ensemble import Ensemble
 from knowledge_graph.identifiers import ClassifierID, WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import (
+    LLM_PRELABELLED_METADATA_KEY,
     ArgillaSession,
     ResourceAlreadyExistsError,
     ResourceDoesNotExistError,
@@ -223,6 +224,33 @@ def test_whether_create_dataset_creates_a_new_dataset(concept):
 
                 assert result == mock_dataset
                 mock_create.assert_called_once()
+
+
+def test_whether_create_dataset_declares_the_llm_prelabelled_metadata_property(concept):
+    """New datasets can filter on the pre-labelling status from the day they're made."""
+    with patch("knowledge_graph.labelling.Argilla") as mock_argilla_class:
+        mock_client = MagicMock()
+        mock_argilla_class.return_value = mock_client
+
+        workspace = MagicMock()
+        workspace.name = "test-workspace"
+        mock_client.workspaces.return_value = workspace
+        # Mock that dataset doesn't exist initially
+        mock_client.datasets.return_value = None
+
+        with (
+            patch("knowledge_graph.labelling.Settings") as mock_settings,
+            patch("knowledge_graph.labelling.TextField"),
+            patch("knowledge_graph.labelling.SpanQuestion"),
+            patch("knowledge_graph.labelling.TaskDistribution"),
+            patch.object(Dataset, "create"),
+        ):
+            ArgillaSession().create_dataset(concept)
+
+    metadata_properties = mock_settings.call_args.kwargs["metadata"]
+    assert [prop.name for prop in metadata_properties] == [LLM_PRELABELLED_METADATA_KEY]
+    assert metadata_properties[0].options == ["true", "false"]
+    assert metadata_properties[0].visible_for_annotators
 
 
 def test_whether_create_dataset_raises_error_if_dataset_already_exists(
@@ -1088,7 +1116,6 @@ def _mock_dataset_for_suggestions(mock_argilla_client, mock_workspace, mock_data
     mock_client, _ = mock_argilla_client
     dataset = mock_dataset(name="Q123")
     dataset.records = MagicMock()
-    dataset.settings = MagicMock()
     mock_client.workspaces.return_value = mock_workspace()
     mock_client.datasets.return_value = dataset
     return dataset
@@ -1198,3 +1225,105 @@ def test_whether_an_empty_suggestion_is_attached_when_the_model_predicts_nothing
     assert suggestion.value == []
     # no spans to score, and the server rejects an empty score list
     assert suggestion.score is None
+
+
+def test_whether_a_prelabelled_record_is_marked_as_such_in_its_metadata(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """Annotators can filter for records an ensemble has been over."""
+    dataset = _mock_dataset_for_suggestions(
+        mock_argilla_client, mock_workspace, mock_dataset
+    )
+
+    session = ArgillaSession()
+    session.add_labelled_passages(
+        labelled_passages=[LabelledPassage(text=SUGGESTION_TEXT, spans=[])],
+        wikibase_id="Q123",
+        suggestion_model=_stub_ensemble(["Solar", "Solar", "Solar"]),
+    )
+
+    record = dataset.records.log.call_args[0][0][0]
+    assert record.metadata[LLM_PRELABELLED_METADATA_KEY] == "true"
+
+
+def test_whether_a_record_the_model_found_nothing_in_is_still_marked_as_prelabelled(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """The case the metadata exists for: a negative prediction, not an unseen passage."""
+    dataset = _mock_dataset_for_suggestions(
+        mock_argilla_client, mock_workspace, mock_dataset
+    )
+
+    session = ArgillaSession()
+    session.add_labelled_passages(
+        labelled_passages=[LabelledPassage(text=SUGGESTION_TEXT, spans=[])],
+        wikibase_id="Q123",
+        suggestion_model=_stub_ensemble(["nuclear", "nuclear", "nuclear"]),
+    )
+
+    record = dataset.records.log.call_args[0][0][0]
+    assert list(record.suggestions)[0].value == []
+    assert record.metadata[LLM_PRELABELLED_METADATA_KEY] == "true"
+
+
+def test_whether_a_record_is_marked_as_not_prelabelled_without_a_suggestion_model(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """A false value is written explicitly, rather than left as a missing key."""
+    dataset = _mock_dataset_for_suggestions(
+        mock_argilla_client, mock_workspace, mock_dataset
+    )
+
+    session = ArgillaSession()
+    session.add_labelled_passages(
+        labelled_passages=[
+            LabelledPassage(text=SUGGESTION_TEXT, spans=[], metadata={"existing": "v"})
+        ],
+        wikibase_id="Q123",
+    )
+
+    record = dataset.records.log.call_args[0][0][0]
+    assert record.metadata[LLM_PRELABELLED_METADATA_KEY] == "false"
+    # the passage's own metadata is left alone
+    assert record.metadata["existing"] == "v"
+
+
+def test_whether_pushing_declares_the_metadata_property_on_an_older_dataset(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    """Datasets made before the property existed pick it up on the next push."""
+    dataset = _mock_dataset_for_suggestions(
+        mock_argilla_client, mock_workspace, mock_dataset
+    )
+    assert [prop.name for prop in dataset.settings.metadata] == []
+
+    session = ArgillaSession()
+    session.add_labelled_passages(
+        labelled_passages=[LabelledPassage(text=SUGGESTION_TEXT, spans=[])],
+        wikibase_id="Q123",
+    )
+
+    assert [prop.name for prop in dataset.settings.metadata] == [
+        LLM_PRELABELLED_METADATA_KEY
+    ]
+    dataset.update.assert_called_once()
+
+
+def test_whether_pushing_leaves_an_already_declared_metadata_property_alone(
+    mock_argilla_client, mock_workspace, mock_dataset
+):
+    dataset = _mock_dataset_for_suggestions(
+        mock_argilla_client, mock_workspace, mock_dataset
+    )
+    session = ArgillaSession()
+    dataset.settings.metadata.add(session._llm_prelabelled_metadata_property())
+
+    session.add_labelled_passages(
+        labelled_passages=[LabelledPassage(text=SUGGESTION_TEXT, spans=[])],
+        wikibase_id="Q123",
+    )
+
+    assert [prop.name for prop in dataset.settings.metadata] == [
+        LLM_PRELABELLED_METADATA_KEY
+    ]
+    dataset.update.assert_not_called()

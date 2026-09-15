@@ -8,7 +8,7 @@ import json
 import os
 import textwrap
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
@@ -65,9 +65,6 @@ from knowledge_graph.result import (
 from knowledge_graph.utils import get_logger
 from knowledge_graph.version import Version, get_latest_model_version
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
-
-VESPA_MAX_TIMEOUT_M: timedelta = timedelta(minutes=5)
-VESPA_CONNECTION_POOL_SIZE: int = 5
 
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
 WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"

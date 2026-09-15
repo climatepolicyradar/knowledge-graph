@@ -61,7 +61,6 @@ U = TypeVar("U")
 
 JsonDict = NewType("JsonDict", dict[str, Any])
 
-# Needed to get document passages from Vespa
 # Example: CCLW.executive.1813.2418
 DocumentImportId = NewType("DocumentImportId", str)
 # Needed to load the inference results
@@ -385,17 +384,6 @@ class S3Uri:
         return cls(bucket=bucket, key=key)
 
 
-def remove_translated_suffix(file_name: DocumentStem) -> DocumentImportId:
-    """
-    Remove the suffix from a file name that indicates it has been translated.
-
-    Often used for querying Vespa.
-
-    E.g. "CCLW.executive.1.1_en_translated" -> "CCLW.executive.1.1"
-    """
-    return DocumentImportId(re.sub(r"(_translated(?:_[a-zA-Z]+)?)$", "", file_name))
-
-
 async def s3_file_exists(file_key: str, bucket_name: str, s3_client: S3Client) -> bool:
     """Check if a file exists in an S3 bucket."""
     try:
@@ -665,15 +653,15 @@ async def map_as_local(
     The parameters are the same as `map_as_sub_flow` so it can be a
     drop-in replacement.
 
-    You'll want to patch the function first, for example, if you want to run indexing:
+    You'll want to patch the function first, for example, if you want to run inference:
 
     ```
     import flows.utils
 
     flows.utils.map_as_sub_flow = flows.utils.map_as_local
 
-    from flows.index import (
-        index,
+    from flows.inference import (
+        inference,
     ...
     ````
     """

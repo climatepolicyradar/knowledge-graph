@@ -5,7 +5,6 @@ from anthropic import Anthropic
 
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.concept import Concept
-from knowledge_graph.identifiers import ClassifierID
 
 
 class KeywordExpansionClassifier(KeywordClassifier):
@@ -22,19 +21,20 @@ class KeywordExpansionClassifier(KeywordClassifier):
         self,
         concept: Concept,
         model: str = "claude-3-5-haiku-20241022",
+        fold_subscripts: bool = True,
+        match_word_forms: bool = True,
     ):
         self.original_concept = concept
         self.concept = concept
         self.model = model
+        self.keyword_kwargs = {
+            "fold_subscripts": fold_subscripts,
+            "match_word_forms": match_word_forms,
+        }
         self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
         # Initialize with original concept so that we can always fall back to it
-        super().__init__(self.concept)
-
-    @property
-    def id(self) -> ClassifierID:
-        """Return a deterministic, human-readable identifier for the classifier."""
-        return ClassifierID.generate(self.name, self.concept.id)
+        super().__init__(self.concept, **self.keyword_kwargs)
 
     def _generate_prompt(self) -> str:
         """Generate the prompt for keyword expansion."""
@@ -97,7 +97,7 @@ class KeywordExpansionClassifier(KeywordClassifier):
         except (json.JSONDecodeError, KeyError) as e:
             print(f"Warning: Failed to parse LLM response for keyword expansion: {e}")
             # Fall back to original concept if expansion fails
-            super().__init__(self.original_concept)
+            super().__init__(self.original_concept, **self.keyword_kwargs)
             return self
 
         # Create a new concept with the expanded set of keywords
@@ -116,6 +116,6 @@ class KeywordExpansionClassifier(KeywordClassifier):
 
         # Reinitialize parent with expanded concept
         self.concept = expanded_concept
-        super().__init__(expanded_concept)
+        super().__init__(expanded_concept, **self.keyword_kwargs)
 
         return self

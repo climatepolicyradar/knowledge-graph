@@ -11,7 +11,6 @@ from typing import Any, Final, Literal, NamedTuple, Optional, TypeAlias, cast, o
 import wandb
 from aiobotocore.config import AioConfig
 from botocore.exceptions import ClientError
-from cpr_sdk.parser_models import BaseParserOutput, BaseParserOutputV2, BlockType
 from mypy_boto3_s3.type_defs import (
     PutObjectOutputTypeDef,
 )
@@ -40,6 +39,7 @@ from flows.classifier_specs.spec_interface import (
     should_skip_doc,
 )
 from flows.config import Config, validate_s3_prefix
+from flows.models import BaseParserOutput, BaseParserOutputV2, BlockType
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -1321,6 +1321,7 @@ async def inference(
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
     classifier_gpu_concurrency_limit: PositiveInt = CLASSIFIER_GPU_CONCURRENCY_LIMIT,
+    skip_existing_inference_results: bool = True,
     return_pointer: Literal[False] = False,
 ) -> set[DocumentStem] | Fault: ...
 
@@ -1337,6 +1338,7 @@ async def inference(
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
     classifier_gpu_concurrency_limit: PositiveInt = CLASSIFIER_GPU_CONCURRENCY_LIMIT,
+    skip_existing_inference_results: bool = True,
     return_pointer: Literal[True] = ...,
 ) -> RunOutputIdentifier | Fault: ...
 
@@ -1356,6 +1358,7 @@ async def inference(
     batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     classifier_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
     classifier_gpu_concurrency_limit: PositiveInt = CLASSIFIER_GPU_CONCURRENCY_LIMIT,
+    skip_existing_inference_results: bool = True,
     return_pointer: bool = False,
 ) -> set[DocumentStem] | RunOutputIdentifier | Fault:
     """
@@ -1381,6 +1384,8 @@ async def inference(
       for the version) to run inference with
     - config: A Config object, uses the default if not given. Usually
       there is no need to change this outside of local dev
+    - skip_existing_inference_results: Skip documents that already have
+      inference results in S3. Set to False to force re-processing.
     - return_pointer: Either return a pointer to the results, a run
       output identifier, or the return the results themselves
       directly. Since there can be a large amount of document IDs, the
@@ -1463,7 +1468,7 @@ async def inference(
         accepted_documents_count[classifier_spec] = len(filter_result.accepted)
 
         # Check for existing results if caching is enabled
-        if config.skip_existing_inference_results:
+        if skip_existing_inference_results:
             (
                 documents_to_process,
                 skipped_stems,

@@ -1976,7 +1976,6 @@ async def test_create_classifiers_profiles_artifact():
 async def test_create_classifiers_profiles_artifact__pr_error():
     validation_errors = []
     wandb_errors = []
-    vespa_errors = []
     successes = [
         {"wikibase_id": "Q5", "classifier_id": "abcd2345"},
         {"wikibase_id": "Q6", "classifier_id": "yyyy8888"},
@@ -2009,9 +2008,7 @@ async def test_create_classifiers_profiles_artifact__pr_error():
         assert key == f"classifiers-profiles-validation-{aws_env.value}"
 
         # Assert the table contains the correct number of rows
-        assert len(table) == len(successes) + len(validation_errors) + len(
-            wandb_errors
-        ) + len(vespa_errors)  # pr and s3 errors not added to table
+        assert len(table) == len(successes) + len(validation_errors) + len(wandb_errors)
 
         # Assert the description contains the PR number
         assert (

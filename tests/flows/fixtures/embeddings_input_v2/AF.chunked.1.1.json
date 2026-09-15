@@ -1,44 +1,9 @@
 {
   "document_id": "AF.chunked.1.1",
-  "document_metadata": {
-    "name": "Building Resilience",
-    "document_title": "Project document",
-    "description": "...",
-    "import_id": "AF.chunked.1.1",
-    "slug": "project-document_1",
-    "family_import_id": "AF.family.1.1",
-    "family_slug": "chunked-document-sample_0da5",
-    "publication_ts": "2026-01-12T00:00:00Z",
-    "date": null,
-    "source_url": "https://climatepolicyradar.org/test.pdf",
-    "download_url": null,
-    "corpus_import_id": "MCF.corpus.AF.n0000",
-    "corpus_type_name": "AF",
-    "collection_title": null,
-    "collection_summary": null,
-    "type": "",
-    "source": "AF",
-    "category": "MCF",
-    "geography": "ZAF",
-    "geographies": [
-      "ZAF"
-    ],
-    "languages": [
-      "English"
-    ],
-    "metadata": {}
-  },
-  "document_name": "Building Resilience",
-  "document_description": "...",
-  "document_source_url": "https://climatepolicyradar.org/test.pdf",
-  "document_cdn_object": "SOME/1990/pdf-object",
   "document_content_type": "application/pdf",
-  "document_md5_sum": "dad18bb27a04a750bde7b9be28de069a",
-  "document_slug": "project-document_1",
   "languages": [
     "en"
   ],
-  "translated": false,
   "html_data": null,
   "pdf_data": {
     "page_metadata": [
@@ -1216,12 +1181,5 @@
         "serialised_text": "Section context: this excerpt is from the section titled 'PART I: PROJECT INFORMATION'. Project Category:\nRegular\nCountry:\nSouth Africa\nTitle of Project:\nBuilding Resilience in the Greater uMngeni Catchment\nType of Implementing Entity:\nNational\nImplementing Entity:\nSouth African National Biodiversity Institute\nExecuting Entity:\nuMgungundlovu District Municipality\nAmount of Financing Requested:\nUSD 7,495,055"
       }
     ]
-  },
-  "pipeline_metadata": {
-    "parser_metadata": {
-      "azure_api_version": "2023-07-31",
-      "azure_model_id": "prebuilt-document",
-      "parsing_date": "2025-05-22T17:35:22.344845"
-    }
   }
 }

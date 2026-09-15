@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 import polars as pl
@@ -11,15 +11,11 @@ from pydantic import AnyHttpUrl, SecretStr
 from flows.utils import (
     S3Uri,
     SlackNotify,
-    total_milliseconds,
 )
 from knowledge_graph.cloud import AwsEnv, get_async_session
 from knowledge_graph.concept import Concept
 from knowledge_graph.utils import get_logger
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
-
-VESPA_MAX_TIMEOUT_MS: int = total_milliseconds(timedelta(minutes=5))
-VESPA_CONNECTION_POOL_SIZE: int = 5
 
 WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
 WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
@@ -184,8 +180,7 @@ async def sync_concepts(
     If there is existing state, then only the new concepts or new
     versions of existing concepts are synced.
 
-    The side-effects are data frames in S3 and documents inserted ino
-    Vespa.
+    The side-effects are data frames in S3.
 
     If no WikibaseAuth is passed, credentials are fetched from AWS SSM.
 

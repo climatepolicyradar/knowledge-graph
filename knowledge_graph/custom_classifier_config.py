@@ -148,6 +148,25 @@ class BERTClassifierConfig(BaseModel):
         }
 
 
+class KeywordClassifierConfig(BaseModel):
+    """
+    Maps to KeywordClassifier kwargs (keyword.py), unset unless the YAML sets them.
+
+    Restating the classifier's own defaults here would give them a second home to
+    drift from. Since the options are hashed into the classifier's id, the two homes
+    disagreeing would send one concept to two different ids.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    fold_subscripts: bool | None = None
+    match_word_forms: bool | None = None
+
+    def to_classifier_kwargs(self) -> dict[str, Any]:
+        """Only the explicitly set options (drops None so the classifier defaults win)."""
+        return self.model_dump(exclude_none=True)
+
+
 class CustomClassifierConfig(BaseModel):
     """Config for custom concept classifier (one YAML file per concept)."""
 
@@ -156,8 +175,10 @@ class CustomClassifierConfig(BaseModel):
     wikibase_id: WikibaseID
     concept_overrides: ConceptOverrides = Field(default_factory=ConceptOverrides)
     sampling: SamplingConfig = Field(default_factory=SamplingConfig)
-    llm: LLMClassifierConfig
+    # Optional because a keyword classifier is trained without any LLM labelling step
+    llm: LLMClassifierConfig | None = None
     bert: BERTClassifierConfig = Field(default_factory=BERTClassifierConfig)
+    keyword: KeywordClassifierConfig = Field(default_factory=KeywordClassifierConfig)
 
     @classmethod
     def from_yaml(cls, path: Path | str) -> "CustomClassifierConfig":

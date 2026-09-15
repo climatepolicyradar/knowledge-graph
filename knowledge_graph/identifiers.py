@@ -4,7 +4,7 @@ from enum import Enum
 from functools import total_ordering
 from typing import Any, Callable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from pydantic_core import CoreSchema, core_schema
 from typing_extensions import Self
 
@@ -65,38 +65,6 @@ class WikibaseID(str):
             json_schema=core_schema.str_schema(),
             python_schema=core_schema.no_info_plain_validator_function(cls._validate),
         )
-
-
-class VespaSchema(Enum):
-    """Schema definitions' names for Vespa"""
-
-    FamilyDocument = "family_document"
-    DocumentPassage = "document_passage"
-
-
-class VespaID(BaseModel):
-    """Base class for a Vespa schema ID"""
-
-    prefix: str = Field(description="TODO", frozen=True, default="id:doc_search")
-    kind: VespaSchema = Field(description="TODO")
-    id: str = Field(description="TODO")
-
-    def __str__(self) -> str:
-        """String representation of a Vespa ID, ready to be used with Vespa queries"""
-        kind_value: str = self.kind.value  # type: ignore[attr-defined]
-        return f"{self.prefix}:{kind_value}::{self.id}"
-
-
-class FamilyDocumentID(VespaID):
-    """An ID for a family document in Vespa"""
-
-    kind: VespaSchema = Field(default=VespaSchema.FamilyDocument, exclude=True)
-
-
-class DocumentPassageID(VespaID):
-    """An ID for a document passage in Vespa"""
-
-    kind: VespaSchema = Field(default=VespaSchema.DocumentPassage, exclude=True)
 
 
 class Identifier(str):

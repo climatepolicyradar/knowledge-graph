@@ -31,7 +31,8 @@ def validate_dir(config_dir: Path = CONFIG_DIR) -> None:
 
 def check_wikibase_ids(cfg: CustomClassifierConfig, session: "WikibaseSession") -> None:
     """Live: confirm wikibase_id + related_definitions resolve in the concept store."""
-    for wid in [cfg.wikibase_id, *cfg.llm.related_definitions]:
+    related = cfg.llm.related_definitions if cfg.llm else []
+    for wid in [cfg.wikibase_id, *related]:
         try:
             session.get_concept(wid)
         except ConceptNotFoundError as e:

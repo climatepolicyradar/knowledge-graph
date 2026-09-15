@@ -64,6 +64,7 @@ async def topic_pipeline(
     inference_batch_size: int = INFERENCE_BATCH_SIZE_DEFAULT,
     inference_cpu_concurrency_limit: PositiveInt = CLASSIFIER_CPU_CONCURRENCY_LIMIT,
     inference_gpu_concurrency_limit: PositiveInt = CLASSIFIER_GPU_CONCURRENCY_LIMIT,
+    inference_skip_existing_results: bool = True,
     config: Config | None = None,
     aggregation_n_documents_in_batch: PositiveInt = AGGREGATION_DEFAULT_N_DOCUMENTS_IN_BATCH,
     aggregation_n_batches: PositiveInt = 5,
@@ -83,6 +84,8 @@ async def topic_pipeline(
         inference_batch_size: Number of documents to process in each batch.
         inference_cpu_concurrency_limit: Maximum concurrent CPU classifier batches.
         inference_gpu_concurrency_limit: Maximum concurrent GPU classifier batches.
+        inference_skip_existing_results: Skip documents that already have inference
+            results in S3. Set to False to force re-processing.
         aggregation_n_documents_in_batch: Number of documents per aggregation batch.
         aggregation_n_batches: Number of aggregation batches to run.
 
@@ -109,6 +112,7 @@ async def topic_pipeline(
         batch_size=inference_batch_size,
         classifier_cpu_concurrency_limit=inference_cpu_concurrency_limit,
         classifier_gpu_concurrency_limit=inference_gpu_concurrency_limit,
+        skip_existing_inference_results=inference_skip_existing_results,
         return_pointer=True,
         return_state=True,
     )
