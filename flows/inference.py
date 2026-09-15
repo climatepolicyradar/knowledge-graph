@@ -783,6 +783,18 @@ async def load_document(
     return document_result
 
 
+def should_store_labelled_passages(
+    input_schema: InputSchema, spans: list[Span]
+) -> bool:
+    """
+    Utility validating if labelled_passages should be stored for a passage.
+
+    For v1 we always store because we rely on positional ordering. For v2 we
+    only store if there are actually results.
+    """
+    return input_schema == "v1" or (input_schema == "v2" and bool(spans))
+
+
 async def run_classifier_inference_on_document(
     result: SingleDocumentInferenceResult,
     classifier: Classifier,
@@ -809,21 +821,21 @@ async def run_classifier_inference_on_document(
     )
     if random.random() < 0.1:
         logger.info(f"Completed inference on {result.document_stem}")
-    for spans in all_spans:
-        _validate_spans(spans)
-
     result.labelled_passages = []
+
     for spans, (text, block_id) in zip(all_spans, passages):
-        labelled_passage = _get_labelled_passage_from_prediction(
-            classifier,
-            spans,
-            block_id,
-            text,
-            result.classifier_spec,
-            result.document_etag,
-            result.document_last_modified,
-        )
-        result.labelled_passages.append(labelled_passage)
+        if should_store_labelled_passages(input_schema, spans):
+            _validate_spans(spans)
+            labelled_passage = _get_labelled_passage_from_prediction(
+                classifier,
+                spans,
+                block_id,
+                text,
+                result.classifier_spec,
+                result.document_etag,
+                result.document_last_modified,
+            )
+            result.labelled_passages.append(labelled_passage)
 
     # Unload the document now that we're done with it
     result.document = None

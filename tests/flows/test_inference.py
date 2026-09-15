@@ -721,7 +721,17 @@ async def test_run_classifier_inference_on_document(
 @pytest.mark.asyncio
 async def test_run_classifier_inference_on_document_v2_schema():
     classifier = MagicMock()
-    classifier.predict.return_value = [[]]
+    classifier.predict.return_value = [
+        [
+            Span(
+                text="ADAPTATION FUND\nPROJECT PROPOSAL TO THE ADAPTATION FUND",
+                start_index=0,
+                end_index=15,
+                labellers=["test_labeller"],
+                timestamps=[datetime(2025, 1, 15, 10, 30, tzinfo=timezone.utc)],
+            )
+        ]
+    ]
 
     classifier_spec = ClassifierSpec(
         wikibase_id=WikibaseID("Q788"),
@@ -764,6 +774,78 @@ async def test_run_classifier_inference_on_document_v2_schema():
     assert result.labelled_passages[0].id == document.pdf_data.text_blocks[0].id
     assert result.document_last_modified
     assert result.document_etag
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "input_schema,expected_span_counts",
+    [("v1", [1, 0]), ("v2", [1])],
+    ids=["v1_stores_empty_passage", "v2_drops_empty_passage"],
+)
+async def test_run_classifier_inference_on_document_passage_without_spans(
+    input_schema, expected_span_counts, parser_output_pdf
+):
+    """A passage the classifier finds nothing in is stored for v1, but not for v2."""
+    if input_schema == "v1":
+        document = parser_output_pdf
+        assert document.pdf_data
+        document.pdf_data.text_blocks.append(
+            PDFTextBlock(
+                text=["nothing of interest here"],
+                text_block_id="3",
+                page_number=1,
+                coords=[],
+                type=BlockType.TEXT,
+                type_confidence=0.5,
+            )
+        )
+        labelled_text = "test pdf text"
+    else:
+        document = BaseParserOutputV2.model_validate_json(
+            (
+                Path(__file__).parent
+                / "fixtures"
+                / "embeddings_input_v2"
+                / "AF.chunked.1.1.json"
+            ).read_text()
+        )
+        labelled_text = "ADAPTATION FUND\nPROJECT PROPOSAL TO THE ADAPTATION FUND"
+
+    # The first passage gets a span, the second doesn't
+    classifier = MagicMock()
+    classifier.predict.return_value = [
+        [
+            Span(
+                text=labelled_text,
+                start_index=0,
+                end_index=4,
+                labellers=["test_labeller"],
+                timestamps=[datetime(2025, 1, 15, 10, 30, tzinfo=timezone.utc)],
+            )
+        ],
+        [],
+    ]
+
+    store_result = SingleDocumentInferenceResult(
+        document_stem=DocumentStem("CCLW.executive.0.1"),
+        labelled_passages=[],
+        document_etag="abbaabba",
+        document_last_modified=datetime(2025, 1, 15, 10, 30, tzinfo=timezone.utc),
+        document=document,
+        classifier_spec=ClassifierSpec(
+            wikibase_id=WikibaseID("Q788"),
+            classifier_id=ClassifierID("6vxrmcuf"),
+            wandb_registry_version="v7",
+        ),
+    )
+
+    result = await run_classifier_inference_on_document(
+        result=store_result,
+        classifier=classifier,
+        input_schema=input_schema,
+    )
+
+    assert [len(p.spans) for p in result.labelled_passages] == expected_span_counts
 
 
 @pytest.mark.asyncio
