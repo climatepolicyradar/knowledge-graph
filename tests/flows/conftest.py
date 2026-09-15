@@ -333,6 +333,7 @@ def parser_output_pdf(parser_output) -> Generator[BaseParserOutput, None, None]:
                 text_block_id="2",
                 page_number=1,
                 coords=[],
+                idx=1,
                 type=BlockType.TEXT,
                 type_confidence=0.5,
             )

@@ -419,6 +419,8 @@ async def test_load_document(
         document_stem=DocumentStem(invalid_document_stem),
         document=None,
         labelled_passages=[],
+        document_etag="abbaabba",
+        document_last_modified=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
         classifier_spec=classifier_spec,
     )
     result = await load_document(
@@ -434,6 +436,8 @@ async def test_load_document(
         document_stem=DocumentStem(valid_document_stem),
         document=None,
         labelled_passages=[],
+        document_etag="abbaabba",
+        document_last_modified=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
         classifier_spec=classifier_spec,
     )
     result = await load_document(
@@ -680,6 +684,8 @@ async def test_run_classifier_inference_on_document(
     store_result = SingleDocumentInferenceResult(
         document_stem=document_stem,
         labelled_passages=[],
+        document_etag="abbaabba",
+        document_last_modified=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
         document=BaseParserOutput(
             document_id=document_stem,
             document_content_type="text/html",
@@ -734,6 +740,8 @@ async def test_run_classifier_inference_on_document_v2_schema():
     store_result = SingleDocumentInferenceResult(
         document_stem=DocumentStem("AF.chunked.1.1"),
         labelled_passages=[],
+        document_etag="abbaabba",
+        document_last_modified=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
         document=document,
         classifier_spec=classifier_spec,
     )
@@ -754,6 +762,8 @@ async def test_run_classifier_inference_on_document_v2_schema():
     )
     assert len(result.labelled_passages) == 1
     assert result.labelled_passages[0].id == document.pdf_data.text_blocks[0].id
+    assert result.document_last_modified
+    assert result.document_etag
 
 
 @pytest.mark.asyncio
@@ -2026,6 +2036,8 @@ def test_process_single_document_inference():
     success_result = SingleDocumentInferenceResult(
         document=None,
         labelled_passages=[],
+        document_etag="abbaabba",
+        document_last_modified=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
         document_stem=doc_stem,
         classifier_spec=classifier_spec,
     )
@@ -2475,6 +2487,8 @@ def test_get_labelled_passage_from_prediction_with_spans():
         block_id="fish_block",
         text="I love fishing. Aquaculture is the best.",
         classifier_spec=spec,
+        document_etag="abbaabba",
+        document_last_modified=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
     )
 
     assert len(result.spans) > 0
@@ -2507,6 +2521,8 @@ def test_get_labelled_passage_from_prediction_without_spans():
         block_id="fish_block",
         text="Rockets are cool. We should build more rockets.",
         classifier_spec=spec,
+        document_etag="abbaabba",
+        document_last_modified=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
     )
 
     assert len(result.spans) == 0
