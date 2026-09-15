@@ -9,7 +9,7 @@ Topics blog post. Results in [FINDINGS.md](FINDINGS.md), charts in `figures/`.
 ## Running it
 
 ```bash
-uv run python scripts/climate_justice_analysis/pull_data.py
+uv run python demos/climate_justice_analysis/pull_data.py
 ```
 
 Pulls everything from Snowflake into `data/*.parquet` (connection `cpr`, SSO).
@@ -17,15 +17,15 @@ Pass pull names as arguments to refresh only some of them, e.g.
 `pull_data.py corpus_rates law_rates`.
 
 ```bash
-uv run python scripts/climate_justice_analysis/text_stats.py
-uv run python scripts/climate_justice_analysis/specificity.py
+uv run python demos/climate_justice_analysis/text_stats.py
+uv run python demos/climate_justice_analysis/specificity.py
 ```
 
 Word statistics into `results/*.csv`. These use the shared repo environment
 (pandas + scikit-learn, both already dependencies).
 
 ```bash
-cd scripts/climate_justice_analysis && uv run --script viz.py
+cd demos/climate_justice_analysis && uv run --script viz.py
 ```
 
 Charts into `figures/`. This script carries a PEP 723 inline dependency header
