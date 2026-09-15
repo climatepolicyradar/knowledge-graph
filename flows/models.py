@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import (
     Annotated,
@@ -279,6 +279,8 @@ class _BaseParserOutputFieldsMixin(BaseModel, Generic[PDFDataT, PDFTextBlockT]):
     languages: Optional[Sequence[str]] = None
     html_data: Optional[HTMLData] = None
     pdf_data: Optional[PDFDataT] = None
+    etag: Optional[str] = None
+    last_modified: Optional[datetime] = None
 
     @property
     def text_blocks(self) -> Sequence[_TextBlockProto]:

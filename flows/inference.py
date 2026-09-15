@@ -608,6 +608,8 @@ class SingleDocumentInferenceResult(BaseModel):
     document: Optional[ParserOutput]
     labelled_passages: Sequence[LabelledPassage]
     document_stem: DocumentStem
+    document_etag: Optional[str]
+    document_last_modified: Optional[datetime]
     classifier_spec: ClassifierSpec
     noop: bool = False  # Flag nothing was done / needs doing
 
@@ -697,6 +699,8 @@ def _get_labelled_passage_from_prediction(
     block_id: str,
     text: str,
     classifier_spec: ClassifierSpec,
+    document_etag: str,
+    document_last_modified: datetime,
 ) -> LabelledPassage:
     """Creates the LabelledPassage from the list of spans output by the classifier"""
     # If there were no inference results, don't include the concept
@@ -714,6 +718,8 @@ def _get_labelled_passage_from_prediction(
         metadata = {
             "concept": concept,
             "classifier_spec": classifier_spec.model_dump(),
+            "etag": document_etag,
+            "document_last_updated": document_last_modified.isoformat(),
         }
 
     return LabelledPassage(
@@ -772,6 +778,8 @@ async def load_document(
         document_result.noop = True
 
     document_result.document = document
+    document_result.document_etag = s3_file.etag
+    document_result.document_last_modified = s3_file.last_modified
     return document_result
 
 
@@ -783,6 +791,9 @@ async def run_classifier_inference_on_document(
     """Run the classifier inference flow on a document."""
     logger = get_logger()
     assert result.document  # For typing, we already check this properly earlier
+    assert result.document_last_modified  # For typing
+    assert result.document_etag  # For typing
+
     if input_schema == "v1":
         document = cast(BaseParserOutput, result.document)
         passages = list(document_passages(document))
@@ -793,8 +804,6 @@ async def run_classifier_inference_on_document(
         raise ValueError(f"Invalid input_schema: {input_schema}")
 
     all_text = [text for text, _ in passages]
-    all_block_ids = [block_id for _, block_id in passages]
-
     all_spans: list[list[Span]] = classifier.predict(
         all_text, batch_size=CLASSIFIER_PREDICT_BATCH_SIZE
     )
@@ -803,12 +812,18 @@ async def run_classifier_inference_on_document(
     for spans in all_spans:
         _validate_spans(spans)
 
-    result.labelled_passages = [
-        _get_labelled_passage_from_prediction(
-            classifier, spans, block_id, text, result.classifier_spec
+    result.labelled_passages = []
+    for spans, (text, block_id) in zip(all_spans, passages):
+        labelled_passage = _get_labelled_passage_from_prediction(
+            classifier,
+            spans,
+            block_id,
+            text,
+            result.classifier_spec,
+            result.document_etag,
+            result.document_last_modified,
         )
-        for spans, block_id, text in zip(all_spans, all_block_ids, all_text)
-    ]
+        result.labelled_passages.append(labelled_passage)
 
     # Unload the document now that we're done with it
     result.document = None
@@ -960,6 +975,8 @@ async def _inference_batch_of_documents(
             SingleDocumentInferenceResult(
                 document=None,
                 labelled_passages=[],
+                document_etag=None,
+                document_last_modified=None,
                 document_stem=document_stem,
                 classifier_spec=classifier_spec,
             )
