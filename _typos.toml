@@ -20,3 +20,7 @@ extend-ignore-re = [
 [default.extend-words]
 fpr = "fpr"
 FPR = "FPR"
+# Substring prefixes used as lexicon terms in the climate justice
+# analysis, not misspellings.
+allocat = "allocat"
+participat = "participat"

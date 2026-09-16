@@ -1,0 +1,10 @@
+# Pulled Snowflake extracts — regenerate with `uv run python pull_data.py`.
+# Kept out of the repo because text_samples.parquet alone is ~112MB of raw
+# passage text, and the root .gitignore's `data/**/*` rule is anchored to the
+# repo root so it does not cover this directory.
+data/
+assets/fonts/
+
+# Machine-generated vector copies of the figures: ~400KB of unreviewable XML
+# each, and 95% of the diff. Regenerate with `uv run --script viz.py`.
+figures/*.svg
