@@ -282,7 +282,7 @@ async def main() -> None:
             {
                 "input_schema": "v2",
                 "inference_document_source_prefix": "embeddings_input_v2/",
-                "inference_document_target_prefix": "labelled_passages_v2/",
+                "inference_document_target_prefix": "inference_results_v2/",
             }
         ),
     )
