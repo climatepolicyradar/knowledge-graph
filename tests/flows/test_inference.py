@@ -472,9 +472,9 @@ def test_document_passages__blocked_types(parser_output_pdf):
 
     # Should only get the non-page-number block
     assert len(results) == 1
-    assert results[0] == ("test pdf text", "2")
+    assert results[0] == ("test pdf text", "2", None)
     # Verify the page number block was filtered out
-    assert not any(block_id == "page_1" for _, block_id in results)
+    assert not any(block_id == "page_1" for _, block_id, _ in results)
 
 
 def test_document_passages__invalid_content_type(parser_output):
@@ -486,12 +486,12 @@ def test_document_passages__invalid_content_type(parser_output):
 
 def test_document_passages__html(parser_output_html):
     html_result = document_passages(parser_output_html).__next__()
-    assert html_result == ("test html text", "1")
+    assert html_result == ("test html text", "1", None)
 
 
 def test_document_passages__pdf(parser_output_pdf):
     pdf_result = document_passages(parser_output_pdf).__next__()
-    assert pdf_result == ("test pdf text", "2")
+    assert pdf_result == ("test pdf text", "2", None)
 
 
 @pytest.mark.asyncio
@@ -766,7 +766,7 @@ async def test_run_classifier_inference_on_document_v2_schema():
     assert document.pdf_data is not None
     assert set(classifier.predict.call_args.args[0]) == set(
         [
-            "PART I: PROJECT INFORMATION",
+            "PART I: FISHING PROJECT INFORMATION",
             "ADAPTATION FUND\nPROJECT PROPOSAL TO THE ADAPTATION FUND",
         ]
     )
@@ -1031,8 +1031,11 @@ async def test_inference_batch_of_documents_cpu__v2_input(
         for line in jsonl_content.decode("utf-8").split("\n")
         if line.strip()
     ]
-    assert len(lines) > 0
-    json.loads(lines[0])
+    assert len(lines) == 1
+    line = json.loads(lines[0])
+    assert line["metadata"]["idx"] == 1
+    assert line["metadata"]["etag"] == "da800315167ba5cd08d5cc2e6e06a0be"
+    assert line["metadata"]["document_last_updated"] is not None
 
 
 @pytest.mark.asyncio
@@ -2567,6 +2570,7 @@ def test_get_labelled_passage_from_prediction_with_spans():
         classifier=classifier,
         spans=spans,
         block_id="fish_block",
+        block_idx=None,
         text="I love fishing. Aquaculture is the best.",
         classifier_spec=spec,
         document_etag="abbaabba",
@@ -2601,6 +2605,7 @@ def test_get_labelled_passage_from_prediction_without_spans():
         classifier=classifier,
         spans=[],
         block_id="fish_block",
+        block_idx=None,
         text="Rockets are cool. We should build more rockets.",
         classifier_spec=spec,
         document_etag="abbaabba",
