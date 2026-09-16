@@ -561,7 +561,7 @@ async def download_s3_file(config: Config, key: str, s3_client: S3Client) -> S3D
     body = await response["Body"].read()
     return S3Download(
         content=body.decode("utf-8"),
-        etag=response["ETag"],
+        etag=response["ETag"].strip('"'),
         last_modified=response["LastModified"],
     )
 
@@ -582,24 +582,24 @@ def _stringify(text: list[str]) -> str:
 
 def document_passages(
     document: BaseParserOutput,
-) -> Generator[tuple[str, str], None, None]:
+) -> Generator[tuple[str, str, Optional[int]], None, None]:
     """Yield the text block irrespective of content type."""
     text_blocks = document.get_text_blocks()
 
     for text_block in text_blocks:
         if text_block.type not in BLOCKED_BLOCK_TYPES:  # pyright: ignore[reportAttributeAccessIssue]
-            yield _stringify(text_block.text), text_block.text_block_id  # pyright: ignore[reportAttributeAccessIssue]
+            yield _stringify(text_block.text), text_block.text_block_id, None  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def document_passages_v2(
     document: BaseParserOutputV2,
-) -> Generator[tuple[str, str], None, None]:
+) -> Generator[tuple[str, str, int], None, None]:
     """Yield v2 text blocks as `(text, id)` tuples."""
     text_blocks = document.get_text_blocks()
 
     for text_block in text_blocks:
         if text_block.type not in BLOCKED_BLOCK_TYPES:  # pyright: ignore[reportAttributeAccessIssue]
-            yield text_block.to_string(), text_block.id  # pyright: ignore[reportAttributeAccessIssue]
+            yield text_block.to_string(), text_block.id, text_block.idx  # pyright: ignore[reportAttributeAccessIssue]
 
 
 class SingleDocumentInferenceResult(BaseModel):
@@ -697,6 +697,7 @@ def _get_labelled_passage_from_prediction(
     classifier: Classifier,
     spans: list[Span],
     block_id: str,
+    block_idx: Optional[int],
     text: str,
     classifier_spec: ClassifierSpec,
     document_etag: str,
@@ -716,6 +717,7 @@ def _get_labelled_passage_from_prediction(
         concept = concept_no_labelled_passages.model_dump()
 
         metadata = {
+            "idx": block_idx,
             "concept": concept,
             "classifier_spec": classifier_spec.model_dump(),
             "etag": document_etag,
@@ -815,7 +817,7 @@ async def run_classifier_inference_on_document(
     else:
         raise ValueError(f"Invalid input_schema: {input_schema}")
 
-    all_text = [text for text, _ in passages]
+    all_text = [text for text, _, _ in passages]
     all_spans: list[list[Span]] = classifier.predict(
         all_text, batch_size=CLASSIFIER_PREDICT_BATCH_SIZE
     )
@@ -823,13 +825,14 @@ async def run_classifier_inference_on_document(
         logger.info(f"Completed inference on {result.document_stem}")
     result.labelled_passages = []
 
-    for spans, (text, block_id) in zip(all_spans, passages):
+    for spans, (text, block_id, block_idx) in zip(all_spans, passages):
         if should_store_labelled_passages(input_schema, spans):
             _validate_spans(spans)
             labelled_passage = _get_labelled_passage_from_prediction(
                 classifier,
                 spans,
                 block_id,
+                block_idx if input_schema == "v2" else None,
                 text,
                 result.classifier_spec,
                 result.document_etag,
