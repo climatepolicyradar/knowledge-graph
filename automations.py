@@ -277,12 +277,6 @@ async def main() -> None:
         actions=[
             RunDeployment(
                 source="selected",
-                deployment_id=topic_pipeline_deployment.id,
-                parameters={},
-                schedule_after=timedelta(hours=3),
-            ),
-            RunDeployment(
-                source="selected",
                 deployment_id=inference_v2_deployment.id,
                 parameters={},
                 schedule_after=timedelta(hours=3),
