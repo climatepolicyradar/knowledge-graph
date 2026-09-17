@@ -149,4 +149,4 @@ def yaml_spec_to_json(aws_env: AwsEnv):
     with open(file_path, "r") as file:
         contents = yaml.load(file, Loader=yaml.FullLoader)
 
-    print(json.dumps(contents, indent=2))
+    return json.dumps(contents, indent=2)

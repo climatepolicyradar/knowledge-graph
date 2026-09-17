@@ -124,6 +124,9 @@ audit-prefect-artifacts +OPTS="":
         uv run collect_prefect_artifacts {{OPTS}}
     fi
 
+# print classifier specs as json to the console, ready for prefect, etc
+show-specs +OPTS="":
+    uv run python scripts/audit/classifier_specs_to_json.py {{OPTS}}
 
 # Validate all custom-classifier config YAMLs (offline schema + structural checks)
 validate-configs:
