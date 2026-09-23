@@ -85,6 +85,7 @@ BLOCKED_BLOCK_TYPES: Final[set[BlockType]] = {
 
 CLASSIFIER_CPU_CONCURRENCY_LIMIT: Final[PositiveInt] = 40
 CLASSIFIER_GPU_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
+EXISTING_RESULTS_CONCURRENCY_LIMIT: Final[PositiveInt] = 20
 INFERENCE_BATCH_SIZE_DEFAULT: Final[PositiveInt] = 200
 CLASSIFIER_PREDICT_BATCH_SIZE: Final[PositiveInt] = 32
 AWS_ENV: str = os.environ["AWS_ENV"]
@@ -231,6 +232,7 @@ async def get_file_stems_for_document_ids(
 ) -> list[DocumentStem]:
     """Collect all the Document Stems for the Document Import Ids"""
 
+    s3_prefix_document_stems_set = set(s3_prefix_document_stems)
     document_stems: list[DocumentStem] = []
 
     for document_id in document_ids:
@@ -241,7 +243,7 @@ async def get_file_stems_for_document_ids(
                 f"{document_id}_translated_{target_language}"
             )
 
-            if document_stem_translated in s3_prefix_document_stems:
+            if document_stem_translated in s3_prefix_document_stems_set:
                 document_stems.append(document_stem_translated)
                 found_translated = True
 
@@ -251,9 +253,9 @@ async def get_file_stems_for_document_ids(
     return document_stems
 
 
-async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
+async def list_bucket_file_stems(config: Config) -> dict[DocumentStem, datetime]:
     """
-    Scan configured bucket and return all file stems.
+    Scan configured bucket and return all file stems with their last modified dates.
 
     Where a stem refers to a file name without the extension. Often, this is the same as
     the document id, but not always as we have translated documents.
@@ -266,54 +268,21 @@ async def list_bucket_file_stems(config: Config) -> list[DocumentStem]:
         page_iterator = await get_bucket_paginator(
             config, config.inference_document_source_prefix, s3_client
         )
-        file_stems = []
+        file_stems: dict[DocumentStem, datetime] = {}
 
         async for p in page_iterator:
             if "Contents" in p:
                 for o in p["Contents"]:
-                    file_stem = Path(o["Key"]).stem  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                    file_stems.append(file_stem)
+                    file_stem = DocumentStem(Path(o["Key"]).stem)  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                    file_stems[file_stem] = o["LastModified"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
     return file_stems
-
-
-async def get_s3_prefix_last_modified_dates(
-    config: Config,
-    prefix: str,
-) -> dict[str, datetime]:
-    """
-    Retrieve the last modified datetime for all objects in an S3 prefix.
-
-    Args:
-        config: Config object containing bucket information
-        prefix: S3 prefix to list objects under
-
-    Returns:
-        Dictionary mapping S3 keys to their last modified datetime.
-    """
-    session = get_async_session(
-        region_name=config.bucket_region,
-        aws_env=config.aws_env,
-    )
-    async with session.client("s3") as s3_client:
-        paginator = s3_client.get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(
-            Bucket=config.cache_bucket_str,
-            Prefix=prefix,
-        )
-
-        result: dict[str, datetime] = {}
-        async for page in page_iterator:
-            for obj in page.get("Contents", []):
-                key = obj["Key"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                last_modified = obj["LastModified"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                result[key] = last_modified
-    return result
 
 
 async def filter_existing_inference_results(
     config: Config,
     classifier_spec: ClassifierSpec,
     filter_result: FilterResult,
+    text_extraction_dates: dict[DocumentStem, datetime],
 ) -> tuple[
     list[DocumentStem],
     set[DocumentStem],
@@ -326,13 +295,6 @@ async def filter_existing_inference_results(
         classifier_spec=classifier_spec,
     )
 
-    text_extraction_dates: dict[
-        str, datetime
-    ] = await get_s3_prefix_last_modified_dates(
-        config=config,
-        prefix=config.inference_document_source_prefix,
-    )
-
     # Filter out documents that already have results and were produced from the latest
     # version of text for a document.
     documents_to_process: list[DocumentStem] = []
@@ -342,13 +304,10 @@ async def filter_existing_inference_results(
             continue
 
         inference_date: datetime = existing_results[stem]
-        key: str = os.path.join(
-            config.inference_document_source_prefix,
-            f"{stem}.json",
-        )
-        text_extraction_date: datetime | None = text_extraction_dates.get(key)
+        text_extraction_date: datetime | None = text_extraction_dates.get(stem)
 
         if not text_extraction_date:
+            key = os.path.join(config.inference_document_source_prefix, f"{stem}.json")
             logger.warning(
                 f"No latestModified date for: s3://{config.cache_bucket_str}/{key}"
             )
@@ -1460,12 +1419,12 @@ async def inference(
         S3Uri.from_s3_path(document_ids_s3_path) if document_ids_s3_path else None
     )
 
-    current_bucket_file_stems = await list_bucket_file_stems(config=config)
+    text_extraction_dates = await list_bucket_file_stems(config=config)
     validated_file_stems = await determine_file_stems(
         config=config,
         requested_document_ids=document_ids,
         document_ids_s3_uri=document_ids_s3_uri,
-        current_bucket_file_stems=current_bucket_file_stems,
+        current_bucket_file_stems=list(text_extraction_dates),
     )
 
     if classifier_specs is None:
@@ -1508,27 +1467,40 @@ async def inference(
     existing_results_count: dict[ClassifierSpec, int] = {}
     accepted_documents_count: dict[ClassifierSpec, int] = {}
 
-    for classifier_spec in classifier_specs:
-        filter_result = filter_document_batch(validated_file_stems, classifier_spec)
-        accepted_documents_count[classifier_spec] = len(filter_result.accepted)
+    async def documents_to_process_for(
+        classifier_spec: ClassifierSpec, filter_result: FilterResult
+    ) -> tuple[Sequence[DocumentStem], set[DocumentStem], int]:
+        if not skip_existing_inference_results:
+            return filter_result.accepted, set(), 0
+        return await filter_existing_inference_results(
+            config=config,
+            classifier_spec=classifier_spec,
+            filter_result=filter_result,
+            text_extraction_dates=text_extraction_dates,
+        )
 
-        # Check for existing results if caching is enabled
-        if skip_existing_inference_results:
-            (
-                documents_to_process,
-                skipped_stems,
-                existing_count,
-            ) = await filter_existing_inference_results(
-                config=config,
-                classifier_spec=classifier_spec,
-                filter_result=filter_result,
+    filter_results = [
+        filter_document_batch(validated_file_stems, classifier_spec)
+        for classifier_spec in classifier_specs
+    ]
+    semaphore = asyncio.Semaphore(EXISTING_RESULTS_CONCURRENCY_LIMIT)
+    documents_to_process_results = await asyncio.gather(
+        *[
+            wait_for_semaphore(
+                semaphore, documents_to_process_for(classifier_spec, filter_result)
             )
-            skipped_by_cache[classifier_spec] = skipped_stems
-            existing_results_count[classifier_spec] = existing_count
-        else:
-            documents_to_process = filter_result.accepted
-            skipped_by_cache[classifier_spec] = set()
-            existing_results_count[classifier_spec] = 0
+            for classifier_spec, filter_result in zip(classifier_specs, filter_results)
+        ]
+    )
+
+    for classifier_spec, filter_result, (
+        documents_to_process,
+        skipped_stems,
+        existing_count,
+    ) in zip(classifier_specs, filter_results, documents_to_process_results):
+        accepted_documents_count[classifier_spec] = len(filter_result.accepted)
+        skipped_by_cache[classifier_spec] = skipped_stems
+        existing_results_count[classifier_spec] = existing_count
 
         # Track all documents we were asked to process (including skipped ones)
         requested_document_stems.update(documents_to_process)

@@ -119,8 +119,9 @@ async def helper_list_labels_in_bucket(test_config, bucket_name, async_s3_client
 @pytest.mark.asyncio
 async def test_list_bucket_file_stems(test_config, mock_async_bucket_documents):
     expected_ids = [Path(d).stem for d in mock_async_bucket_documents]
-    got_ids = await list_bucket_file_stems(test_config)
-    assert sorted(expected_ids) == sorted(got_ids)
+    got = await list_bucket_file_stems(test_config)
+    assert sorted(expected_ids) == sorted(got)
+    assert all(isinstance(d, datetime) for d in got.values())
 
 
 @pytest.mark.parametrize(
@@ -2170,6 +2171,7 @@ async def test_filter_existing_inference_results_no_existing_results(
         config=test_config,
         classifier_spec=classifier_spec,
         filter_result=FilterResult(accepted=[document_stem], removed=[]),
+        text_extraction_dates=await list_bucket_file_stems(test_config),
     )
 
     assert result == ([document_stem], set(), 0)
@@ -2217,6 +2219,7 @@ async def test_filter_existing_inference_results_up_to_date(
         config=test_config,
         classifier_spec=classifier_spec,
         filter_result=FilterResult(accepted=[document_stem], removed=[]),
+        text_extraction_dates=await list_bucket_file_stems(test_config),
     )
 
     assert result == ([], {document_stem}, 1)
@@ -2265,6 +2268,41 @@ async def test_filter_existing_inference_results_out_of_date(
         config=test_config,
         classifier_spec=classifier_spec,
         filter_result=FilterResult(accepted=[document_stem], removed=[]),
+        text_extraction_dates=await list_bucket_file_stems(test_config),
+    )
+
+    assert result == ([document_stem], set(), 1)
+
+
+@pytest.mark.asyncio
+async def test_filter_existing_inference_results_missing_source_date(
+    mock_async_bucket,
+    mock_s3_async_client,
+    test_config,
+) -> None:
+    """Test that documents are reprocessed when the source date is unknown."""
+    document_stem = DocumentStem("CCLW.executive.1.1")
+    classifier_spec = ClassifierSpec(
+        wikibase_id=WikibaseID("Q123"),
+        classifier_id=ClassifierID("testabcd"),
+        wandb_registry_version="v1",
+    )
+    result_key = (
+        f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/"
+        f"{classifier_spec.classifier_id}/{document_stem}.json"
+    )
+
+    await mock_s3_async_client.put_object(
+        Bucket=test_config.cache_bucket,
+        Key=result_key,
+        Body=b'{"test": "data"}',
+    )
+
+    result = await filter_existing_inference_results(
+        config=test_config,
+        classifier_spec=classifier_spec,
+        filter_result=FilterResult(accepted=[document_stem], removed=[]),
+        text_extraction_dates={},
     )
 
     assert result == ([document_stem], set(), 1)
