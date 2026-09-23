@@ -293,7 +293,7 @@ def test_filter_non_english_file_stems() -> None:
 
     # Test that we can filter quickly even on very long lists
     file_stems = []
-    for i in list(range(7_000)):
+    for i in list(range(100_000)):
         file_stems.append(f"AF.document.{i}.n0000")
         if i % 2 == 0:
             file_stems.append(f"AF.document.{i}.n0000_translated_en")

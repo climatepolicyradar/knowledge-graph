@@ -443,7 +443,7 @@ async def collect_unique_file_stems_under_prefix(
 
 def is_file_stem_for_english_language_document(
     file_stem: DocumentStem,
-    file_stems: list[DocumentStem],
+    file_stems: set[DocumentStem],
     english_translation_suffix: str = "_translated_en",
 ) -> bool:
     """
@@ -464,9 +464,10 @@ def filter_non_english_language_file_stems(
     file_stems: list[DocumentStem],
 ) -> list[DocumentStem]:
     """Filter out file stems that are for non-English language documents."""
+    file_stems_set = set(file_stems)
     return list(
         filter(
-            lambda f: is_file_stem_for_english_language_document(f, file_stems),
+            lambda f: is_file_stem_for_english_language_document(f, file_stems_set),
             file_stems,
         )
     )
