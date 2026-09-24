@@ -1,0 +1,33 @@
+wikibase_id,preferred_label,model_name,is_baseline,structured_output,agreement_level,precision,recall,f1,f1_ci_low,f1_ci_high,support,n_passages,n_failed_predictions,predict_seconds,prompt_usd_per_mtok,completion_usd_per_mtok
+Q32,climate justice,openrouter:google/gemini-3.1-pro-preview,True,True,Passage level,0.9036144578313252,0.9375,0.920245398773006,0.8734,0.9595,107,107,0,87.9,2.0,12.0
+Q32,climate justice,openrouter:google/gemini-3.1-pro-preview,True,True,Span level (0.5),0.4671532846715328,0.6274509803921569,0.5355648535564854,,,194,107,0,87.9,2.0,12.0
+Q32,climate justice,openrouter:deepseek/deepseek-v4-pro-0813,False,True,Passage level,0.9384615384615383,0.7625,0.8413793103448275,0.7752,0.8993,107,107,0,22.6,0.462,1.386
+Q32,climate justice,openrouter:deepseek/deepseek-v4-pro-0813,False,True,Span level (0.5),0.2934782608695652,0.2647058823529412,0.2783505154639175,,,190,107,0,22.6,0.462,1.386
+Q32,climate justice,openrouter:moonshotai/kimi-k3,False,True,Passage level,0.9058823529411764,0.9625,0.9333333333333332,0.8875,0.9669,107,107,0,372.2,3.0,15.0
+Q32,climate justice,openrouter:moonshotai/kimi-k3,False,True,Span level (0.5),0.392156862745098,0.5882352941176471,0.4705882352941176,,,214,107,0,372.2,3.0,15.0
+Q911,distributive justice,openrouter:google/gemini-3.1-pro-preview,True,True,Passage level,0.89,0.8018018018018018,0.8436018957345972,0.786,0.8947,178,178,0,118.5,2.0,12.0
+Q911,distributive justice,openrouter:google/gemini-3.1-pro-preview,True,True,Span level (0.5),0.7297297297297297,0.5869565217391305,0.6506024096385542,,,224,178,0,118.5,2.0,12.0
+Q911,distributive justice,openrouter:moonshotai/kimi-k3,False,True,Passage level,0.8932038834951457,0.8288288288288288,0.8598130841121495,0.8079,0.9067,178,178,0,700.0,3.0,15.0
+Q911,distributive justice,openrouter:moonshotai/kimi-k3,False,True,Span level (0.5),0.5625,0.5869565217391305,0.5744680851063831,,,257,178,0,700.0,3.0,15.0
+Q911,distributive justice,openrouter:deepseek/deepseek-v4-pro-0813,False,True,Passage level,0.9016393442622952,0.4954954954954955,0.6395348837209303,0.5526,0.7219,178,178,0,34.3,0.462,1.386
+Q911,distributive justice,openrouter:deepseek/deepseek-v4-pro-0813,False,True,Span level (0.5),0.3972602739726027,0.2101449275362318,0.2748815165876777,,,243,178,0,34.3,0.462,1.386
+Q912,procedural justice,openrouter:google/gemini-3.1-pro-preview,True,True,Passage level,0.8795180722891566,0.8202247191011236,0.8488372093023256,0.7875,0.9016,227,227,0,133.0,2.0,12.0
+Q912,procedural justice,openrouter:google/gemini-3.1-pro-preview,True,True,Span level (0.5),0.4509803921568627,0.4554455445544554,0.4532019704433498,,,285,227,0,133.0,2.0,12.0
+Q912,procedural justice,openrouter:moonshotai/kimi-k3,False,True,Passage level,0.8064516129032258,0.8426966292134831,0.8241758241758241,0.7614,0.8804,227,227,0,655.8,3.0,15.0
+Q912,procedural justice,openrouter:moonshotai/kimi-k3,False,True,Span level (0.5),0.4545454545454545,0.5445544554455446,0.4954954954954954,,,287,227,0,655.8,3.0,15.0
+Q912,procedural justice,openrouter:deepseek/deepseek-v4-pro-0813,False,True,Passage level,0.8414634146341463,0.7752808988764045,0.8070175438596492,0.7385,0.8639,227,227,0,43.2,0.462,1.386
+Q912,procedural justice,openrouter:deepseek/deepseek-v4-pro-0813,False,True,Span level (0.5),0.3406593406593406,0.3069306930693069,0.3229166666666667,,,286,227,0,43.2,0.462,1.386
+Q32,climate justice,openrouter:anthropic/claude-opus-5.5,False,False,Passage level,0.9259259259259259,0.9375,0.9316770186335404,0.8903,0.9708,107,107,0,30.1,4.0,20.0
+Q32,climate justice,openrouter:anthropic/claude-opus-5.5,False,False,Span level (0.5),0.5040650406504065,0.6078431372549019,0.551111111111111,,,184,107,0,30.1,4.0,20.0
+Q911,distributive justice,openrouter:anthropic/claude-opus-5.5,False,False,Passage level,0.8979591836734694,0.7927927927927928,0.8421052631578948,0.7857,0.8929,178,178,0,38.0,4.0,20.0
+Q911,distributive justice,openrouter:anthropic/claude-opus-5.5,False,False,Span level (0.5),0.632,0.572463768115942,0.6007604562737643,,,241,178,0,38.0,4.0,20.0
+Q912,procedural justice,openrouter:anthropic/claude-opus-5.5,False,False,Passage level,0.868421052631579,0.7415730337078652,0.8,0.7296,0.8586,227,227,0,42.7,4.0,20.0
+Q912,procedural justice,openrouter:anthropic/claude-opus-5.5,False,False,Span level (0.5),0.5567010309278351,0.5346534653465347,0.5454545454545455,,,272,227,0,42.7,4.0,20.0
+Q1829,finance flow,openrouter:openai/gpt-5,True,True,Passage level,0.8587786259541985,0.7758620689655172,0.8152173913043479,0.778,0.8469,644,644,0,811.6,1.25,10.0
+Q1829,finance flow,openrouter:openai/gpt-5,True,True,Span level (0.5),0.5295566502463054,0.5180722891566265,0.5237515225334958,,,923,644,0,811.6,1.25,10.0
+Q1829,finance flow,openrouter:moonshotai/kimi-k3,False,True,Passage level,0.8758620689655172,0.8758620689655172,0.8758620689655172,0.8444,0.9017,644,644,13,3349.7,3.0,15.0
+Q1829,finance flow,openrouter:moonshotai/kimi-k3,False,True,Span level (0.5),0.5870069605568445,0.6096385542168675,0.5981087470449172,,,911,644,13,3349.7,3.0,15.0
+Q1829,finance flow,openrouter:deepseek/deepseek-v4-pro-0813,False,True,Passage level,0.8595890410958904,0.8655172413793103,0.8625429553264604,0.8312,0.8908,644,644,2,2394.1,0.462,1.386
+Q1829,finance flow,openrouter:deepseek/deepseek-v4-pro-0813,False,True,Span level (0.5),0.5627906976744186,0.5831325301204819,0.5727810650887574,,,916,644,2,2394.1,0.462,1.386
+Q1829,finance flow,openrouter:anthropic/claude-opus-5.5,False,False,Passage level,0.89453125,0.7896551724137931,0.8388278388278388,0.8052,0.87,644,644,1,132.6,4.0,20.0
+Q1829,finance flow,openrouter:anthropic/claude-opus-5.5,False,False,Span level (0.5),0.6239067055393586,0.5156626506024097,0.5646437994722955,,,871,644,1,132.6,4.0,20.0
