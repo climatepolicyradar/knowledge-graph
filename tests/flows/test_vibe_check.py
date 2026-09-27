@@ -1,3 +1,5 @@
+import io
+import json
 from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,6 +15,19 @@ from knowledge_graph.labelling import ArgillaConfig
 from knowledge_graph.wikibase import WikibaseConfig
 
 N_PASSAGES = 10
+EMBEDDING_DIM = 384
+
+
+def _make_embedding_batch(n: int, dim: int, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    embeddings = rng.random((n, dim), dtype=np.float32)
+    return embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+
+
+def _make_single_embedding(dim: int, seed: int) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    embedding = rng.random(dim).astype(np.float32)
+    return embedding / np.linalg.norm(embedding)
 
 
 def _make_passages_df(n: int) -> pd.DataFrame:
@@ -59,11 +74,7 @@ def vibe_check_externals(test_config):
     mock_classifier.predict.return_value = [[] for _ in range(N_PASSAGES)]
 
     passages_df = _make_passages_df(N_PASSAGES)
-
-    embedding_dim = 384
-    rng = np.random.default_rng(42)
-    embeddings = rng.random((N_PASSAGES, embedding_dim), dtype=np.float32)
-    embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
+    embeddings = _make_embedding_batch(N_PASSAGES, EMBEDDING_DIM, seed=42)
 
     metadata = {"embedding_model_name": "test-model"}
 
@@ -116,9 +127,7 @@ def vibe_check_externals(test_config):
         mock_wikibase_cls.return_value = mock_wikibase
 
         mock_st = MagicMock()
-        concept_embedding = rng.random(embedding_dim).astype(np.float32)
-        concept_embedding = concept_embedding / np.linalg.norm(concept_embedding)
-        mock_st.encode.return_value = concept_embedding
+        mock_st.encode.return_value = _make_single_embedding(EMBEDDING_DIM, seed=43)
         mock_st_cls.return_value = mock_st
 
         yield VibeCheckExternals(
@@ -195,3 +204,119 @@ async def test_vibe_check_isolates_failures_across_multiple_concepts(
         await vibe_check_inference(wikibase_ids=["Q1", "Q2"])
 
     assert vibe_check_externals.push_to_s3.call_count == 3
+
+
+VIBE_CHECK_BUCKET_NAME = "test-vibe-checker-bucket"
+
+
+@pytest.fixture
+def vibe_check_s3_ssm_environment(mock_s3_client, mock_ssm_client) -> None:
+    """Seeds a real (moto) S3 bucket + SSM param with the files the flow reads for real."""
+    mock_s3_client.create_bucket(
+        Bucket=VIBE_CHECK_BUCKET_NAME,
+        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
+    )
+    mock_ssm_client.put_parameter(
+        Name="/vibe-checker/bucket-name",
+        Value=VIBE_CHECK_BUCKET_NAME,
+        Type="String",
+    )
+
+    passages_df = _make_passages_df(N_PASSAGES)
+    feather_buffer = io.BytesIO()
+    passages_df.to_feather(feather_buffer)
+    mock_s3_client.put_object(
+        Bucket=VIBE_CHECK_BUCKET_NAME,
+        Key="passages_dataset.feather",
+        Body=feather_buffer.getvalue(),
+    )
+
+    embeddings = _make_embedding_batch(N_PASSAGES, EMBEDDING_DIM, seed=42)
+    embeddings_buffer = io.BytesIO()
+    np.save(embeddings_buffer, embeddings)
+    mock_s3_client.put_object(
+        Bucket=VIBE_CHECK_BUCKET_NAME,
+        Key="passages_embeddings.npy",
+        Body=embeddings_buffer.getvalue(),
+    )
+
+    mock_s3_client.put_object(
+        Bucket=VIBE_CHECK_BUCKET_NAME,
+        Key="passages_embeddings_metadata.json",
+        Body=json.dumps({"embedding_model_name": "test-model"}).encode("utf-8"),
+    )
+
+
+@dataclass
+class VibeCheckEndToEndExternals:
+    """Handles to the mocks left in the end-to-end test: real third-party services only."""
+
+    wikibase_session: MagicMock
+    classifier: MagicMock
+
+
+@pytest.fixture
+def vibe_check_end_to_end(vibe_check_s3_ssm_environment, test_config):
+    mock_classifier = MagicMock()
+    mock_classifier.id = "test_classifier_id"
+    mock_classifier.predict.return_value = [[] for _ in range(N_PASSAGES)]
+
+    with (
+        patch(
+            "flows.vibe_check.Config.create",
+            new_callable=AsyncMock,
+            return_value=test_config,
+        ),
+        # wandb is a genuine external service test_config would otherwise log into for real.
+        patch("wandb.login"),
+        patch("flows.vibe_check.WikibaseSession") as mock_wikibase_cls,
+        patch("flows.vibe_check.SentenceTransformer") as mock_st_cls,
+        patch(
+            "flows.vibe_check.run_training",
+            new_callable=AsyncMock,
+            return_value=mock_classifier,
+        ),
+    ):
+        mock_wikibase = MagicMock()
+        mock_wikibase_cls.return_value = mock_wikibase
+
+        mock_st = MagicMock()
+        mock_st.encode.return_value = _make_single_embedding(EMBEDDING_DIM, seed=123)
+        mock_st_cls.return_value = mock_st
+
+        yield VibeCheckEndToEndExternals(
+            wikibase_session=mock_wikibase,
+            classifier=mock_classifier,
+        )
+
+
+@pytest.mark.asyncio
+async def test_vibe_check_inference_end_to_end_isolates_failures_across_concepts(
+    vibe_check_end_to_end,
+    mock_s3_client,
+):
+    """Real S3/SSM wiring end-to-end: confirms Q2 failing doesn't block Q1's real S3 writes."""
+
+    def _get_concept(wikibase_id):
+        if wikibase_id == WikibaseID("Q2"):
+            raise ValueError("Q2 not found")
+        return Concept(wikibase_id=wikibase_id, preferred_label="ok concept")
+
+    vibe_check_end_to_end.wikibase_session.get_concept_async = AsyncMock(
+        side_effect=_get_concept
+    )
+
+    with pytest.raises(RuntimeError, match="1/2 concepts failed to process: Q2"):
+        await vibe_check_inference(wikibase_ids=["Q1", "Q2"])
+
+    objects = mock_s3_client.list_objects_v2(Bucket=VIBE_CHECK_BUCKET_NAME)
+    keys = {obj["Key"] for obj in objects.get("Contents", [])}
+
+    # Q1 succeeded, and its outputs were really written to S3...
+    q1_prefix = f"Q1/{vibe_check_end_to_end.classifier.id}/"
+    assert f"{q1_prefix}predictions.jsonl" in keys
+    assert f"{q1_prefix}concept.json" in keys
+    assert f"{q1_prefix}classifier.json" in keys
+
+    # ...but Q2 failed before it got anywhere near S3.
+    assert not any(key.startswith("Q2/") for key in keys)
