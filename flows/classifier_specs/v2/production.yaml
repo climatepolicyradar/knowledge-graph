@@ -11,7 +11,7 @@
 - wikibase_id: Q47
   concept_id: hdgvd2ju
   classifier_id: rfvhzrck
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v0
 - wikibase_id: Q53
   concept_id: kgtd77zy
@@ -26,12 +26,12 @@
 - wikibase_id: Q68
   concept_id: ad7tcbph
   classifier_id: kk8dqcrj
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v2
 - wikibase_id: Q69
   concept_id: 7gzqkcyc
   classifier_id: swabfsar
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v3
 - wikibase_id: Q218
   concept_id: ygjab2d5
@@ -66,7 +66,7 @@
 - wikibase_id: Q374
   concept_id: 2nf7bhjg
   classifier_id: argh45s5
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v27
 - wikibase_id: Q385
   concept_id: chj57n99
@@ -86,7 +86,7 @@
 - wikibase_id: Q557
   concept_id: yd3rpeuh
   classifier_id: nnv2ma7z
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v0
 - wikibase_id: Q567
   concept_id: 596hws3c
@@ -146,7 +146,7 @@
 - wikibase_id: Q676
   concept_id: mc8gvrpj
   classifier_id: y3vcj3dm
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v17
 - wikibase_id: Q684
   concept_id: z6atmpr5
@@ -241,7 +241,7 @@
 - wikibase_id: Q774
   concept_id: mqnudzra
   classifier_id: qxa74qvw
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v25
 - wikibase_id: Q775
   concept_id: zt7e7p5z
@@ -329,7 +329,7 @@
 - wikibase_id: Q979
   concept_id: e2cbzw2u
   classifier_id: fnkarth4
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v0
 - wikibase_id: Q983
   concept_id: yfycqcfb
@@ -349,7 +349,7 @@
 - wikibase_id: Q1167
   concept_id: rhs8xgsy
   classifier_id: jp8e4k7h
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v17
 - wikibase_id: Q1269
   concept_id: fxmy2gbs
@@ -426,7 +426,7 @@
 - wikibase_id: Q1343
   concept_id: nrdhw2ad
   classifier_id: vax7e3n7
-  classifiers_profile: experimental
+  classifiers_profile: retired
   wandb_registry_version: v14
 - wikibase_id: Q1344
   concept_id: f3jxb2er
@@ -509,7 +509,7 @@
 - wikibase_id: Q1830
   concept_id: p8hgdgwd
   classifier_id: v32gpea3
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v0
 - wikibase_id: Q1831
   concept_id: ewzessvq
@@ -519,7 +519,7 @@
 - wikibase_id: Q1832
   concept_id: tbhqkjzf
   classifier_id: ggks7e8w
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v0
 - wikibase_id: Q1833
   concept_id: sdkqfbce
@@ -534,7 +534,7 @@
 - wikibase_id: Q1835
   concept_id: xk8b47d2
   classifier_id: p7jtajcb
-  classifiers_profile: primary
+  classifiers_profile: retired
   wandb_registry_version: v0
 - wikibase_id: Q1836
   concept_id: mry6wsvv
