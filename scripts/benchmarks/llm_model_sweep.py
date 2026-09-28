@@ -32,6 +32,7 @@ Example::
 import asyncio
 import csv
 import logging
+import os
 import time
 from pathlib import Path
 from typing import Annotated, Any, cast
@@ -43,6 +44,7 @@ from rich.console import Console
 from rich.table import Table
 
 from knowledge_graph.classifier.large_language_model import LLMClassifier
+from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.concept import Concept
 from knowledge_graph.custom_classifier_config import CustomClassifierConfig
 from knowledge_graph.labelled_passage import LabelledPassage
@@ -403,12 +405,20 @@ def main(
     output_dir: Annotated[
         Path, typer.Option(help="Directory to write results.csv into")
     ] = DEFAULT_OUTPUT_DIR,
+    aws_env: Annotated[
+        AwsEnv, typer.Option(help="AWS environment to fetch the OpenRouter key from")
+    ] = AwsEnv.production,
 ):
     """Benchmark several LLMs on custom-classifier YAML configs."""
     config_paths = (
         [Path(p) for p in split_list(configs)] if configs else DEFAULT_CONFIGS
     )
     model_names = split_list(models) if models else DEFAULT_MODELS
+
+    console.log("Fetching OpenRouter API key from SSM")
+    os.environ["OPENROUTER_API_KEY"] = get_aws_ssm_param(
+        "/OpenRouter/KGApiKey", aws_env=aws_env
+    )
 
     output_path = output_dir / "results.csv"
     console.log(
