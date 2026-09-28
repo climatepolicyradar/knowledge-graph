@@ -6,6 +6,10 @@ on:
       aws-env:
         required: true
         type: string
+      skip:
+        required: false
+        type: boolean
+        default: false
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -22,6 +26,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ !inputs.skip }}
     runs-on: ubuntu-latest
 
     steps:
