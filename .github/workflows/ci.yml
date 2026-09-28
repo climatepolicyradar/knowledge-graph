@@ -1,9 +1,9 @@
 name: CI
 
 on:
+  # No paths-ignore on pull_request: required checks never report if the workflow is skipped, which blocks
+  # Markdown-only PRs. Jobs skip themselves via the `changes` job instead, and skipped jobs count as passing.
   pull_request:
-    paths-ignore:
-      - '**/*.md' # Run on all pull requests, regardless of target branch but don't run for a Markdown file change
   push:
     branches:
       - main
@@ -15,7 +15,27 @@ permissions:
   contents: write
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'pull_request'
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     name: "Lint"
     steps:
@@ -44,6 +64,8 @@ jobs:
         run: just lint-all
 
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     name: "Test"
     steps:
@@ -73,9 +95,13 @@ jobs:
 
   deploy_prefect_sandbox:
     name: "Sandbox"
+    needs: changes
     uses: ./.github/workflows/prefect_deploy.yml
     with:
       aws-env: sandbox
+      # Skip inside the called workflow rather than with a job-level `if:` here, so the required
+      # "Sandbox / deploy" check still reports (as skipped) instead of pending forever
+      skip: ${{ needs.changes.outputs.code != 'true' }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID_SANDBOX }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY_SANDBOX }}
