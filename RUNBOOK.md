@@ -6,6 +6,7 @@ fails.
 ## Contents
 
 - [Labelled datasets in Argilla](#labelled-datasets-in-argilla)
+- [Users in Argilla](#users-in-argilla)
 - [Classifiers](#classifiers)
 - [Deploys and pipelines](#deploys-and-pipelines)
 
@@ -113,6 +114,12 @@ which fails with `ValueError: '' is not a valid AwsEnv` before anything else hap
 
 Also needs `uv run prefect cloud login`. `Config.create()` reads a Prefect Variable for the cache
 bucket. If AWS calls fail with `TokenRetrievalError`, re-run `aws sso login --profile prod`.
+
+## Users in Argilla
+
+See `scripts/argilla/users.py`. At the time of writing there are commands to both create users (either annotator or owner) or list all users. This script exists because there's no built in CLI for Argilla V2 – so, feel free to (vibe-)update it with new tasks as needed.
+
+The `create` command of the `users.py` script will automatically generate you a password.
 
 ## Classifiers
 

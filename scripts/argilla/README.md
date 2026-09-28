@@ -10,7 +10,7 @@ Both require use of the sample script (`scripts/sample.py`). They're set to load
 ## Users
 
 - `users.py`: manage Argilla users. It has two commands:
-  - `create`: interactively create a single user as an `annotator` or an `owner`. Labellers are also assigned to the `knowledge-graph` workspace.
+  - `create`: interactively create a single user as an `annotator` or an `owner`. Annotators are also assigned to the `knowledge-graph` workspace.
   - `list`: print every Argilla user with their name, role and workspace memberships.
 
 Argilla owner credentials are pulled from SSM (`/Argilla/APIURL` and `/Argilla/Owner/APIKey`), so you must be authenticated to AWS when running it. Run with `uv run python scripts/argilla/users.py create` or `... list`.
