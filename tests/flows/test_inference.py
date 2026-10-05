@@ -2172,6 +2172,7 @@ async def test_filter_existing_inference_results_no_existing_results(
         classifier_spec=classifier_spec,
         filter_result=FilterResult(accepted=[document_stem], removed=[]),
         text_extraction_dates=await list_bucket_file_stems(test_config),
+        s3_client=mock_s3_async_client,
     )
 
     assert result == ([document_stem], set(), 0)
@@ -2220,6 +2221,7 @@ async def test_filter_existing_inference_results_up_to_date(
         classifier_spec=classifier_spec,
         filter_result=FilterResult(accepted=[document_stem], removed=[]),
         text_extraction_dates=await list_bucket_file_stems(test_config),
+        s3_client=mock_s3_async_client,
     )
 
     assert result == ([], {document_stem}, 1)
@@ -2269,6 +2271,7 @@ async def test_filter_existing_inference_results_out_of_date(
         classifier_spec=classifier_spec,
         filter_result=FilterResult(accepted=[document_stem], removed=[]),
         text_extraction_dates=await list_bucket_file_stems(test_config),
+        s3_client=mock_s3_async_client,
     )
 
     assert result == ([document_stem], set(), 1)
@@ -2303,6 +2306,7 @@ async def test_filter_existing_inference_results_missing_source_date(
         classifier_spec=classifier_spec,
         filter_result=FilterResult(accepted=[document_stem], removed=[]),
         text_extraction_dates={},
+        s3_client=mock_s3_async_client,
     )
 
     assert result == ([document_stem], set(), 1)
@@ -2333,6 +2337,7 @@ async def test_get_existing_inference_results_empty(
     existing = await get_existing_inference_results(
         config=test_config,
         classifier_spec=classifier_spec,
+        s3_client=mock_s3_async_client,
     )
 
     assert existing == dict()
@@ -2368,6 +2373,7 @@ async def test_get_existing_inference_results_with_results(
     existing = await get_existing_inference_results(
         config=test_config,
         classifier_spec=classifier_spec,
+        s3_client=mock_s3_async_client,
     )
 
     assert set(existing.keys()) == set(documents)
@@ -2411,10 +2417,12 @@ async def test_get_existing_inference_results_different_classifiers(
     existing_1 = await get_existing_inference_results(
         config=test_config,
         classifier_spec=classifier_spec_1,
+        s3_client=mock_s3_async_client,
     )
     existing_2 = await get_existing_inference_results(
         config=test_config,
         classifier_spec=classifier_spec_2,
+        s3_client=mock_s3_async_client,
     )
 
     assert set(existing_1.keys()) == {doc1}

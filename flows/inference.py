@@ -283,6 +283,7 @@ async def filter_existing_inference_results(
     classifier_spec: ClassifierSpec,
     filter_result: FilterResult,
     text_extraction_dates: dict[DocumentStem, datetime],
+    s3_client: S3Client,
 ) -> tuple[
     list[DocumentStem],
     set[DocumentStem],
@@ -293,6 +294,7 @@ async def filter_existing_inference_results(
     existing_results = await get_existing_inference_results(
         config=config,
         classifier_spec=classifier_spec,
+        s3_client=s3_client,
     )
 
     # Filter out documents that already have results and were produced from the latest
@@ -328,6 +330,7 @@ async def filter_existing_inference_results(
 async def get_existing_inference_results(
     config: Config,
     classifier_spec: ClassifierSpec,
+    s3_client: S3Client,
 ) -> dict[DocumentStem, datetime]:
     """Get document stems that have inference results for a classifier."""
     logger = get_logger()
@@ -343,30 +346,22 @@ async def get_existing_inference_results(
         f"checking for existing results at s3://{config.cache_bucket}/{prefix}"
     )
 
-    session = get_async_session(
-        region_name=config.bucket_region,
-        aws_env=config.aws_env,
+    # Use paginator for efficient bulk listing
+    paginator = s3_client.get_paginator("list_objects_v2")
+    page_iterator = paginator.paginate(
+        Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
+        Prefix=prefix,
     )
 
-    async with session.client("s3") as s3_client:
-        # Use paginator for efficient bulk listing
-        paginator = s3_client.get_paginator("list_objects_v2")
-        page_iterator = paginator.paginate(
-            Bucket=config.cache_bucket,  # pyright: ignore[reportArgumentType]
-            Prefix=prefix,
-        )
+    existing_inference_results_stems: dict[DocumentStem, datetime] = dict()
+    async for page in page_iterator:
+        if "Contents" in page:
+            for obj in page["Contents"]:  # pyright: ignore[reportUnknownVariableType]
+                key: str = obj["Key"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
+                last_modified: datetime = obj["LastModified"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
 
-        existing_inference_results_stems: dict[DocumentStem, datetime] = dict()
-        async for page in page_iterator:
-            if "Contents" in page:
-                for obj in page["Contents"]:  # pyright: ignore[reportUnknownVariableType]
-                    key: str = obj["Key"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
-                    last_modified: datetime = obj["LastModified"]  # pyright: ignore[reportUnknownVariableType,reportTypedDictNotRequiredAccess]
-
-                    filename = Path(key).stem
-                    existing_inference_results_stems[DocumentStem(filename)] = (
-                        last_modified
-                    )
+                filename = Path(key).stem
+                existing_inference_results_stems[DocumentStem(filename)] = last_modified
 
     logger.debug(
         f"found {len(existing_inference_results_stems)} existing results for {classifier_spec}"
@@ -1468,7 +1463,9 @@ async def inference(
     accepted_documents_count: dict[ClassifierSpec, int] = {}
 
     async def documents_to_process_for(
-        classifier_spec: ClassifierSpec, filter_result: FilterResult
+        classifier_spec: ClassifierSpec,
+        filter_result: FilterResult,
+        s3_client: S3Client,
     ) -> tuple[Sequence[DocumentStem], set[DocumentStem], int]:
         if not skip_existing_inference_results:
             return filter_result.accepted, set(), 0
@@ -1477,6 +1474,7 @@ async def inference(
             classifier_spec=classifier_spec,
             filter_result=filter_result,
             text_extraction_dates=text_extraction_dates,
+            s3_client=s3_client,
         )
 
     filter_results = [
@@ -1484,14 +1482,23 @@ async def inference(
         for classifier_spec in classifier_specs
     ]
     semaphore = asyncio.Semaphore(EXISTING_RESULTS_CONCURRENCY_LIMIT)
-    documents_to_process_results = await asyncio.gather(
-        *[
-            wait_for_semaphore(
-                semaphore, documents_to_process_for(classifier_spec, filter_result)
-            )
-            for classifier_spec, filter_result in zip(classifier_specs, filter_results)
-        ]
+    session = get_async_session(
+        region_name=config.bucket_region,
+        aws_env=config.aws_env,
     )
+    boto_config = AioConfig(max_pool_connections=EXISTING_RESULTS_CONCURRENCY_LIMIT * 2)
+    async with session.client("s3", config=boto_config) as s3_client:
+        documents_to_process_results = await asyncio.gather(
+            *[
+                wait_for_semaphore(
+                    semaphore,
+                    documents_to_process_for(classifier_spec, filter_result, s3_client),
+                )
+                for classifier_spec, filter_result in zip(
+                    classifier_specs, filter_results
+                )
+            ]
+        )
 
     for classifier_spec, filter_result, (
         documents_to_process,
