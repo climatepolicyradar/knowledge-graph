@@ -87,18 +87,32 @@ def get_latest_model_version(
 ) -> Version:
     """Get the latest wandb model version for a given AWS environment from a list of artifacts."""
     current_env_versions = []
-    all_envs = set()
+    # Latest artifact path per other env, to suggest a move command on failure
+    other_env_latest: dict[str, tuple[Version, str]] = {}
     for artifact in artifacts:
-        artifact_env = artifact.metadata.get("aws_env")
-        all_envs.add(artifact_env)
+        artifact_env = str(artifact.metadata.get("aws_env"))
+        version = Version(artifact.version)
         if artifact_env == aws_env.name:
-            current_env_versions.append(Version(artifact.version))
+            current_env_versions.append(version)
+        elif (
+            artifact_env not in other_env_latest
+            or other_env_latest[artifact_env][0] < version
+        ):
+            other_env_latest[artifact_env] = (version, artifact.qualified_name)
 
     if not current_env_versions:
+        latest = sorted(other_env_latest.items())
+        found = ", ".join(f"{env}: {path}" for env, (_, path) in latest)
+        commands = "\n".join(
+            "python scripts/move_model_to_prod.py "
+            f"--wandb-path {path} --source-env {env} --target-env {aws_env.value}"
+            for env, (_, path) in latest
+            if env != "None"
+        )
         raise ValueError(
-            f"No model found in {aws_env.name}. Only found versions for: {all_envs}. "
-            "Was the model trained in the right environment? Consider moving it with: "
-            "`scripts/move_model_to_prod.py` if needed."
+            f"No model found in {aws_env.name}. Only found latest versions for: "
+            f"{{{found}}}. Was the model trained in the right environment? "
+            f"Consider moving it with:\n{commands}"
         )
 
     return max(current_env_versions)
