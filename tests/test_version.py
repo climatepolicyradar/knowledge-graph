@@ -67,6 +67,7 @@ def test_get_latest_model_version():
         def __init__(self, version, aws_env):
             self.version = version
             self.metadata = {"aws_env": aws_env.name}
+            self.qualified_name = f"climatepolicyradar/Q123/abcd1234:{version}"
 
     artifacts = [
         MockArtifact("v1", AwsEnv("labs")),
@@ -94,6 +95,7 @@ def test_get_latest_model_version__raises():
         def __init__(self, version, aws_env):
             self.version = version
             self.metadata = {"aws_env": aws_env.name}
+            self.qualified_name = f"climatepolicyradar/Q123/abcd1234:{version}"
 
     artifacts = [
         MockArtifact("v1", AwsEnv("labs")),
@@ -104,7 +106,13 @@ def test_get_latest_model_version__raises():
 
     with pytest.raises(ValueError) as value_error:
         get_latest_model_version(artifacts, AwsEnv.production)
-        assert value_error == (
-            "ValueError: No model found in production. Only found versions for: "
-            "{'labs', 'staging'}"
-        )
+
+    message = str(value_error.value)
+    assert "No model found in production" in message
+    assert "labs: climatepolicyradar/Q123/abcd1234:v2" in message
+    assert "staging: climatepolicyradar/Q123/abcd1234:v2" in message
+    assert (
+        "python scripts/move_model_to_prod.py "
+        "--wandb-path climatepolicyradar/Q123/abcd1234:v2 "
+        "--source-env labs --target-env prod"
+    ) in message
