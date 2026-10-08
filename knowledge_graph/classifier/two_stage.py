@@ -36,6 +36,7 @@ class TwoStageClassifier(Classifier):
         filter_classifier: Classifier | str,
         candidate_classifier: Classifier | str | None = None,
         filter_threshold: float | str | None = None,
+        allow_gpu_bound_candidate: bool = False,
     ):
         """
         Create a two-stage classifier.
@@ -52,6 +53,9 @@ class TwoStageClassifier(Classifier):
             KeywordClassifier for the concept.
         :param float | str | None filter_threshold: Optional probability threshold
             for the filter classifier
+        :param bool allow_gpu_bound_candidate: Must be set to True to use a
+            GPU-bound candidate classifier. The candidate runs on every passage, so
+            a GPU-bound candidate is usually a mistake (see the class docstring).
         """
         super().__init__(concept)
 
@@ -79,14 +83,22 @@ class TwoStageClassifier(Classifier):
                     f"{sub_classifier} must be fitted before it is used in a "
                     f"{self.name}"
                 )
-        if isinstance(candidate_classifier, GPUBoundClassifier) and not isinstance(
-            filter_classifier, GPUBoundClassifier
-        ):
+        if isinstance(candidate_classifier, GPUBoundClassifier):
+            if not allow_gpu_bound_candidate:
+                raise ValueError(
+                    f"The candidate classifier {candidate_classifier} is GPU-bound. "
+                    "The candidate classifier runs on every passage, so it should "
+                    "normally be the cheaper of the two. Pass "
+                    "allow_gpu_bound_candidate=True to use it anyway."
+                )
             get_logger().warning(
-                f"The candidate classifier {candidate_classifier} is GPU-bound but the "
-                f"filter classifier {filter_classifier} is not. The candidate "
-                f"classifier runs on every passage, so it should be the cheaper of the "
-                f"two."
+                f"The candidate classifier {candidate_classifier} is GPU-bound and "
+                "will run on every passage."
+            )
+        if isinstance(filter_classifier, GPUBoundClassifier):
+            get_logger().warning(
+                f"The filter classifier {filter_classifier} is GPU-bound. It will "
+                "only run on passages where the candidate classifier found spans."
             )
 
         self.candidate_classifier = candidate_classifier

@@ -61,7 +61,7 @@ class RecordingFilter(Classifier, ZeroShotClassifier):
         return ClassifierID.generate(self.name, self.concept.id)
 
 
-class GPUBoundCandidate(KeywordClassifier, GPUBoundClassifier):
+class GPUBoundKeywordClassifier(KeywordClassifier, GPUBoundClassifier):
     """A keyword classifier marked as GPU-bound, standing in for a BERT model."""
 
 
@@ -141,7 +141,16 @@ def test_filter_gets_full_batches_of_candidate_passages():
     assert filter_classifier.batches == [["a grant of money", "grant money"]]
 
 
-def test_warns_when_candidate_is_gpu_bound_and_filter_is_not():
+def test_gpu_bound_candidate_raises_without_opt_in():
+    with pytest.raises(ValueError, match="allow_gpu_bound_candidate"):
+        TwoStageClassifier(
+            GRANT,
+            filter_classifier=KeywordClassifier(FINANCE),
+            candidate_classifier=GPUBoundKeywordClassifier(GRANT),
+        )
+
+
+def test_gpu_bound_candidate_warns_with_opt_in():
     # Patch the module's logger directly rather than relying on caplog: in some
     # contexts get_logger() returns a Prefect run logger that does not propagate
     # to caplog's root handler.
@@ -149,7 +158,15 @@ def test_warns_when_candidate_is_gpu_bound_and_filter_is_not():
         TwoStageClassifier(
             GRANT,
             filter_classifier=KeywordClassifier(FINANCE),
-            candidate_classifier=GPUBoundCandidate(GRANT),
+            candidate_classifier=GPUBoundKeywordClassifier(GRANT),
+            allow_gpu_bound_candidate=True,
         )
     warnings = [str(call.args[0]) for call in mock_get_logger().warning.call_args_list]
-    assert any("cheaper of the two" in message for message in warnings)
+    assert any("will run on every passage" in message for message in warnings)
+
+
+def test_warns_when_filter_is_gpu_bound():
+    with patch("knowledge_graph.classifier.two_stage.get_logger") as mock_get_logger:
+        TwoStageClassifier(GRANT, filter_classifier=GPUBoundKeywordClassifier(FINANCE))
+    warnings = [str(call.args[0]) for call in mock_get_logger().warning.call_args_list]
+    assert any("filter classifier" in message for message in warnings)
