@@ -1,8 +1,14 @@
 from datetime import datetime
+from typing import Sequence
+from unittest.mock import patch
 
 import pytest
 
-from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
+from knowledge_graph.classifier.classifier import (
+    Classifier,
+    GPUBoundClassifier,
+    ZeroShotClassifier,
+)
 from knowledge_graph.classifier.keyword import KeywordClassifier
 from knowledge_graph.classifier.two_stage import TwoStageClassifier
 from knowledge_graph.concept import Concept
@@ -24,6 +30,7 @@ class RecordingFilter(Classifier, ZeroShotClassifier):
         super().__init__(concept)
         self.seen: list[str] = []
         self.thresholds: list[float | None] = []
+        self.batches: list[list[str]] = []
 
     def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
         self.seen.append(text)
@@ -42,10 +49,20 @@ class RecordingFilter(Classifier, ZeroShotClassifier):
             )
         ]
 
+    def _predict_batch(
+        self, texts: Sequence[str], threshold: float | None = None
+    ) -> list[list[Span]]:
+        self.batches.append(list(texts))
+        return super()._predict_batch(texts, threshold=threshold)
+
     @property
     def id(self) -> ClassifierID:
         """Return a deterministic identifier for the test classifier."""
         return ClassifierID.generate(self.name, self.concept.id)
+
+
+class GPUBoundCandidate(KeywordClassifier, GPUBoundClassifier):
+    """A keyword classifier marked as GPU-bound, standing in for a BERT model."""
 
 
 def test_only_labels_when_both_classifiers_fire():
@@ -111,3 +128,28 @@ def test_save_and_load_round_trip(tmp_path):
     assert isinstance(loaded, TwoStageClassifier)
     assert loaded.id == clf.id
     assert loaded.predict("The grant provides finance.") != []
+
+
+def test_filter_gets_full_batches_of_candidate_passages():
+    filter_classifier = RecordingFilter(FINANCE)
+    clf = TwoStageClassifier(GRANT, filter_classifier=filter_classifier)
+    texts = ["a grant of money", "nothing here", "nothing here either", "grant money"]
+
+    clf.predict(texts, batch_size=2)
+
+    # Both hits arrive in one full batch, rather than one per input batch
+    assert filter_classifier.batches == [["a grant of money", "grant money"]]
+
+
+def test_warns_when_candidate_is_gpu_bound_and_filter_is_not():
+    # Patch the module's logger directly rather than relying on caplog: in some
+    # contexts get_logger() returns a Prefect run logger that does not propagate
+    # to caplog's root handler.
+    with patch("knowledge_graph.classifier.two_stage.get_logger") as mock_get_logger:
+        TwoStageClassifier(
+            GRANT,
+            filter_classifier=KeywordClassifier(FINANCE),
+            candidate_classifier=GPUBoundCandidate(GRANT),
+        )
+    warnings = [str(call.args[0]) for call in mock_get_logger().warning.call_args_list]
+    assert any("cheaper of the two" in message for message in warnings)

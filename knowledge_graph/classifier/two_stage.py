@@ -1,19 +1,29 @@
 from datetime import datetime
-from typing import Sequence
+from typing import Sequence, overload
 
-from knowledge_graph.classifier.classifier import Classifier, ZeroShotClassifier
+from rich.console import Console
+
+from knowledge_graph.classifier.classifier import (
+    Classifier,
+    GPUBoundClassifier,
+    ZeroShotClassifier,
+)
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span
+from knowledge_graph.utils import get_logger
 
 
 class TwoStageClassifier(Classifier):
     """
     A classifier which only labels a passage when two classifiers agree.
 
-    The candidate classifier runs first and finds candidate spans. The filter classifier
-    is then run only on the passages where the candidate classifier found spans, and the
-    candidate spans are kept only if the filter classifier also finds spans on that passage.
+    The two classifiers run in a fixed order:
+
+    1. The candidate classifier runs first, on every passage. It should be the
+       cheap one (i.e. a KeywordClassifier).
+    2. The filter classifier runs second, only on passages where the candidate
+       classifier positively labelled spans. It can be the expensive one (eg. a BERT model).
 
     Spans are published under the candidate classifier's concept. Where the filter
     classifier gives a probability, it is used as the prediction_probability of the
@@ -69,6 +79,15 @@ class TwoStageClassifier(Classifier):
                     f"{sub_classifier} must be fitted before it is used in a "
                     f"{self.name}"
                 )
+        if isinstance(candidate_classifier, GPUBoundClassifier) and not isinstance(
+            filter_classifier, GPUBoundClassifier
+        ):
+            get_logger().warning(
+                f"The candidate classifier {candidate_classifier} is GPU-bound but the "
+                f"filter classifier {filter_classifier} is not. The candidate "
+                f"classifier runs on every passage, so it should be the cheaper of the "
+                f"two."
+            )
 
         self.candidate_classifier = candidate_classifier
         self.filter_classifier = filter_classifier
@@ -78,6 +97,65 @@ class TwoStageClassifier(Classifier):
         )
         # Both sub-classifiers are already zero-shot or fitted
         self.is_fitted = True
+
+    @overload
+    def predict(
+        self,
+        text: str,
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+        threshold: float | None = None,
+        **kwargs,
+    ) -> list[Span]: ...
+
+    @overload
+    def predict(
+        self,
+        text: list[str],
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+        threshold: float | None = None,
+        **kwargs,
+    ) -> list[list[Span]]: ...
+
+    def predict(
+        self,
+        text: str | list[str],
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+        threshold: float | None = None,
+        **kwargs,
+    ) -> list[Span] | list[list[Span]]:
+        """
+        Predict whether the supplied text contains an instance of the concept.
+
+        Unlike the base class, which runs both stages on one batch at a time, this
+        runs the candidate classifier over every text first, then sends all of the
+        candidate passages to the filter classifier in full batches of batch_size.
+        This stops an expensive filter classifier (eg. BERT on a GPU) being given
+        lots of small, uneven batches.
+
+        :param float | None threshold: Optional threshold which is passed to the
+            filter classifier, overriding filter_threshold. It is never passed to the
+            candidate classifier.
+        """
+        if isinstance(text, str):
+            return self._predict(text, threshold=threshold)
+
+        candidate_spans = self.candidate_classifier.predict(
+            text, batch_size=batch_size, show_progress=show_progress, console=console
+        )
+        return self._filter_candidate_spans(
+            text,
+            candidate_spans,
+            threshold=threshold,
+            batch_size=batch_size,
+            show_progress=show_progress,
+            console=console,
+        )
 
     def _predict(self, text: str, threshold: float | None = None) -> list[Span]:
         """Predict whether the supplied text contains an instance of the concept."""
@@ -94,14 +172,33 @@ class TwoStageClassifier(Classifier):
             candidate classifier.
         """
         candidate_spans = self.candidate_classifier._predict_batch(texts)
+        return self._filter_candidate_spans(texts, candidate_spans, threshold=threshold)
 
+    def _filter_candidate_spans(
+        self,
+        texts: Sequence[str],
+        candidate_spans: list[list[Span]],
+        threshold: float | None = None,
+        batch_size: int | None = None,
+        show_progress: bool = False,
+        console: Console | None = None,
+    ) -> list[list[Span]]:
+        """
+        Keep candidate spans only on passages where the filter classifier fires.
+
+        The filter classifier is only run on passages which have candidate spans.
+        """
         candidate_indices = [i for i, spans in enumerate(candidate_spans) if spans]
         if not candidate_indices:
             return [[] for _ in texts]
 
         filter_threshold = threshold if threshold is not None else self.filter_threshold
         filter_spans = self.filter_classifier.predict(
-            [texts[i] for i in candidate_indices], threshold=filter_threshold
+            [texts[i] for i in candidate_indices],
+            batch_size=batch_size,
+            show_progress=show_progress,
+            console=console,
+            threshold=filter_threshold,
         )
 
         now = datetime.now()
@@ -159,8 +256,8 @@ class TwoStageClassifier(Classifier):
         )
 
     def __repr__(self) -> str:
-        """Return a string representation of the classifier."""
+        """Return a string representation, showing the order the classifiers run in."""
         return (
             f'{self.name}("{self.concept.preferred_label}", '
-            f"filter={self.filter_classifier!r})"
+            f"first={self.candidate_classifier!r}, then={self.filter_classifier!r})"
         )
