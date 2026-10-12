@@ -102,6 +102,3 @@ When migrating a remaining `scripts/` operation, follow this:
   `flows/inference.py` alongside the orchestration. Extracting the pure helpers into
   `operations/infer.py` (with a `tests/operations/test_infer.py`) is the follow-up; helpers
   that need `flows.*` types should stay in `flows/`.
-- The `analyse-classifier` just recipe has no prediction step: `just predict` now needs a
-  classifier + passages artifact path, which the recipe chain (which only has an `id`)
-  can't supply. Run `just predict` / `just predict-documents` separately for that step.
