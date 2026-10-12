@@ -3,7 +3,7 @@ CLI wrapper for the train operation.
 
 The reusable, Prefect-free logic (`run_training`, `train_classifier`, and the W&B/S3
 helpers) lives in `knowledge_graph.operations.train` and is imported directly by the
-training flows. This module only adds the Typer command used by `just train` and the
+training flows. This module only adds the Typer command used by `uv run train` and the
 dispatch to the remote `train-on-cpu` / `train-on-gpu` Prefect deployments.
 """
 
