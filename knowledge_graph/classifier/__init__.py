@@ -69,6 +69,9 @@ def __getattr__(name):
     elif name in ("AutoLLMClassifier"):
         module = importlib.import_module(".autollm", __package__)
         return getattr(module, name)
+    elif name == "TwoStageClassifier":
+        module = importlib.import_module(".two_stage", __package__)
+        return getattr(module, name)
     else:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
@@ -85,6 +88,7 @@ __all__ = [
     "LLMClassifier",  # type: ignore
     "LocalLLMClassifier",  # type: ignore
     "AutoLLMClassifier",  # type: ignore
+    "TwoStageClassifier",  # type: ignore
     "GPUBoundClassifier",
     "ModelPath",
     "get_local_classifier_path",
