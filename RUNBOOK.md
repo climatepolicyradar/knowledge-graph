@@ -154,7 +154,8 @@ flowchart TD
     end
 
     subgraph KW["KeywordClassifier"]
-        TK["4 train"]
+        direction LR
+        TK["4 train"] --> VK["vibe check<br/>(webapp)"]
     end
 
     subgraph BERT["BertBasedClassifier"]
@@ -183,6 +184,8 @@ flowchart TD
     class BD,SY scheduled
 ```
 
+The key covers the BertBasedClassifier distillation process, where an LLM classifier labels passages to train BERT. It also includes the shared data and deploy steps on either side.
+
 | step | command |
 | --- | --- |
 | 1 build dataset | scheduled: the `build_dataset` flow runs at 08:00 on the 1st of each month in prod and writes the combined and balanced feathers to S3, which the `sample` flow reads. |
@@ -201,7 +204,8 @@ Things the diagram doesn't show:
 - BERT training drops any passage that's also labelled in Argilla, so evaluation stays clean. The run logs a `training-data` artifact, and `predict_adhoc` excludes those passages by default.
 - `--limit-training-samples` also balances BERT's training data, aiming for half positives and half negatives. If one class runs short, it takes all of that class and fills the rest from the other. Without the flag, BERT trains on the predict artifact as-is, however imbalanced. Balancing happens before the Argilla dedupe, so the final set can come out slightly smaller.
 - `LLMClassifier` is zero-shot, so "training" it just registers the model in W&B. `AutoLLMClassifier` optimises its prompt against the Argilla labels.
-- Vibe checks for LLM and BERT classifiers are done in Google Sheets, because the vibe-checker webapp lacks the features for them. The `vibe_check_inference` flow only covers each concept's default classifier.
+- KeywordClassifiers are vibe-checked in the [vibe-checker webapp](https://vibe-checker.labs.climatepolicyradar.org). The `vibe_check_inference` flow refreshes it at 08:00 Mon-Thu in labs for the concepts listed in `vibe-checker/config.yml`, using each concept's default classifier.
+- Vibe checks for LLM and BERT classifiers are done in Google Sheets, because the webapp lacks the features for them.
 
 For a programmes perspective of the process, please refer to [this](https://app.notion.com/p/climatepolicyradar/Concept-development-LLM-classifiers-31f9109609a480c89a81ed4a7169ccb7) guide.
 
