@@ -8,5 +8,5 @@ predict, …). These modules know nothing about Prefect orchestration (`flows/`)
 CLI entrypoints (`scripts/`):
 
 - **`flows/`** wraps operations for Prefect orchestration.
-- **`scripts/`** wraps operations as thin Typer CLI entrypoints (e.g. `just evaluate`).
+- **`scripts/`** wraps operations as thin Typer CLI entrypoints (e.g. `uv run evaluate`).
 - **`knowledge_graph.classifier.autollm`** imports operations directly.

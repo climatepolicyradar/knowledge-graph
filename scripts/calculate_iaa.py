@@ -50,7 +50,7 @@ def calculate_iaa(
         concept = Concept.load(concept_dir / f"{wikibase_id}.json")
     except FileNotFoundError:
         console.print(
-            f"Concept {wikibase_id} not found. Have you run `just get-concept {wikibase_id}` ?",
+            f"Concept {wikibase_id} not found. Have you run `uv run python scripts/get_concept.py --wikibase-id {wikibase_id}` ?",
             style="red",
         )
         raise typer.Exit(1)

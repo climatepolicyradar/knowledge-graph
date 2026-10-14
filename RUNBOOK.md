@@ -143,8 +143,69 @@ the defaults; `--no-track-and-upload` skips W&B tracking and the S3 upload.
 
 ### Training pipeline
 
-The [Training pipeline diagram](https://whimsical.com/climate-policy-radar/kg-training-pipeline-83TPn2YZocfbEYdEUnViph)
-illustrates the process and how to construct the commands to run.
+How a concept goes from raw passages to a deployed classifier. Numbered steps map to the commands in the key below. Dashed hexagons run on a schedule.
+
+```mermaid
+flowchart TD
+    subgraph DATA["Data + evaluation set"]
+        direction LR
+        SF[(Snowflake)] --> BD{{"1 build dataset<br/>(scheduled)"}} --> CE["2 create eval set"] --> AR[(Argilla<br/>human labels)]
+        EX["3 extend eval set"] --> AR
+    end
+
+    subgraph KW["KeywordClassifier"]
+        direction LR
+        TK["4 train"] --> VK["vibe check<br/>(webapp)"]
+    end
+
+    subgraph BERT["BertBasedClassifier"]
+        direction LR
+        TL["5 train LLM"] --> V1["vibe check"] --> OK1{passed?}
+        OK1 -- no --> TL
+        OK1 -- yes --> S["6 sample"] --> P["7 predict"] --> EN{enough<br/>positives?}
+        EN -- no: new sample --> S
+        EN -- no: restart --> P
+        EN -- yes --> TB["8 train BERT"] --> PG{good<br/>enough?}
+        PG -- no --> NX["vibe check +<br/>plan next steps"] --> TL
+        PG -- yes --> V3["vibe check"]
+    end
+
+    subgraph DEPLOY["Deploy"]
+        direction LR
+        WB[(W&B + S3)] --> WK["9 set ID + profile<br/>in Wikibase"] --> SY{{"10 sync profiles<br/>(scheduled)"}} --> INF[inference]
+    end
+
+    DATA -. evaluate .-> KW
+    DATA -. evaluate + dedupe .-> BERT
+    KW --> DEPLOY
+    BERT --> DEPLOY
+
+    classDef scheduled fill:#eef2ff,stroke:#6366f1,stroke-dasharray:5 3
+    class BD,SY scheduled
+```
+
+The key covers the BertBasedClassifier distillation process, where an LLM classifier labels passages to train BERT. It also includes the shared data and deploy steps on either side.
+
+| step | command |
+| --- | --- |
+| 1 build dataset | scheduled: the `build_dataset` flow runs at 08:00 on the 1st of each month in prod and writes the combined and balanced feathers to S3, which the `sample` flow reads. |
+| 2 create eval set | `uv run prefect deployment run 'create-evaluation-dataset-in-argilla/kg-create-evaluation-dataset-in-argilla-prod' -p wikibase_id=<ID> -p sample_size=<N> -p limit=<N>` - see [Create an evaluation set](#create-an-evaluation-set-for-a-concept-that-has-none) |
+| 3 extend eval set | `uv run prefect deployment run 'extend-existing-dataset/kg-extend-existing-dataset-prod' -p wikibase_id=<ID> -p n_new_passages=<N>` - see [Add more labelling passages](#add-more-labelling-passages-to-a-concept-that-already-has-a-dataset) |
+| 4 train KeywordClassifier | `uv run train --wikibase-id <ID> --classifier-type KeywordClassifier --compute local` |
+| 5 train LLM | `uv run train --wikibase-id <ID> --classifier-type LLMClassifier` (or `AutoLLMClassifier`), or `uv run train --from-yaml-config` to use the `llm:` section of the concept's custom config |
+| 6 sample | `uv run prefect deployment run 'sample/kg-sample-prod' -p wikibase_id=<ID> -p dataset_name=combined -p sample_size=10000` |
+| 7 predict | `uv run prefect deployment run 'predict-adhoc/kg-predict-adhoc-prod' -p wikibase_id=<ID> -p classifier_wandb_path=<LLM model from 5> -p labelled_passages_wandb_path=<labelled-passages from 6> -p stop_after_n_positives=2000`<br><br>To get more positives without re-predicting, re-run with `-p restart_from_wandb_run=<previous predict run>`. Passages that run already predicted are skipped, and the new artifact contains the old and new predictions together.<br><br>The input can be the same sample or a new one from 6. `stop_after_n_positives` only counts positives found in the new run, so set it to how many more you want. |
+| 8 train BERT | `uv run train --wikibase-id <ID> --classifier-type BertBasedClassifier --compute remote-gpu --training-data-wandb-path <labelled-passages from 7> --limit-training-samples <2 × positives>`<br>Positives is the number of positive passages in the labelled-passages artifact from 7. Doubling it gives a balanced positive/negative set. |
+| 9 set ID + profile | edit the concept in Wikibase |
+| 10 sync profiles | scheduled: runs at 10:00 and 17:00 Mon-Thu in prod. Trigger it early with `uv run prefect deployment run 'sync-classifiers-profiles/kg-sync-classifiers-profiles-prod'` - see [Promote, demote and update specs](#promote-demote-and-update-specs) |
+
+Things the diagram doesn't show:
+
+- BERT training drops any passage that's also labelled in Argilla, so evaluation stays clean. The run logs a `training-data` artifact, and `predict_adhoc` excludes those passages by default.
+- `--limit-training-samples` also balances BERT's training data, aiming for half positives and half negatives. If one class runs short, it takes all of that class and fills the rest from the other. Without the flag, BERT trains on the predict artifact as-is, however imbalanced. Balancing happens before the Argilla dedupe, so the final set can come out slightly smaller.
+- `LLMClassifier` is zero-shot, so "training" it just registers the model in W&B. `AutoLLMClassifier` optimises its prompt against the Argilla labels.
+- KeywordClassifiers are vibe-checked in the [vibe-checker webapp](https://vibe-checker.labs.climatepolicyradar.org). The `vibe_check_inference` flow refreshes it at 08:00 Mon-Thu in labs for the concepts listed in `vibe-checker/config.yml`, using each concept's default classifier.
+- Vibe checks for LLM and BERT classifiers are done in Google Sheets, because the webapp lacks the features for them.
 
 For a programmes perspective of the process, please refer to [this](https://app.notion.com/p/climatepolicyradar/Concept-development-LLM-classifiers-31f9109609a480c89a81ed4a7169ccb7) guide.
 
