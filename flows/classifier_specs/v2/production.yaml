@@ -479,7 +479,7 @@
 - wikibase_id: Q1274
   concept_id: 2uqvf32h
   classifier_id: 5n5kb8dd
-  classifiers_profile: experimental
+  classifiers_profile: primary
   wandb_registry_version: v16
 - wikibase_id: Q1274
   concept_id: bjgcfphm
@@ -769,6 +769,16 @@
 - wikibase_id: Q2029
   concept_id: q2htxc45
   classifier_id: ghax83yn
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q2410
+  concept_id: 8ef5bmrm
+  classifier_id: ahdwwmxa
+  classifiers_profile: primary
+  wandb_registry_version: v0
+- wikibase_id: Q2411
+  concept_id: pm56y4rf
+  classifier_id: suqn5c8b
   classifiers_profile: primary
   wandb_registry_version: v0
 - wikibase_id: Q2419
