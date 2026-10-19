@@ -16,6 +16,11 @@ extend-ignore-re = [
   "(?s)(#|//)\\s*spellchecker:off.*?(#|//)\\s*spellchecker:on",
 ]
 
+[default.extend-identifiers]
+# Plural of NDC (nationally determined contribution). typos splits it into "ND" + "Cs"
+# and "corrects" ND to AND.
+NDCs = "NDCs"
+
 # Domain abbreviations which typos would otherwise "correct".
 [default.extend-words]
 fpr = "fpr"
