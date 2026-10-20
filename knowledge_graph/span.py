@@ -455,16 +455,16 @@ def group_overlapping_spans(
     """
     groups: list[list[Span]] = []
     for span in spans:
-        found = False
+        merged_group = [span]
+        remaining_groups = []
         for group in groups:
             if any(
                 jaccard_similarity(span, other) > jaccard_threshold for other in group
             ):
-                group.append(span)
-                found = True
-                break
-        if not found:
-            groups.append([span])
+                merged_group = group + merged_group
+            else:
+                remaining_groups.append(group)
+        groups = remaining_groups + [merged_group]
 
     return groups
 
