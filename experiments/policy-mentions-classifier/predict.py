@@ -8,12 +8,17 @@ on first run.
 
 Documents are selected by id or slug; all English passages for each document are
 fetched from Snowflake (same connection as ``knowledge_graph.operations.snowflake``),
-classified, and written to one CSV per document under ``data/processed/predictions/``.
+classified, and written to one CSV per document under
+``data/policy-mentions-classifier/outputs/``.
 
     uv run python experiments/policy-mentions-classifier/predict.py --document-id <id>
     uv run python experiments/policy-mentions-classifier/predict.py --document-slug <slug>
+    uv run python experiments/policy-mentions-classifier/predict.py \
+        --ids-file experiments/policy-mentions-classifier/inputs/fus-609.txt \
+        --combined-output data/policy-mentions-classifier/fus-609/bert.parquet
 """
 
+import json
 from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
@@ -55,8 +60,9 @@ MAX_LENGTH = 512
 BATCH_SIZE = 100
 
 # A passage is labelled class 1 (policy mention) only when the model's class-1
-# probability meets this threshold; otherwise class 0.
-THRESHOLD = 0.75
+# probability meets this threshold; otherwise class 0. Kept low because BERT is only
+# a cost filter ahead of the LLM, so recall matters more than precision.
+THRESHOLD = 0.5
 
 # Outputs: one CSV per document, named by slug
 OUTPUT_DIR = data_dir / "policy-mentions-classifier" / "outputs"
@@ -104,14 +110,38 @@ def load_model(model_dir: Path = MODEL_DIR):
     return model, tokenizer, model_info
 
 
+def read_ids_file(path: Path) -> list[str]:
+    """Read one document ID per line, ignoring blank lines and ``#`` comments."""
+    ids = [
+        doc_id
+        for line in path.read_text().splitlines()
+        if (doc_id := line.split("#", 1)[0].strip())
+    ]
+    return list(dict.fromkeys(ids))  # de-duplicate, preserving order
+
+
+def _parse_array(value) -> list:
+    """Coerce a Snowflake ARRAY/VARIANT value (a JSON string in pandas) to a list."""
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return []
+    if isinstance(value, (list, tuple, np.ndarray)):
+        return list(value)
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return [value]
+    return parsed if isinstance(parsed, list) else [parsed]
+
+
 def load_documents_from_snowflake(
     document_ids: list[str], document_slugs: list[str]
 ) -> dict:
     """
     Fetch English passages for the requested documents, grouped by document.
 
-    Returns ``{document_id: {document_name, document_slug, passages: [{text,
-    text_block_id}]}}`` — the same shape the original predict.py used.
+    Returns ``{document_id: {document_name, document_slug, ..., passages: [{text,
+    text_block_id, passage_id, passage_idx, page_numbers}]}}``. Passages are in
+    document reading order (``IDX``).
     """
     filters: list[str] = []
     params: list[str] = []
@@ -128,9 +158,15 @@ def load_documents_from_snowflake(
     query = f"""
     SELECT
         p.CONTENT AS text_block_text,
+        p.ID AS passage_id,
+        p.IDX AS passage_idx,
+        p.PAGE_NUMBERS AS page_numbers,
         d.DOCUMENT_ID AS document_id,
         d.DOCUMENT_NAME AS document_name,
-        d.DOCUMENT_SLUG AS document_slug
+        d.DOCUMENT_SLUG AS document_slug,
+        d.DOCUMENT_SOURCE_URL AS document_source_url,
+        d.METADATA_FAMILY_IMPORT_ID AS family_import_id,
+        d.METADATA_GEOGRAPHIES AS geographies
     FROM {DOCUMENTS_TABLE} d
     JOIN {PASSAGES_TABLE} p
         ON d.DOCUMENT_ID = p.DOCUMENT_ID
@@ -138,7 +174,7 @@ def load_documents_from_snowflake(
       AND p.CONTENT IS NOT NULL
       AND LENGTH(p.CONTENT) > {MINIMUM_TEXT_CHARS}
       AND ({document_filter})
-    ORDER BY d.DOCUMENT_ID
+    ORDER BY d.DOCUMENT_ID, p.IDX
     """
 
     console.print("❄️  Connecting to Snowflake")
@@ -156,15 +192,23 @@ def load_documents_from_snowflake(
 
     document_passage_dict: dict = {}
     for document_id, group in df.groupby("document_id", sort=False):
-        # The passages table (per build_dataset.py) exposes no native passage id,
-        # so we assign a sequential text_block_id within each document.
         passages = [
-            {"text": text, "text_block_id": str(idx)}
-            for idx, text in enumerate(group["text_block_text"].tolist())
+            {
+                "text": row.text_block_text,
+                "text_block_id": str(row.passage_idx),
+                "passage_id": row.passage_id,
+                "passage_idx": int(row.passage_idx),
+                "page_numbers": [int(n) for n in _parse_array(row.page_numbers)],
+            }
+            for row in group.itertuples(index=False)
         ]
+        first = group.iloc[0]
         document_passage_dict[document_id] = {
-            "document_name": group["document_name"].iloc[0],
-            "document_slug": group["document_slug"].iloc[0],
+            "document_name": first["document_name"],
+            "document_slug": first["document_slug"],
+            "document_source_url": first["document_source_url"],
+            "family_import_id": first["family_import_id"],
+            "geographies": [str(g) for g in _parse_array(first["geographies"])],
             "passages": passages,
         }
 
@@ -189,15 +233,18 @@ def predict_single_text(text: str, model, tokenizer, device: str = "cpu"):
     return predicted_class, confidence, probabilities[0].cpu().numpy()
 
 
-def _result_row(passage: dict, probs) -> dict:
-    """Build a result row, applying THRESHOLD to decide predicted_class."""
+def _result_row(passage: dict, probs, threshold: float = THRESHOLD) -> dict:
+    """Build a result row, applying ``threshold`` to decide predicted_class."""
     class_0_prob, class_1_prob = float(probs[0]), float(probs[1])
-    predicted_class = 1 if class_1_prob >= THRESHOLD else 0
+    predicted_class = 1 if class_1_prob >= threshold else 0
     # Report the probability of the class we actually assigned.
     confidence = class_1_prob if predicted_class == 1 else class_0_prob
     return {
         "text": passage["text"],
         "text_block_id": passage["text_block_id"],
+        "passage_id": passage["passage_id"],
+        "passage_idx": passage["passage_idx"],
+        "page_numbers": passage["page_numbers"],
         "predicted_class": predicted_class,
         "confidence": confidence,
         "class_0_prob": class_0_prob,
@@ -213,6 +260,7 @@ def predict_document(
     batch_size: int = BATCH_SIZE,
     progress: Optional[Progress] = None,
     task_id=None,
+    threshold: float = THRESHOLD,
 ) -> tuple[list[dict], list[dict]]:
     """Classify all passages of a single document. Returns (results, errors)."""
     results: list[dict] = []
@@ -235,7 +283,7 @@ def predict_document(
                 probabilities = torch.softmax(logits, dim=-1).cpu().numpy()
 
             for j, passage in enumerate(batch):
-                results.append(_result_row(passage, probabilities[j]))
+                results.append(_result_row(passage, probabilities[j], threshold))
         except Exception as e:
             console.print(f"Error processing batch: [bold red]{e}[/]")
             # Fall back to one-at-a-time prediction for this batch
@@ -244,7 +292,7 @@ def predict_document(
                     _, _, probs = predict_single_text(
                         passage["text"], model, tokenizer, device
                     )
-                    results.append(_result_row(passage, probs))
+                    results.append(_result_row(passage, probs, threshold))
                 except Exception as single_e:
                     console.print(
                         f"Error processing single passage: [bold red]{single_e}[/]"
@@ -265,9 +313,15 @@ def predict_document(
 OUTPUT_COLUMNS = [
     "text",
     "text_block_id",
+    "passage_id",
+    "passage_idx",
+    "page_numbers",
     "document_id",
     "document_name",
     "document_slug",
+    "document_source_url",
+    "family_import_id",
+    "geographies",
     "predicted_class",
     "confidence",
     "class_0_prob",
@@ -298,15 +352,43 @@ def main(
     document_slug: Optional[list[str]] = typer.Option(
         None, "--document-slug", help="Document slug to classify (repeatable)."
     ),
+    ids_file: Optional[Path] = typer.Option(
+        None,
+        "--ids-file",
+        help="File with one document id per line (# comments allowed).",
+        exists=True,
+        dir_okay=False,
+    ),
+    combined_output: Optional[Path] = typer.Option(
+        None,
+        "--combined-output",
+        help=(
+            "Also write all predictions to this single file (.parquet or .csv), "
+            "alongside the per-document CSVs."
+        ),
+    ),
+    threshold: float = typer.Option(
+        THRESHOLD, help="class_1_prob threshold for predicted_class."
+    ),
     batch_size: int = typer.Option(BATCH_SIZE, help="Inference batch size."),
 ):
     """Classify the passages of the requested documents and save per-document CSVs."""
-    document_ids = document_id or []
+    document_ids = list(document_id or [])
+    if ids_file is not None:
+        document_ids += read_ids_file(ids_file)
+    document_ids = list(dict.fromkeys(document_ids))
     document_slugs = document_slug or []
     if not document_ids and not document_slugs:
         console.print(
-            "[bold red]Provide at least one --document-id or --document-slug[/]"
+            "[bold red]Provide at least one --document-id, --document-slug or "
+            "--ids-file[/]"
         )
+        raise typer.Exit(code=1)
+    if combined_output is not None and combined_output.suffix not in (
+        ".parquet",
+        ".csv",
+    ):
+        console.print("[bold red]--combined-output must end in .parquet or .csv[/]")
         raise typer.Exit(code=1)
 
     ensure_model()
@@ -354,12 +436,19 @@ def main(
                 batch_size,
                 progress=progress,
                 task_id=task,
+                threshold=threshold,
             )
 
             for r in rows:
                 r["document_id"] = doc_id
-                r["document_name"] = doc["document_name"]
-                r["document_slug"] = doc["document_slug"]
+                for key in (
+                    "document_name",
+                    "document_slug",
+                    "document_source_url",
+                    "family_import_id",
+                    "geographies",
+                ):
+                    r[key] = doc[key]
 
             # Write each document's results immediately so an interrupted run
             # keeps everything completed so far.
@@ -390,6 +479,38 @@ def main(
 
     _print_summary(all_results)
     log_prediction_run(log_entries, output_dir.parent / "runs_log.csv")
+
+    if combined_output is not None:
+        combined_output.parent.mkdir(parents=True, exist_ok=True)
+        combined = pd.DataFrame(all_results, columns=OUTPUT_COLUMNS)
+        combined["threshold"] = threshold
+        if combined_output.suffix == ".parquet":
+            combined.to_parquet(combined_output, index=False)
+        else:
+            combined.to_csv(combined_output, index=False)
+        console.print(
+            f"✅ Saved {len(combined)} predictions to [bold green]{combined_output}[/]"
+        )
+
+    _report_coverage(document_ids, documents, log_entries)
+
+
+def _report_coverage(
+    requested_ids: list[str], documents: dict, log_entries: list[dict]
+) -> None:
+    """Flag requested documents that returned no passages or no positives."""
+    missing = [d for d in requested_ids if d not in documents]
+    no_positives = [
+        e["document_id"] for e in log_entries if e["policy_mentions_detected"] == 0
+    ]
+    console.print(
+        f"\n📋 Requested {len(requested_ids)} ids, got passages for "
+        f"{sum(1 for d in requested_ids if d in documents)}"
+    )
+    for d in missing:
+        console.print(f"  [bold red]⚠️ no passages[/]: {d}")
+    for d in no_positives:
+        console.print(f"  [bold yellow]⚠️ zero positives[/]: {d}")
 
 
 def _print_summary(results: list[dict]) -> None:
