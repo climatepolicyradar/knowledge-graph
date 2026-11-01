@@ -1,5 +1,5 @@
 # Builder stage with full image, as we need compilation software
-FROM python:3.13-bookworm@sha256:aba8a0cd72f259c2737c8a47050652036c8bc8266a4f39291523a45cf8081960 AS builder
+FROM python:3.15-bookworm@sha256:b97b63f7b64698bebb0651b6a5842d33f4493a6902291d36acc5a768e383b950 AS builder
 COPY --from=ghcr.io/astral-sh/uv@sha256:f64ad69940b634e75d2e4d799eb5238066c5eeda49f76e782d4873c3d014ea33 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1
@@ -22,7 +22,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         -c /tmp/requirements.lock.txt --link-mode=copy
 
 # Runtime stage with slim image
-FROM python:3.13-slim-bookworm@sha256:9b8102b7b3a61db24fe58f335b526173e5aeaaf7d13b2fbfb514e20f84f5e386
+FROM python:3.15-slim-bookworm@sha256:4e03260adeeebafccd084f3584e6b84823aba5651cfb53ef8a078ed441ddf9cd
 
 WORKDIR /app
 
