@@ -95,6 +95,88 @@ async def s3_prefix_has_objects(s3_uri: S3Uri, region: str, aws_env: AwsEnv) -> 
         return "Contents" in response and len(response["Contents"]) > 0
 
 
+async def list_archive_files(
+    concepts_archive_path: Path | S3Uri, region: str, aws_env: AwsEnv
+) -> list[str]:
+    """List the Parquet files in the archive, as paths/URIs Polars can read."""
+    match concepts_archive_path:
+        case Path():
+            return sorted(str(p) for p in concepts_archive_path.glob("*.parquet"))
+        case S3Uri():
+            session = get_async_session(region_name=region, aws_env=aws_env)
+            keys: list[str] = []
+            async with session.client("s3") as s3:
+                paginator = s3.get_paginator("list_objects_v2")
+                async for page in paginator.paginate(
+                    Bucket=concepts_archive_path.bucket,
+                    Prefix=f"{concepts_archive_path.key}/",
+                ):
+                    keys.extend(
+                        o["Key"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                        for o in page.get("Contents", [])
+                        if o["Key"].endswith(".parquet")  # pyright: ignore[reportTypedDictNotRequiredAccess]
+                    )
+            return sorted(f"s3://{concepts_archive_path.bucket}/{key}" for key in keys)
+
+
+@task(cache_policy=NONE)
+async def remove_deleted_concepts(
+    concepts_archive_path: Path | S3Uri,
+    current_wikibase_ids: list[str],
+    region: str,
+    aws_env: AwsEnv,
+    credential_provider: pl.CredentialProvider | None,
+    storage_options: dict[str, str] | None,
+) -> int:
+    """
+    Remove concepts that no longer exist in Wikibase from the archive.
+
+    Archive files are rewritten without the rows for deleted concepts,
+    or deleted if no rows remain, so that the archive only holds
+    concepts that currently exist.
+
+    Returns the number of rows removed.
+    """
+    logger = get_logger()
+
+    if not current_wikibase_ids:
+        # Don't wipe the archive if Wikibase unexpectedly returned nothing
+        logger.warning("no current concepts, skipping removal of deleted concepts")
+        return 0
+
+    removed = 0
+    for file in await list_archive_files(concepts_archive_path, region, aws_env):
+        df = pl.read_parquet(
+            file,
+            credential_provider=credential_provider,
+            storage_options=storage_options,
+        )
+        kept = df.filter(pl.col("wikibase_id").is_in(current_wikibase_ids))
+        if len(kept) == len(df):
+            continue
+
+        removed += len(df) - len(kept)
+        deleted_ids = df["wikibase_id"].unique().sort().to_list()
+        logger.info(f"removing {len(df) - len(kept)} deleted concept rows from {file}")
+        logger.debug(f"wikibase IDs in {file}: {deleted_ids}")
+
+        if len(kept):
+            kept.write_parquet(
+                file,
+                credential_provider=credential_provider,
+                storage_options=storage_options,
+            )
+        elif isinstance(concepts_archive_path, Path):
+            Path(file).unlink()
+        else:
+            session = get_async_session(region_name=region, aws_env=aws_env)
+            async with session.client("s3") as s3:
+                uri = S3Uri.from_s3_path(file)
+                await s3.delete_object(Bucket=uri.bucket, Key=uri.key)
+
+    return removed
+
+
 @task(cache_policy=NONE)
 async def get_new_versions(
     current_df: pl.LazyFrame,
@@ -178,7 +260,8 @@ async def sync_concepts(
     The sync state is stored in data frames in S3. If there's no state
     so far, a new data frame is written, and all concepts are synced.
     If there is existing state, then only the new concepts or new
-    versions of existing concepts are synced.
+    versions of existing concepts are synced. Concepts that no longer
+    exist in Wikibase are removed from the existing state.
 
     The side-effects are data frames in S3.
 
@@ -246,9 +329,21 @@ async def sync_concepts(
             archives_exist = concepts_archive_path.exists()
     logger.info(f"found existing archive(s): {archives_exist}")
 
-    # Load previous state from all Parquet files if archive exists
+    # Prune deleted concepts, then load previous state from all Parquet files
+    # if archive exists
     existing_ids: pl.LazyFrame | None = None
     if archives_exist:
+        logger.info("removing concepts deleted from Wikibase from archive(s)")
+        removed = await remove_deleted_concepts(
+            concepts_archive_path,
+            [str(concept.wikibase_id) for concept in concepts],
+            region,
+            aws_env,
+            credential_provider,
+            storage_options,
+        )
+        logger.info(f"removed {removed} rows for deleted concepts")
+
         logger.info("loading existing ID(s) from archive(s)")
         parquet_pattern = f"{concepts_archive_path}/*.parquet"
         existing_ids = (
