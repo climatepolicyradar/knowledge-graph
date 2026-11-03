@@ -6,6 +6,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 from flows.sync_concepts import (
+    sync_concepts,
     concepts_to_dataframe,
     get_new_versions,
     load_concepts,
@@ -14,6 +15,8 @@ from flows.sync_concepts import (
 )
 from flows.utils import S3Uri
 from knowledge_graph.cloud import AwsEnv
+from knowledge_graph.concept import Concept
+from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.wikibase import WikibaseAuth
 
 
@@ -336,3 +339,34 @@ async def test_remove_deleted_concepts__no_current_concepts_is_noop(
 
     assert removed == 0
     assert len(pl.read_parquet(tmp_path / "a.parquet")) == len(mock_concepts)
+
+
+@pytest.mark.asyncio
+async def test_sync_concepts__all_archive_files_removed(
+    mock_concepts, tmp_path, wikibase_auth_fixture
+):
+    """Pruning every archive file leaves nothing to scan, so all concepts are new."""
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    deleted = Concept(wikibase_id=WikibaseID("Q999"), preferred_label="deleted")
+    concepts_to_dataframe([deleted]).write_parquet(archive / "old.parquet")
+
+    cache_path = tmp_path / "cache.jsonl"
+    cache_path.write_text(
+        "".join(c.model_dump_json() + "\n" for c in mock_concepts)
+    )
+
+    await sync_concepts.fn(
+        aws_env=AwsEnv.sandbox,
+        wikibase_auth=wikibase_auth_fixture,
+        wikibase_cache_path=cache_path,
+        concepts_archive_path=archive,
+    )
+
+    files = list(archive.glob("*.parquet"))
+    assert len(files) == 1
+    assert files[0].name != "old.parquet"
+    written = pl.read_parquet(files[0])
+    assert sorted(written["wikibase_id"].to_list()) == sorted(
+        str(c.wikibase_id) for c in mock_concepts
+    )

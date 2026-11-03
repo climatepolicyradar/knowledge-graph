@@ -343,7 +343,12 @@ async def sync_concepts(
             storage_options,
         )
         logger.info(f"removed {removed} rows for deleted concepts")
+        if removed:
+            archives_exist = bool(
+                await list_archive_files(concepts_archive_path, region, aws_env)
+            )
 
+    if archives_exist:
         logger.info("loading existing ID(s) from archive(s)")
         parquet_pattern = f"{concepts_archive_path}/*.parquet"
         existing_ids = (
