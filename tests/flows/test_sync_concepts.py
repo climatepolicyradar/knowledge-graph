@@ -170,17 +170,19 @@ def _write_cache(path, concepts):
 
 
 @pytest.mark.asyncio
-async def test_sync_concepts__writes_snapshot_and_removes_previous_files(
+async def test_sync_concepts__writes_snapshot_and_latest(
     mock_concepts, tmp_path, wikibase_auth_fixture
 ):
-    """Deleted concepts disappear: the archive only holds the latest snapshot."""
+    """Latest only holds live concepts, and the snapshot is kept alongside."""
     archive = tmp_path / "archive"
+    snapshots = tmp_path / "archive_snapshots"
     archive.mkdir()
+    snapshots.mkdir()
     deleted = Concept(wikibase_id=WikibaseID("Q999"), preferred_label="deleted")
     concepts_to_dataframe([mock_concepts[0], deleted]).write_parquet(
-        archive / "old_1.parquet"
+        archive / "latest.parquet"
     )
-    concepts_to_dataframe([deleted]).write_parquet(archive / "old_2.parquet")
+    concepts_to_dataframe([deleted]).write_parquet(snapshots / "concepts_old.parquet")
 
     cache_path = tmp_path / "cache.jsonl"
     _write_cache(cache_path, mock_concepts)
@@ -192,12 +194,22 @@ async def test_sync_concepts__writes_snapshot_and_removes_previous_files(
         concepts_archive_path=archive,
     )
 
-    files = list(archive.glob("*.parquet"))
-    assert len(files) == 1
-    assert files[0].name not in {"old_1.parquet", "old_2.parquet"}
-    written = pl.read_parquet(files[0])
-    assert sorted(written["wikibase_id"].to_list()) == sorted(
-        str(c.wikibase_id) for c in mock_concepts
+    expected_ids = sorted(str(c.wikibase_id) for c in mock_concepts)
+
+    # Snowflake only sees latest, which has no deleted concepts
+    assert [f.name for f in archive.glob("*.parquet")] == ["latest.parquet"]
+    latest = pl.read_parquet(archive / "latest.parquet")
+    assert sorted(latest["wikibase_id"].to_list()) == expected_ids
+
+    # Old snapshots are never deleted, and the new one matches latest
+    snapshot_files = {f.name: f for f in snapshots.glob("*.parquet")}
+    assert "concepts_old.parquet" in snapshot_files
+    assert len(snapshot_files) == 2
+    new_snapshot = next(
+        f for n, f in snapshot_files.items() if n != "concepts_old.parquet"
+    )
+    assert (
+        sorted(pl.read_parquet(new_snapshot)["wikibase_id"].to_list()) == expected_ids
     )
 
 
@@ -216,18 +228,17 @@ async def test_sync_concepts__creates_archive_if_missing(
         concepts_archive_path=archive,
     )
 
-    files = list(archive.glob("*.parquet"))
-    assert len(files) == 1
-    assert len(pl.read_parquet(files[0])) == len(mock_concepts)
+    assert len(pl.read_parquet(archive / "latest.parquet")) == len(mock_concepts)
+    assert len(list((tmp_path / "archive_snapshots").glob("concepts_*.parquet"))) == 1
 
 
 @pytest.mark.asyncio
-async def test_sync_concepts__no_concepts_leaves_archive_untouched(
+async def test_sync_concepts__no_concepts_leaves_latest_untouched(
     tmp_path, mock_concepts, wikibase_auth_fixture
 ):
     archive = tmp_path / "archive"
     archive.mkdir()
-    concepts_to_dataframe(mock_concepts).write_parquet(archive / "old.parquet")
+    concepts_to_dataframe(mock_concepts).write_parquet(archive / "latest.parquet")
 
     cache_path = tmp_path / "cache.jsonl"
     cache_path.write_text("")
@@ -240,4 +251,5 @@ async def test_sync_concepts__no_concepts_leaves_archive_untouched(
             concepts_archive_path=archive,
         )
 
-    assert [f.name for f in archive.glob("*.parquet")] == ["old.parquet"]
+    assert len(pl.read_parquet(archive / "latest.parquet")) == len(mock_concepts)
+    assert not (tmp_path / "archive_snapshots").exists()

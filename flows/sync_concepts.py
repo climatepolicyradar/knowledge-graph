@@ -11,7 +11,7 @@ from flows.utils import (
     S3Uri,
     SlackNotify,
 )
-from knowledge_graph.cloud import AwsEnv, get_async_session
+from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.utils import get_logger
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
@@ -69,44 +69,6 @@ def concepts_to_dataframe(concepts: list[Concept]) -> pl.DataFrame:
     df = df.with_columns(pl.lit(datetime.now(timezone.utc)).alias("synced_at"))
 
     return df
-
-
-async def list_archive_files(
-    concepts_archive_path: Path | S3Uri, region: str, aws_env: AwsEnv
-) -> list[str]:
-    """List the Parquet files in the archive, as paths/URIs Polars can read."""
-    match concepts_archive_path:
-        case Path():
-            return sorted(str(p) for p in concepts_archive_path.glob("*.parquet"))
-        case S3Uri():
-            session = get_async_session(region_name=region, aws_env=aws_env)
-            keys: list[str] = []
-            async with session.client("s3") as s3:
-                paginator = s3.get_paginator("list_objects_v2")
-                async for page in paginator.paginate(
-                    Bucket=concepts_archive_path.bucket,
-                    Prefix=f"{concepts_archive_path.key}/",
-                ):
-                    keys.extend(
-                        o["Key"]  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                        for o in page.get("Contents", [])
-                        if o["Key"].endswith(".parquet")  # pyright: ignore[reportTypedDictNotRequiredAccess]
-                    )
-            return sorted(f"s3://{concepts_archive_path.bucket}/{key}" for key in keys)
-
-
-async def delete_archive_files(files: list[str], region: str, aws_env: AwsEnv) -> None:
-    """Delete archive Parquet files, as listed by `list_archive_files`."""
-    s3_files = [f for f in files if f.startswith("s3://")]
-    for file in set(files) - set(s3_files):
-        Path(file).unlink()
-
-    if s3_files:
-        session = get_async_session(region_name=region, aws_env=aws_env)
-        async with session.client("s3") as s3:
-            for file in s3_files:
-                uri = S3Uri.from_s3_path(file)
-                await s3.delete_object(Bucket=uri.bucket, Key=uri.key)
 
 
 @task(persist_result=False)
@@ -168,10 +130,16 @@ async def sync_concepts(
     """
     Sync all concepts from Wikibase to S3, as a full snapshot.
 
-    Each run writes every concept currently in Wikibase to a new
-    Parquet file, then removes the previous archive file(s). This means
-    the archive only ever holds concepts that currently exist, with no
-    reliance on history.
+    Each run writes every concept currently in Wikibase to a timestamped
+    Parquet file in a snapshots location, then overwrites `latest.parquet`
+    in the archive location with the same data. Downstream (Snowflake)
+    only reads the archive location, so it only ever sees concepts that
+    currently exist. Snapshots are never deleted by this flow, so
+    they can be used to recover from failures and to debug; expire them
+    with a lifecycle policy instead.
+
+    The snapshots location is the archive location with a `_snapshots`
+    suffix, e.g. `wikibase_concepts` and `wikibase_concepts_snapshots`.
 
     The side-effects are data frames in S3.
 
@@ -227,23 +195,30 @@ async def sync_concepts(
         }
 
     if not concepts:
-        # Don't replace the archive with nothing if Wikibase returned no concepts
-        raise ValueError("no concepts returned, refusing to replace the archive")
-
-    # The archive is a full snapshot of Wikibase. Write the new snapshot
-    # before removing the old ones, so a failure can't leave it empty.
-    previous_files = await list_archive_files(concepts_archive_path, region, aws_env)
+        # Don't replace latest with nothing if Wikibase returned no concepts
+        raise ValueError("no concepts returned, refusing to replace latest")
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    obj_name = f"concepts_{timestamp}.parquet"
 
     match concepts_archive_path:
         case S3Uri():
-            snapshot_path = f"{concepts_archive_path}/{obj_name}"
+            snapshots_path = S3Uri(
+                bucket=concepts_archive_path.bucket,
+                key=f"{concepts_archive_path.key}_snapshots",
+            )
+            snapshot_path = f"{snapshots_path}/concepts_{timestamp}.parquet"
+            latest_path = f"{concepts_archive_path}/latest.parquet"
         case Path():
+            snapshots_dir = concepts_archive_path.with_name(
+                f"{concepts_archive_path.name}_snapshots"
+            )
+            snapshots_dir.mkdir(parents=True, exist_ok=True)
             concepts_archive_path.mkdir(parents=True, exist_ok=True)
-            snapshot_path = str(concepts_archive_path / obj_name)
+            snapshot_path = str(snapshots_dir / f"concepts_{timestamp}.parquet")
+            latest_path = str(concepts_archive_path / "latest.parquet")
 
+    # Write the snapshot first, so if overwriting latest fails the
+    # snapshot is kept and latest still holds the previous export.
     logger.info(f"writing snapshot of {len(current_df)} concepts to {snapshot_path}")
     current_df.write_parquet(
         snapshot_path,
@@ -251,6 +226,9 @@ async def sync_concepts(
         storage_options=storage_options,
     )
 
-    stale_files = [f for f in previous_files if f != snapshot_path]
-    logger.info(f"removing {len(stale_files)} previous archive file(s)")
-    await delete_archive_files(stale_files, region, aws_env)
+    logger.info(f"overwriting {latest_path}")
+    current_df.write_parquet(
+        latest_path,
+        credential_provider=credential_provider,
+        storage_options=storage_options,
+    )
