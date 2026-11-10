@@ -1,19 +1,11 @@
-from contextlib import asynccontextmanager
-from unittest.mock import AsyncMock, patch
-
 import polars as pl
 import pytest
-from botocore.exceptions import ClientError
 
 from flows.sync_concepts import (
-    sync_concepts,
     concepts_to_dataframe,
-    get_new_versions,
     load_concepts,
-    remove_deleted_concepts,
-    s3_prefix_has_objects,
+    sync_concepts,
 )
-from flows.utils import S3Uri
 from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
@@ -146,144 +138,6 @@ def test_concepts_to_dataframe__schema_stable_across_files(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "existing_count,expected_new",
-    [
-        (3, 0),  # No new when all exist
-        (1, 2),  # Partial changes
-    ],
-)
-async def test_get_new_versions__parameterized(
-    mock_concepts, existing_count, expected_new, tmp_path
-):
-    current_df = concepts_to_dataframe(mock_concepts).lazy()
-
-    # Create existing IDs based on existing_count
-    existing_concepts = mock_concepts[:existing_count]
-    existing_ids = concepts_to_dataframe(existing_concepts).select("id").lazy()
-
-    new_versions = await get_new_versions(current_df, existing_ids)
-
-    assert len(new_versions) == expected_new
-
-
-@pytest.mark.asyncio
-async def test_get_new_versions__all_new(mock_concepts, tmp_path):
-    """Test when all concepts are new (empty existing_ids LazyFrame)."""
-    current_df = concepts_to_dataframe(mock_concepts).lazy()
-    # Empty existing_ids means all concepts are new
-    empty_df = pl.DataFrame({"id": []}, schema={"id": pl.String})
-    existing_ids = empty_df.lazy()
-
-    new_versions = await get_new_versions(current_df, existing_ids)
-
-    assert len(new_versions) == len(mock_concepts)
-
-
-@pytest.mark.asyncio
-async def test_get_new_versions__no_archive(mock_concepts, tmp_path):
-    """Test when no archive exists (e.g., in a new environment)."""
-    current_df = concepts_to_dataframe(mock_concepts).lazy()
-
-    # Pass None for existing_ids to indicate no archive
-    new_versions = await get_new_versions(current_df, None)
-
-    # Should return all concepts as new when no archive exists
-    # Exclude synced_at column as it varies between calls
-    cols_to_compare = [c for c in new_versions.columns if c != "synced_at"]
-    expected_df = concepts_to_dataframe(mock_concepts)
-    assert (
-        new_versions.select(cols_to_compare)
-        .sort("id")
-        .equals(expected_df.select(cols_to_compare).sort("id"))
-    )
-
-
-@pytest.mark.asyncio
-async def test_s3_prefix_has_objects__with_objects(mock_s3_async_client):
-    """Test s3_prefix_has_objects returns True when objects exist."""
-    bucket_name = "test-bucket"
-    prefix = "test-prefix"
-
-    # Create bucket and add object
-    await mock_s3_async_client.create_bucket(
-        Bucket=bucket_name,
-        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
-    )
-    await mock_s3_async_client.put_object(
-        Bucket=bucket_name, Key=f"{prefix}/test.parquet", Body=b"test"
-    )
-
-    # Mock get_async_session to return a session that yields our mock client
-    @asynccontextmanager
-    async def mock_client(*args, **kwargs):
-        yield mock_s3_async_client
-
-    mock_session = AsyncMock()
-    mock_session.client = mock_client
-
-    with patch("flows.sync_concepts.get_async_session", return_value=mock_session):
-        s3_uri = S3Uri(bucket=bucket_name, key=prefix)
-        result = await s3_prefix_has_objects(s3_uri, "eu-west-1", AwsEnv.sandbox)
-
-    assert result is True
-
-
-@pytest.mark.asyncio
-async def test_s3_prefix_has_objects__no_objects(mock_s3_async_client):
-    """Test s3_prefix_has_objects returns False when no objects exist at prefix."""
-    bucket_name = "test-bucket-empty"
-    prefix = "empty-prefix"
-
-    # Create bucket but don't add any objects
-    await mock_s3_async_client.create_bucket(
-        Bucket=bucket_name,
-        CreateBucketConfiguration={"LocationConstraint": "eu-west-1"},
-    )
-
-    # Mock get_async_session to return a session that yields our mock client
-    @asynccontextmanager
-    async def mock_client(*args, **kwargs):
-        yield mock_s3_async_client
-
-    mock_session = AsyncMock()
-    mock_session.client = mock_client
-
-    with patch("flows.sync_concepts.get_async_session", return_value=mock_session):
-        s3_uri = S3Uri(bucket=bucket_name, key=prefix)
-        result = await s3_prefix_has_objects(s3_uri, "eu-west-1", AwsEnv.sandbox)
-
-    assert result is False
-
-
-@pytest.mark.asyncio
-async def test_s3_prefix_has_objects__error_propagates():
-    """Test s3_prefix_has_objects lets genuine errors propagate."""
-    # Create a mock client that raises AccessDenied
-    mock_s3 = AsyncMock()
-    mock_s3.list_objects_v2.side_effect = ClientError(
-        {"Error": {"Code": "AccessDenied", "Message": "Access Denied"}},
-        "ListObjectsV2",
-    )
-
-    @asynccontextmanager
-    async def mock_client(*args, **kwargs):
-        yield mock_s3
-
-    mock_session = AsyncMock()
-    mock_session.client = mock_client
-
-    with patch("flows.sync_concepts.get_async_session", return_value=mock_session):
-        s3_uri = S3Uri(bucket="test-bucket", key="test-prefix")
-
-        # Should raise the ClientError, not catch it
-        with pytest.raises(ClientError) as exc_info:
-            await s3_prefix_has_objects(s3_uri, "eu-west-1", AwsEnv.sandbox)
-
-        assert exc_info.value.response["Error"]["Code"] == "AccessDenied"
-
-
-@pytest.mark.asyncio
 async def test_load_concepts__from_cache(
     tmp_path, mock_concepts, wikibase_auth_fixture
 ):
@@ -311,50 +165,25 @@ async def test_load_concepts__from_cache(
     assert [c.id for c in concepts_sorted] == [c.id for c in mock_concepts_sorted]
 
 
-@pytest.mark.asyncio
-async def test_remove_deleted_concepts(mock_concepts, tmp_path):
-    kept, deleted = mock_concepts[0], mock_concepts[1]
-    concepts_to_dataframe([kept, deleted]).write_parquet(tmp_path / "mixed.parquet")
-    concepts_to_dataframe([deleted]).write_parquet(tmp_path / "only_deleted.parquet")
-
-    removed = await remove_deleted_concepts.fn(
-        tmp_path, [str(kept.wikibase_id)], "eu-west-1", AwsEnv.sandbox, None, None
-    )
-
-    assert removed == 2
-    assert not (tmp_path / "only_deleted.parquet").exists()
-    remaining = pl.read_parquet(tmp_path / "mixed.parquet")
-    assert remaining["wikibase_id"].to_list() == [str(kept.wikibase_id)]
+def _write_cache(path, concepts):
+    path.write_text("".join(c.model_dump_json() + "\n" for c in concepts))
 
 
 @pytest.mark.asyncio
-async def test_remove_deleted_concepts__no_current_concepts_is_noop(
-    mock_concepts, tmp_path
-):
-    concepts_to_dataframe(mock_concepts).write_parquet(tmp_path / "a.parquet")
-
-    removed = await remove_deleted_concepts.fn(
-        tmp_path, [], "eu-west-1", AwsEnv.sandbox, None, None
-    )
-
-    assert removed == 0
-    assert len(pl.read_parquet(tmp_path / "a.parquet")) == len(mock_concepts)
-
-
-@pytest.mark.asyncio
-async def test_sync_concepts__all_archive_files_removed(
+async def test_sync_concepts__writes_snapshot_and_removes_previous_files(
     mock_concepts, tmp_path, wikibase_auth_fixture
 ):
-    """Pruning every archive file leaves nothing to scan, so all concepts are new."""
+    """Deleted concepts disappear: the archive only holds the latest snapshot."""
     archive = tmp_path / "archive"
     archive.mkdir()
     deleted = Concept(wikibase_id=WikibaseID("Q999"), preferred_label="deleted")
-    concepts_to_dataframe([deleted]).write_parquet(archive / "old.parquet")
+    concepts_to_dataframe([mock_concepts[0], deleted]).write_parquet(
+        archive / "old_1.parquet"
+    )
+    concepts_to_dataframe([deleted]).write_parquet(archive / "old_2.parquet")
 
     cache_path = tmp_path / "cache.jsonl"
-    cache_path.write_text(
-        "".join(c.model_dump_json() + "\n" for c in mock_concepts)
-    )
+    _write_cache(cache_path, mock_concepts)
 
     await sync_concepts.fn(
         aws_env=AwsEnv.sandbox,
@@ -365,8 +194,50 @@ async def test_sync_concepts__all_archive_files_removed(
 
     files = list(archive.glob("*.parquet"))
     assert len(files) == 1
-    assert files[0].name != "old.parquet"
+    assert files[0].name not in {"old_1.parquet", "old_2.parquet"}
     written = pl.read_parquet(files[0])
     assert sorted(written["wikibase_id"].to_list()) == sorted(
         str(c.wikibase_id) for c in mock_concepts
     )
+
+
+@pytest.mark.asyncio
+async def test_sync_concepts__creates_archive_if_missing(
+    mock_concepts, tmp_path, wikibase_auth_fixture
+):
+    archive = tmp_path / "archive"
+    cache_path = tmp_path / "cache.jsonl"
+    _write_cache(cache_path, mock_concepts)
+
+    await sync_concepts.fn(
+        aws_env=AwsEnv.sandbox,
+        wikibase_auth=wikibase_auth_fixture,
+        wikibase_cache_path=cache_path,
+        concepts_archive_path=archive,
+    )
+
+    files = list(archive.glob("*.parquet"))
+    assert len(files) == 1
+    assert len(pl.read_parquet(files[0])) == len(mock_concepts)
+
+
+@pytest.mark.asyncio
+async def test_sync_concepts__no_concepts_leaves_archive_untouched(
+    tmp_path, mock_concepts, wikibase_auth_fixture
+):
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    concepts_to_dataframe(mock_concepts).write_parquet(archive / "old.parquet")
+
+    cache_path = tmp_path / "cache.jsonl"
+    cache_path.write_text("")
+
+    with pytest.raises(ValueError, match="no concepts returned"):
+        await sync_concepts.fn(
+            aws_env=AwsEnv.sandbox,
+            wikibase_auth=wikibase_auth_fixture,
+            wikibase_cache_path=cache_path,
+            concepts_archive_path=archive,
+        )
+
+    assert [f.name for f in archive.glob("*.parquet")] == ["old.parquet"]
