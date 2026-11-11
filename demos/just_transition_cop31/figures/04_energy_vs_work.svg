@@ -1,0 +1,586 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="720pt" height="404.64pt" viewBox="0 0 720 404.64" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-11-11T16:04:02.982366</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.6, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 404.64 
+L 720 404.64 
+L 720 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 146.465 350.06 
+L 698.4 350.06 
+L 698.4 72.305 
+L 146.465 72.305 
+z
+" style="fill: #ffffff"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="ytick_1">
+     <g id="line2d_1"/>
+     <g id="text_1">
+      <text style="font-weight: 600; font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="88.564062" transform="rotate(-0 142.965 88.564062)">Any work sub-topic</text>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_2"/>
+     <g id="text_2">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="110.11625" transform="rotate(-0 142.965 110.11625)">Decent work</text>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_3"/>
+     <g id="text_3">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="131.917461" transform="rotate(-0 142.965 131.917461)">Aligning skills</text>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_4"/>
+     <g id="text_4">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="153.61707" transform="rotate(-0 142.965 153.61707)">Green jobs</text>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_5"/>
+     <g id="text_5">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="175.31668" transform="rotate(-0 142.965 175.31668)">Social dialogue &amp; trade unions</text>
+     </g>
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_6"/>
+     <g id="text_6">
+      <text style="font-weight: 600; font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="210.081875" transform="rotate(-0 142.965 210.081875)">Any energy Topic</text>
+     </g>
+    </g>
+    <g id="ytick_7">
+     <g id="line2d_7"/>
+     <g id="text_7">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="231.735664" transform="rotate(-0 142.965 231.735664)">Energy supply mitigation</text>
+     </g>
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_8"/>
+     <g id="text_8">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="253.479102" transform="rotate(-0 142.965 253.479102)">of which renewable energy</text>
+     </g>
+    </g>
+    <g id="ytick_9">
+     <g id="line2d_9"/>
+     <g id="text_9">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="275.033281" transform="rotate(-0 142.965 275.033281)">Energy supply sector</text>
+     </g>
+    </g>
+    <g id="ytick_10">
+     <g id="line2d_10"/>
+     <g id="text_10">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="296.732891" transform="rotate(-0 142.965 296.732891)">Fossil fuels</text>
+     </g>
+    </g>
+    <g id="ytick_11">
+     <g id="line2d_11"/>
+     <g id="text_11">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="318.4325" transform="rotate(-0 142.965 318.4325)">of which coal</text>
+     </g>
+    </g>
+    <g id="ytick_12">
+     <g id="line2d_12"/>
+     <g id="text_12">
+      <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: end; fill: #101a24" x="142.965" y="340.132109" transform="rotate(-0 142.965 340.132109)">Electrification</text>
+     </g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <path d="M 146.465 78.163895 
+L 597.871415 78.163895 
+L 597.871415 92.485637 
+L 146.465 92.485637 
+z
+" clip-path="url(#p6533a83776)" style="fill: #1a4f8c"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 146.465 99.863504 
+L 397.692231 99.863504 
+L 397.692231 114.185246 
+L 146.465 114.185246 
+z
+" clip-path="url(#p6533a83776)" style="fill: #1a4f8c"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 146.465 121.563113 
+L 272.476667 121.563113 
+L 272.476667 135.884855 
+L 146.465 135.884855 
+z
+" clip-path="url(#p6533a83776)" style="fill: #1a4f8c"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 146.465 143.262723 
+L 243.118353 143.262723 
+L 243.118353 157.584465 
+L 146.465 157.584465 
+z
+" clip-path="url(#p6533a83776)" style="fill: #1a4f8c"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 146.465 164.962332 
+L 196.976897 164.962332 
+L 196.976897 179.284074 
+L 146.465 179.284074 
+z
+" clip-path="url(#p6533a83776)" style="fill: #1a4f8c"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 146.465 199.681707 
+L 380.714125 199.681707 
+L 380.714125 214.003449 
+L 146.465 214.003449 
+z
+" clip-path="url(#p6533a83776)" style="fill: #b7ae8e"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 146.465 221.381316 
+L 294.020178 221.381316 
+L 294.020178 235.703059 
+L 146.465 235.703059 
+z
+" clip-path="url(#p6533a83776)" style="fill: #b7ae8e"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 146.465 243.080926 
+L 280.681398 243.080926 
+L 280.681398 257.402668 
+L 146.465 257.402668 
+z
+" clip-path="url(#p6533a83776)" style="fill: #b7ae8e"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 146.465 264.780535 
+L 244.369371 264.780535 
+L 244.369371 279.102277 
+L 146.465 279.102277 
+z
+" clip-path="url(#p6533a83776)" style="fill: #b7ae8e"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 146.465 286.480145 
+L 233.370158 286.480145 
+L 233.370158 300.801887 
+L 146.465 300.801887 
+z
+" clip-path="url(#p6533a83776)" style="fill: #b7ae8e"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 146.465 308.179754 
+L 171.680331 308.179754 
+L 171.680331 322.501496 
+L 146.465 322.501496 
+z
+" clip-path="url(#p6533a83776)" style="fill: #b7ae8e"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 146.465 329.879363 
+L 186.075166 329.879363 
+L 186.075166 344.201105 
+L 146.465 344.201105 
+z
+" clip-path="url(#p6533a83776)" style="fill: #b7ae8e"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 146.465 350.06 
+L 146.465 72.305 
+" style="fill: none; stroke: #e5e3dc; stroke-width: 0.8; stroke-linejoin: miter; stroke-linecap: square"/>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 600; font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #1a4f8c" x="604.770602" y="87.549375" transform="rotate(-0 604.770602 87.549375)">26%</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #1a4f8c" x="404.591419" y="109.248984" transform="rotate(-0 404.591419 109.248984)">15%</text>
+   </g>
+   <g id="text_15">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #1a4f8c" x="279.375854" y="130.948594" transform="rotate(-0 279.375854 130.948594)">7%</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #1a4f8c" x="250.017541" y="152.648203" transform="rotate(-0 250.017541 152.648203)">6%</text>
+   </g>
+   <g id="text_17">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #1a4f8c" x="203.876084" y="174.347812" transform="rotate(-0 203.876084 174.347812)">3%*</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 7.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #6b7580" x="226.730069" y="174.161094" transform="rotate(-0 226.730069 174.161094)">keyword search, not Topic</text>
+   </g>
+   <g id="text_19">
+    <text style="font-weight: 600; font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #7a7259" x="387.613312" y="209.067187" transform="rotate(-0 387.613312 209.067187)">14%</text>
+   </g>
+   <g id="text_20">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #7a7259" x="300.919365" y="230.766797" transform="rotate(-0 300.919365 230.766797)">9%</text>
+   </g>
+   <g id="text_21">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #7a7259" x="287.580585" y="252.466406" transform="rotate(-0 287.580585 252.466406)">8%</text>
+   </g>
+   <g id="text_22">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #7a7259" x="251.268559" y="274.166016" transform="rotate(-0 251.268559 274.166016)">6%</text>
+   </g>
+   <g id="text_23">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #7a7259" x="240.269346" y="295.865625" transform="rotate(-0 240.269346 295.865625)">5%</text>
+   </g>
+   <g id="text_24">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #7a7259" x="178.579518" y="317.565234" transform="rotate(-0 178.579518 317.565234)">1%</text>
+   </g>
+   <g id="text_25">
+    <text style="font-size: 8.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #7a7259" x="192.974353" y="339.264844" transform="rotate(-0 192.974353 339.264844)">2%</text>
+   </g>
+  </g>
+  <g id="patch_16">
+   <path d="M 23.787909 387.353657 
+C 22.68296 387.353657 21.797901 386.556554 21.797901 385.380141 
+C 21.797901 384.214722 22.68296 383.39563 23.787909 383.39563 
+C 24.782913 383.39563 25.552529 384.022318 25.728442 384.967847 
+L 24.826891 384.967847 
+C 24.68946 384.489585 24.310149 384.192733 23.787909 384.192733 
+C 23.166719 384.192733 22.693955 384.665497 22.693955 385.374644 
+C 22.693955 386.072796 23.172216 386.556554 23.787909 386.556554 
+C 24.282662 386.556554 24.661973 386.292686 24.815897 385.830916 
+L 25.717447 385.830916 
+C 25.53054 386.754456 24.766421 387.353657 23.787909 387.353657 
+z
+M 29.210321 387.271198 
+L 26.32426 387.271198 
+L 26.32426 383.478089 
+L 27.209319 383.478089 
+L 27.209319 386.496085 
+L 29.210321 386.496085 
+L 29.210321 387.271198 
+z
+M 30.629883 387.271198 
+L 29.744824 387.271198 
+L 29.744824 383.478089 
+L 30.629883 383.478089 
+L 30.629883 387.271198 
+z
+M 32.271872 387.271198 
+L 31.474769 387.271198 
+L 31.474769 383.478089 
+L 32.766625 383.478089 
+L 33.591214 386.105779 
+L 34.4213 383.478089 
+L 35.663681 383.478089 
+L 35.663681 387.271198 
+L 34.866578 387.271198 
+L 34.866578 384.352153 
+L 33.95953 387.271198 
+L 33.178919 387.271198 
+L 32.271872 384.341159 
+L 32.271872 387.271198 
+z
+M 40.096163 387.271198 
+L 39.183618 387.271198 
+L 38.919749 386.523571 
+L 37.31455 386.523571 
+L 37.050681 387.271198 
+L 36.149131 387.271198 
+L 37.561926 383.478089 
+L 38.67787 383.478089 
+L 40.096163 387.271198 
+z
+M 38.111652 384.247706 
+L 37.561926 385.808927 
+L 38.666875 385.808927 
+L 38.111652 384.247706 
+z
+M 41.96354 387.271198 
+L 41.078481 387.271198 
+L 41.078481 384.2587 
+L 39.742647 384.2587 
+L 39.742647 383.478089 
+L 43.299374 383.478089 
+L 43.299374 384.2587 
+L 41.96354 384.2587 
+L 41.96354 387.271198 
+z
+M 46.943211 387.271198 
+L 43.826265 387.271198 
+L 43.826265 383.478089 
+L 46.882741 383.478089 
+L 46.882741 384.247706 
+L 44.683837 384.247706 
+L 44.683837 384.945857 
+L 46.580392 384.945857 
+L 46.580392 385.704479 
+L 44.683837 385.704479 
+L 44.683837 386.496085 
+L 46.943211 386.496085 
+L 46.943211 387.271198 
+z
+" style="fill: #101a24"/>
+  </g>
+  <g id="patch_17">
+   <path d="M 50.103712 385.675301 
+C 50.526578 385.290493 51.084761 385.089209 51.65563 385.116273 
+C 52.115286 385.136993 52.556758 385.304871 52.91408 385.594957 
+C 53.007956 385.671073 53.081958 385.743383 53.162725 385.831762 
+L 53.162725 386.896116 
+L 53.162302 386.894424 
+C 53.153845 386.87159 53.144542 386.82888 53.13693 386.802662 
+C 53.119593 386.743038 53.098449 386.684683 53.074346 386.627596 
+C 52.916194 386.257165 52.628645 385.95693 52.265826 385.782709 
+C 51.870023 385.594534 51.416288 385.570854 51.003571 385.717588 
+C 50.591276 385.864745 50.254252 386.169209 50.066077 386.564166 
+C 49.954863 386.800125 49.913422 387.01325 49.906656 387.271198 
+L 49.399217 387.271198 
+C 49.398794 387.237369 49.39964 387.199311 49.400908 387.165482 
+C 49.428818 386.595035 49.681269 386.059264 50.103712 385.675301 
+z
+" style="fill: #005192"/>
+  </g>
+  <g id="patch_18">
+   <path d="M 51.557948 386.171323 
+C 51.849726 386.171323 52.12924 386.287612 52.335176 386.494393 
+C 52.545341 386.705826 52.652749 386.974346 52.655709 387.271198 
+L 52.147424 387.271198 
+C 52.139812 387.116006 52.104291 387.000141 51.998998 386.879624 
+C 51.895818 386.76249 51.750775 386.691449 51.595583 386.680877 
+C 51.437431 386.670305 51.281817 386.723587 51.163837 386.82888 
+C 51.064886 386.915991 50.998496 387.033547 50.974393 387.162944 
+C 50.967627 387.201002 50.965936 387.23314 50.963399 387.271198 
+L 50.456382 387.271198 
+C 50.455536 386.978575 50.571402 386.698215 50.779029 386.491856 
+C 50.985388 386.285497 51.265748 386.170055 51.557948 386.171323 
+z
+" style="fill: #005192"/>
+  </g>
+  <g id="patch_19">
+   <path d="M 50.751966 384.158481 
+C 51.436586 383.982146 52.159687 384.03585 52.810901 384.311135 
+C 52.93184 384.362302 53.049397 384.421081 53.162725 384.487048 
+L 53.162725 385.094706 
+C 53.073923 385.025356 52.946641 384.947126 52.848113 384.893422 
+C 52.351245 384.623211 51.782067 384.515803 51.220924 384.585998 
+C 50.507972 384.6748 49.859718 385.04354 49.419514 385.611026 
+C 49.249522 385.829225 49.114205 386.07195 49.017792 386.331167 
+C 48.997494 386.386562 48.978888 386.442381 48.962396 386.498622 
+C 48.957745 386.513845 48.938716 386.584886 48.934064 386.594612 
+L 48.934064 385.411433 
+C 49.024558 385.27823 49.159029 385.123038 49.271934 385.009287 
+C 49.679154 384.596993 50.190822 384.302678 50.751966 384.158481 
+z
+" style="fill: #005192"/>
+  </g>
+  <g id="patch_20">
+   <path d="M 51.677197 383.042537 
+C 51.7161 383.04888 51.766844 383.046766 51.806594 383.049303 
+C 51.890321 383.054377 51.974049 383.061566 52.057353 383.071715 
+C 52.437087 383.116539 52.808786 383.212529 53.162725 383.357995 
+L 53.162725 383.867549 
+C 52.255677 383.440031 51.21585 383.391402 50.272858 383.732655 
+C 49.856758 383.883618 49.470681 384.107314 49.132388 384.392749 
+C 49.087987 384.430384 49.044432 384.468865 49.001723 384.508191 
+C 48.982271 384.525951 48.951825 384.553438 48.934064 384.57289 
+L 48.934064 383.952968 
+C 49.016946 383.883618 49.132811 383.802428 49.222882 383.742803 
+C 49.723978 383.410431 50.290619 383.189695 50.8839 383.094973 
+C 51.005262 383.075944 51.127048 383.061566 51.249256 383.052686 
+C 51.284777 383.050149 51.319875 383.048457 51.354973 383.046766 
+C 51.376539 383.046343 51.410368 383.04592 51.430666 383.04296 
+L 51.433203 383.042537 
+L 51.677197 383.042537 
+z
+" style="fill: #005192"/>
+  </g>
+  <g id="patch_21">
+   <path d="M 56.198904 387.271198 
+L 55.330337 387.271198 
+L 55.330337 383.478089 
+L 57.292858 383.478089 
+C 58.062475 383.478089 58.562725 383.928865 58.562725 384.632514 
+C 58.562725 385.347157 58.045983 385.830916 57.292858 385.830916 
+L 56.198904 385.830916 
+L 56.198904 387.271198 
+z
+M 56.182412 384.242208 
+L 56.182412 385.0613 
+L 57.226891 385.0613 
+C 57.518246 385.0613 57.677666 384.896382 57.677666 384.649005 
+C 57.677666 384.401629 57.512749 384.242208 57.226891 384.242208 
+L 56.182412 384.242208 
+z
+M 60.897369 387.359154 
+C 59.781425 387.359154 58.913281 386.534565 58.913281 385.374644 
+C 58.913281 384.214722 59.781425 383.390133 60.897369 383.390133 
+C 62.019233 383.390133 62.8878 384.214722 62.8878 385.374644 
+C 62.8878 386.534565 62.019233 387.359154 60.897369 387.359154 
+z
+M 60.897369 386.556554 
+C 61.546045 386.556554 61.991746 386.056304 61.991746 385.374644 
+C 61.991746 384.692984 61.546045 384.187236 60.897369 384.187236 
+C 60.249115 384.187236 59.809334 384.692984 59.809334 385.374644 
+C 59.809334 386.056304 60.249115 386.556554 60.897369 386.556554 
+z
+M 66.422114 387.271198 
+L 63.53563 387.271198 
+L 63.53563 383.478089 
+L 64.421112 383.478089 
+L 64.421112 386.496085 
+L 66.422114 386.496085 
+L 66.422114 387.271198 
+z
+M 67.841676 387.271198 
+L 66.956617 387.271198 
+L 66.956617 383.478089 
+L 67.841676 383.478089 
+L 67.841676 387.271198 
+z
+M 70.478669 387.353657 
+C 69.37372 387.353657 68.488661 386.556554 68.488661 385.380141 
+C 68.488661 384.214722 69.37372 383.39563 70.478669 383.39563 
+C 71.473673 383.39563 72.243289 384.022318 72.419201 384.967847 
+L 71.517651 384.967847 
+C 71.380219 384.489585 71.000908 384.192733 70.478669 384.192733 
+C 69.857478 384.192733 69.384714 384.665497 69.384714 385.374644 
+C 69.384714 386.072796 69.862976 386.556554 70.478669 386.556554 
+C 70.973422 386.556554 71.352733 386.292686 71.506656 385.830916 
+L 72.408207 385.830916 
+C 72.2213 386.754456 71.457181 387.353657 70.478669 387.353657 
+z
+M 74.712827 387.271198 
+L 73.827768 387.271198 
+L 73.827768 385.841911 
+L 72.436962 383.478089 
+L 73.44296 383.478089 
+L 74.295035 385.055803 
+L 75.119624 383.478089 
+L 76.065153 383.478089 
+L 74.712827 385.836413 
+L 74.712827 387.271198 
+z
+M 80.084495 385.731966 
+L 80.969554 387.271198 
+L 79.963555 387.271198 
+L 79.182944 385.781441 
+L 78.578246 385.781441 
+L 78.578246 387.271198 
+L 77.709679 387.271198 
+L 77.709679 383.478089 
+L 79.677698 383.478089 
+C 80.436319 383.478089 80.942067 383.923367 80.942067 384.627016 
+C 80.942067 385.187737 80.601237 385.600031 80.084495 385.731966 
+z
+M 78.561754 384.236711 
+L 78.561754 385.050305 
+L 79.617228 385.050305 
+C 79.908583 385.050305 80.068003 384.890885 80.068003 384.643508 
+C 80.068003 384.390634 79.897588 384.236711 79.617228 384.236711 
+L 78.561754 384.236711 
+z
+M 85.139013 387.271198 
+L 84.226468 387.271198 
+L 83.9626 386.523571 
+L 82.3574 386.523571 
+L 82.093532 387.271198 
+L 81.191981 387.271198 
+L 82.604777 383.478089 
+L 83.72072 383.478089 
+L 85.139013 387.271198 
+z
+M 83.154503 384.247706 
+L 82.604777 385.808927 
+L 83.709726 385.808927 
+L 83.154503 384.247706 
+z
+M 87.175536 383.478089 
+C 88.417917 383.478089 89.176539 384.181738 89.176539 385.34166 
+C 89.176539 386.529068 88.401425 387.271198 87.175536 387.271198 
+L 85.614315 387.271198 
+L 85.614315 383.478089 
+L 87.175536 383.478089 
+z
+M 86.493876 386.518074 
+L 87.126061 386.518074 
+C 87.840705 386.518074 88.280486 386.050807 88.280486 385.347157 
+C 88.280486 384.643508 87.840705 384.231214 87.126061 384.231214 
+L 86.493876 384.231214 
+L 86.493876 386.518074 
+z
+M 93.269037 387.271198 
+L 92.356492 387.271198 
+L 92.092623 386.523571 
+L 90.487424 386.523571 
+L 90.223555 387.271198 
+L 89.322005 387.271198 
+L 90.7348 383.478089 
+L 91.850744 383.478089 
+L 93.269037 387.271198 
+z
+M 91.284526 384.247706 
+L 90.7348 385.808927 
+L 91.839749 385.808927 
+L 91.284526 384.247706 
+z
+M 96.119577 385.731966 
+L 97.004636 387.271198 
+L 95.998637 387.271198 
+L 95.218027 385.781441 
+L 94.613328 385.781441 
+L 94.613328 387.271198 
+L 93.744761 387.271198 
+L 93.744761 383.478089 
+L 95.71278 383.478089 
+C 96.471402 383.478089 96.97715 383.923367 96.97715 384.627016 
+C 96.97715 385.187737 96.636319 385.600031 96.119577 385.731966 
+z
+M 94.596836 384.236711 
+L 94.596836 385.050305 
+L 95.65231 385.050305 
+C 95.943665 385.050305 96.103085 384.890885 96.103085 384.643508 
+C 96.103085 384.390634 95.93267 384.236711 95.65231 384.236711 
+L 94.596836 384.236711 
+z
+" style="fill: #101a24"/>
+  </g>
+  <g id="text_26">
+   <text style="font-size: 9.5px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #4a5560" x="21.6" y="50.191328" transform="rotate(-0 21.6 50.191328)">Of passages carrying a Just Transition Topic, what share are about work, and what share also mention an energy Topic?</text>
+  </g>
+  <g id="text_27">
+   <text style="font-size: 7px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; fill: #6b7580" transform="translate(113.832 376.766977)">106,161 passages with a Just Transition Topic in laws, policies, Party submissions to the UNFCCC, climate fund projects and court documents, 2020–2025.</text>
+   <text style="font-size: 7px; font-family: 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; fill: #6b7580" transform="translate(113.832 385.904219)">Source: Climate Policy Radar, data accessed 11 Nov 2026.</text>
+  </g>
+  <g id="text_28">
+   <text style="font-weight: 700; font-size: 14px; font-family: 'Inter Tight', 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #101a24" x="21.6" y="31.785" transform="rotate(-0 21.6 31.785)">Just transition content mentions </text>
+  </g>
+  <g id="text_29">
+   <text style="font-weight: 700; font-size: 14px; font-family: 'Inter Tight', 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #1a4f8c" x="233.566563" y="31.785" transform="rotate(-0 233.566563 31.785)">work</text>
+  </g>
+  <g id="text_30">
+   <text style="font-weight: 700; font-size: 14px; font-family: 'Inter Tight', 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #101a24" x="266.0925" y="31.785" transform="rotate(-0 266.0925 31.785)"> about twice as often as </text>
+  </g>
+  <g id="text_31">
+   <text style="font-weight: 700; font-size: 14px; font-family: 'Inter Tight', 'Inter', 'Helvetica Neue', 'Arial', 'DejaVu Sans'; text-anchor: start; fill: #7a7259" x="420.158125" y="31.785" transform="rotate(-0 420.158125 31.785)">energy</text>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="p6533a83776">
+   <rect x="146.465" y="72.305" width="551.935" height="277.755"/>
+  </clipPath>
+ </defs>
+</svg>
