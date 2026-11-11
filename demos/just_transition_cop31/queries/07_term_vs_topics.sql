@@ -68,7 +68,7 @@ f as (
          iff(not jt and array_contains('Q704'::variant, c), 1, 0) as ctl_women
   from p
 )
-select 'unfccc_doc' as section, id as unit, any_value(iso) as iso, any_value(yr) as yr,
+select 'unfccc_doc' as section, null as unit, null as iso, any_value(yr) as yr,
        any_value(entity_type) as entity_type, count(*) as passages,
        sum(jt) jt, sum(nonjt) nonjt, sum(child_any) child_any, sum(child_socprot) child_socprot,
        sum(child_inclusion) child_inclusion, sum(child_decent) child_decent, sum(child_greenjobs) child_greenjobs,
