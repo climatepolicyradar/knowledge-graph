@@ -202,33 +202,33 @@ async def sync_concepts(
 
     match concepts_archive_path:
         case S3Uri():
-            snapshots_path = S3Uri(
+            snapshots_dir = S3Uri(
                 bucket=concepts_archive_path.bucket,
                 key=f"{concepts_archive_path.key}_snapshots",
             )
-            snapshot_path = f"{snapshots_path}/concepts_{timestamp}.parquet"
-            latest_path = f"{concepts_archive_path}/latest.parquet"
         case Path():
             snapshots_dir = concepts_archive_path.with_name(
                 f"{concepts_archive_path.name}_snapshots"
             )
             snapshots_dir.mkdir(parents=True, exist_ok=True)
             concepts_archive_path.mkdir(parents=True, exist_ok=True)
-            snapshot_path = str(snapshots_dir / f"concepts_{timestamp}.parquet")
-            latest_path = str(concepts_archive_path / "latest.parquet")
+
+    snapshot_path = f"{snapshots_dir}/concepts_{timestamp}.parquet"
+    latest_path = f"{concepts_archive_path}/latest.parquet"
 
     # Write the snapshot first, so if overwriting latest fails the
     # snapshot is kept and latest still holds the previous export.
-    logger.info(f"writing snapshot of {len(current_df)} concepts to {snapshot_path}")
+    logger.info(f"writing snapshot of {len(current_df)} rows to {snapshot_path}")
     current_df.write_parquet(
         snapshot_path,
         credential_provider=credential_provider,
         storage_options=storage_options,
     )
 
-    logger.info(f"overwriting {latest_path}")
+    logger.info(f"overwriting {latest_path} with {len(current_df)} rows")
     current_df.write_parquet(
         latest_path,
         credential_provider=credential_provider,
         storage_options=storage_options,
     )
+    logger.info(f"successfully wrote {len(current_df)} rows to {latest_path}")
