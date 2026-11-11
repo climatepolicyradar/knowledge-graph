@@ -25,7 +25,7 @@ from pathlib import Path
 import matplotlib.patheffects as pe
 import numpy as np
 import pandas as pd
-from scipy.stats import mannwhitneyu
+from scipy.stats import mannwhitneyu, spearmanr
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / ".claude" / "skills" / "cpr-charts"))
@@ -147,7 +147,7 @@ def chart_by_year() -> None:
         "What share of each year’s passages carry a Just Transition Topic?",
         cpr.footer(
             f"{d.passages.sum() / 1e6:.1f} million paragraphs and list items, 2012–2025, by publication year. "
-            "UNFCCC submissions exclude inventories; nature-only laws and policies excluded.",
+            "UNFCCC submissions by Parties, without inventories; nature-only laws and policies excluded.",
             accessed=ACCESSED,
             source=SOURCE,
         ),
@@ -408,8 +408,8 @@ def chart_energy_vs_work() -> None:
         "Of passages carrying a Just Transition Topic, what share are about work, and what share also mention "
         "an energy Topic?",
         cpr.footer(
-            f"{n:,} passages with a Just Transition Topic in laws, policies, UNFCCC submissions, climate fund "
-            "projects and court documents, 2020–2025.",
+            f"{n:,} passages with a Just Transition Topic in laws, policies, Party submissions to the UNFCCC, "
+            "climate fund projects and court documents, 2020–2025.",
             accessed=ACCESSED,
             source=SOURCE,
         ),
@@ -604,7 +604,7 @@ def chart_regions() -> None:
         "What share of each region’s passages carry a Just Transition Topic, and which of its sub-topics?",
         cpr.footer(
             f"{int(a.loc['All regions', 'passages']):,} paragraphs and list items in national climate laws and "
-            "policies (nature-only excluded) and UNFCCC submissions, 2020–2025, tagged with one region.",
+            "policies (nature-only excluded) and Party submissions to the UNFCCC, 2020–2025, tagged with one region.",
             accessed=ACCESSED,
             source=SOURCE,
         ),
@@ -673,8 +673,12 @@ def chart_term_vs_topics() -> None:
                 "ratio_without_type_adjustment": raw_m["often"] / raw_m["never"],
                 "mean_share_never": raw_m["never"],
                 "mean_share_often": raw_m["often"],
-                "docs_never": int((u.group == "never").sum()),
-                "docs_often": int((u.group == "often").sum()),
+                "docs_never_eligible": int((u.group == "never").sum()),
+                "docs_often_eligible": int((u.group == "often").sum()),
+                # Documents whose type never carries the Topic have a 0/0 scaled share and
+                # drop out, so the ratio rests on these (smaller) counts.
+                "docs_never_used": never.size,
+                "docs_often_used": often.size,
             }
         )
     d = pd.DataFrame(rows)
@@ -714,35 +718,39 @@ def chart_term_vs_topics() -> None:
     halo = [
         pe.withStroke(linewidth=3, foreground=cpr.SURFACE)
     ]  # keeps the lines visible on dark bars
-    ax.hlines(
-        y, d.ci_low, d.ci_high, color=cpr.INK2, lw=1.1, zorder=4, path_effects=halo
-    )
+    # An interval running past the axis is cut at the edge and ends in an arrow, not a cap.
+    xmax = 3.2
+    edge = xmax - 0.04
+    hi = d.ci_high.clip(upper=edge)
+    cut = d.ci_high > edge
+    ax.hlines(y, d.ci_low, hi, color=cpr.INK2, lw=1.1, zorder=4, path_effects=halo)
     ax.vlines(
-        np.r_[d.ci_low, d.ci_high],
-        np.r_[y, y] - 0.16,
-        np.r_[y, y] + 0.16,
+        np.r_[d.ci_low, d.ci_high[~cut]],
+        np.r_[y, y[~cut]] - 0.16,
+        np.r_[y, y[~cut]] + 0.16,
         color=cpr.INK2,
         lw=1.1,
         zorder=4,
         path_effects=halo,
     )
+    ax.plot(hi[cut], y[cut], ">", ms=5, color=cpr.INK2, zorder=4, path_effects=halo)
     ax.set_yticks(y, d.topic, color=cpr.INK)
     ax.get_yticklabels()[0].set_fontweight("semibold")
     ax.set_ylim(y[-1] + 0.6, -0.6)
-    ax.set_xlim(0, 2.7)
+    ax.set_xlim(0, xmax)
     bar_frame(ax)
-    # Reference ticks instead of value labels: x0.5 to x2.5, with x1 marked as no difference.
+    # Reference ticks instead of value labels: x0.5 to x3, with x1 marked as no difference.
     ax.xaxis.set_visible(True)
     ax.set_xticks(
-        [0.5, 1, 1.5, 2, 2.5],
-        ["×0.5", "×1\nno difference", "×1.5", "×2", "×2.5"],
+        [0.5, 1, 1.5, 2, 2.5, 3],
+        ["×0.5", "×1\nno difference", "×1.5", "×2", "×2.5", "×3"],
         color=cpr.INK2,
     )
     ax.tick_params(axis="x", length=0)
-    for xv in (0.5, 1.5, 2, 2.5):
+    for xv in (0.5, 1.5, 2, 2.5, 3):
         ax.axvline(xv, color=cpr.GRID, lw=0.8, zorder=1)
 
-    n_never, n_often = d.docs_never.iloc[0], d.docs_often.iloc[0]
+    n_never, n_often = d.docs_never_eligible.iloc[0], d.docs_often_eligible.iloc[0]
     cpr.titled(
         fig,
         [
@@ -756,13 +764,40 @@ def chart_term_vs_topics() -> None:
         "to also occur anywhere in the same document? Ratio of mean Topic shares, 3+ mentions vs none; lines "
         "show 95% intervals.",
         cpr.footer(
-            f"{len(u):,} UNFCCC submissions, 2020–25: {n_often} use the term 3+ times, {n_never} never. "
+            f"{len(u):,} Party submissions to the UNFCCC, 2020–25: {n_often} use the term 3+ times, {n_never} never. "
             "Topic shares exclude term passages and are scaled within document type.",
             accessed=ACCESSED,
             source=SOURCE,
         ),
     )
     cpr.save(fig, "07_term_vs_topics", OUT, dpi=300, data=d)
+
+
+def term_topic_correlations() -> None:
+    """
+    Spearman correlations quoted in the README under chart 7 -> figures/07_correlations.csv.
+
+    For each document (or country): its term rate (passages using the term / all passages)
+    against its share of each Topic (in passages not using the term), unscaled.
+    """
+    raw = pd.read_csv(DATA / "07_term_vs_topics.csv")
+    u = raw[(raw.section == "unfccc_doc") & (raw.passages >= 30)]
+    ndc = u.entity_type == "Nationally Determined Contribution (NDC)"
+    sets = {
+        "NDC 3.0s (2025+)": u[ndc & (u.yr >= 2025)],
+        "Updated NDCs (2020-24)": u[ndc & u.yr.between(2020, 2024)],
+        "All UNFCCC Party submissions (2020-25)": u[u.yr.between(2020, 2025)],
+        # whole national record: climate laws, policies and UNFCCC submissions, any year
+        "Countries (1,000+ passages)": raw[
+            (raw.section == "country") & (raw.passages >= 1000)
+        ],
+    }
+    rows = []
+    for name, s in sets.items():
+        for col, label, _ in TERM_VS:
+            rho, p = spearmanr(s.jt / s.passages, s[col] / s.nonjt)
+            rows.append({"set": name, "n": len(s), "topic": label, "rho": rho, "p": p})
+    pd.DataFrame(rows).to_csv(OUT / "07_correlations.csv", index=False)
 
 
 if __name__ == "__main__":
@@ -773,3 +808,4 @@ if __name__ == "__main__":
     chart_sector_mix()
     chart_regions()
     chart_term_vs_topics()
+    term_topic_correlations()

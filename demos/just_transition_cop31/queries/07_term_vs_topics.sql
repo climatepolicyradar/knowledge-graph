@@ -9,11 +9,16 @@
 --                 (validated classifiers Q53, Q58, Q68, Q69, Q1754, Q1744). Counting only
 --                 non-term passages removes overlap from labels that contain the phrase itself.
 --   ctl_*         comparison topics (validated classifiers), also counted in non-term passages only
--- Unit: passages; UNFCCC submissions only (no CBD/UNCCD), without emissions inventories.
-with unfccc as (
+-- Unit: passages; UNFCCC submissions by Parties only (author_type 'Party': no CBD/UNCCD, no
+-- secretariat, expert-review, IPCC or non-Party stakeholder documents), without emissions inventories. Laws and policies tagged only Nature are left out.
+with unfccc as (  -- UNFCCC submissions by Parties (incl. negotiating groups): the principal
+                  -- carries author_type 'Party'; documents inherit it through principal_id
   select distinct d.id
-  from PRODUCTION.PUBLISHED.DOCUMENTS d, lateral flatten(input => d.labels) l
+  from PRODUCTION.PUBLISHED.DOCUMENTS d
+  join PRODUCTION.PUBLISHED.DOCUMENTS pr on pr.id = d.principal_id,
+       lateral flatten(input => d.labels) l, lateral flatten(input => pr.labels) a
   where d.category = 'UN submission' and l.value:id::string = 'un_convention::UNFCCC'
+    and a.value:id::string = 'author_type::Party'
 ),
 one_country as (  -- documents tagged with exactly one country (geographies also holds regions)
   select d.id, any_value(replace(g.value::string, 'country::', '')) as iso
@@ -28,6 +33,7 @@ docs as (
   where not d.is_principal and not d.is_collection and d.document_status = 'published'
     and d.concept_ids is not null
     and d.category in ('UN submission', 'Policy', 'Law')
+    and (d.category not in ('Law', 'Policy') or array_contains('Climate'::variant, d.domains))
     and (d.category <> 'UN submission'
          or (d.id in (select id from unfccc)
              and coalesce(d.entity_type, '') <> 'National Inventory Report (NIR)'

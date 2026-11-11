@@ -45,9 +45,9 @@ def main() -> None:
         walk(root)
 
     out = HERE / "data" / "concepts.json"
-    existing = json.loads(out.read_text()) if out.exists() else {}
+    existing = json.loads(out.read_text(encoding="utf-8")) if out.exists() else {}
     existing.update(seen)
-    out.write_text(json.dumps(existing, indent=1, ensure_ascii=False))
+    out.write_text(json.dumps(existing, indent=1, ensure_ascii=False), encoding="utf-8")
     print(
         f"saved {len(seen)} concepts under {ROOTS} -> {out.name} ({len(existing)} total)"
     )

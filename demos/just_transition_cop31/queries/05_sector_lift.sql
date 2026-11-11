@@ -6,12 +6,17 @@
 -- with each corpus's own base rate, so the corpus mix of just transition passages does not
 -- drive it.
 -- Unit: passages (paragraphs and list items, >= 20 characters) in documents with classifier
--- output, published 2020-2025. Laws and policies tagged only Nature are left out.
+-- output, published 2020-2025. UNFCCC submissions by Parties only, without inventories.
+-- Laws and policies tagged only Nature are left out.
 -- Sectors: the 19 economic-sector classifiers (children of Q709).
-with unfccc as (
+with unfccc as (  -- UNFCCC submissions by Parties (incl. negotiating groups): the principal
+                  -- carries author_type 'Party'; documents inherit it through principal_id
   select distinct d.id
-  from PRODUCTION.PUBLISHED.DOCUMENTS d, lateral flatten(input => d.labels) l
+  from PRODUCTION.PUBLISHED.DOCUMENTS d
+  join PRODUCTION.PUBLISHED.DOCUMENTS pr on pr.id = d.principal_id,
+       lateral flatten(input => d.labels) l, lateral flatten(input => pr.labels) a
   where d.category = 'UN submission' and l.value:id::string = 'un_convention::UNFCCC'
+    and a.value:id::string = 'author_type::Party'
 ),
 p as (
   select case d.category when 'UN submission' then 'UNFCCC submissions'

@@ -1,14 +1,17 @@
 r"""
 Build Snowflake regex predicates that mirror KeywordClassifier matching.
 
-They cover concepts that have no classifier of their own (workers, social dialogue), using
-the labels in data/concepts.json.
+They cover concepts that have no classifier of their own (social dialogue, protecting
+transition industry workers), using the labels in data/concepts.json.
 
 Matching mirrors knowledge_graph/classifier/keyword.py:
 - a label with any uppercase or non-ASCII character matches case-sensitively, all
   others case-insensitively;
 - separators are flexible: the label is split on whitespace/hyphens/dashes and rejoined
   with [[:space:]-–—]+;
+- the last word of each label also matches its English plural (the classifier's default
+  word-form rule since Aug 2026): consonant + y -> ies, s/x/z/sh/ch -> es, otherwise s;
+  words under 3 characters or ending in a digit are left alone;
 - whole-word matching via \\b (Snowflake has no lookarounds; \\b is equivalent for labels
   that start and end with a word character, which all of these do).
 None of the subtrees used here carries negative labels, so no suppression step is needed.
@@ -25,15 +28,12 @@ import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-CONCEPTS = json.loads((HERE / "data" / "concepts.json").read_text())
+CONCEPTS = json.loads((HERE / "data" / "concepts.json").read_text(encoding="utf-8"))
 
 SEARCHES = {
-    # Impacted workers (Q1160: workers, employees, working class, informal workers,
-    # workers impacted by the transition, high-risk occupations) sits under impacted
-    # groups, outside Q47. Protecting transition industry workers (Q1799) sits inside
-    # Q47, under social protection (Q53) and workforce for a just transition (Q65).
-    "workers": ["Q1160", "Q1799"],
-    # Protecting transition industry workers alone (inside Q47, under social protection Q53).
+    # Protecting transition industry workers (Q1799) sits inside Q47, under social protection
+    # (Q53) and workforce for a just transition (Q65). Impacted workers (Q1160) sits under
+    # impacted groups, outside Q47, so it is not searched here.
     "transition_workers": ["Q1799"],
     # Social dialogue (Q54, under social inclusion Q58 and decent work Q68) and trade
     # union (Q59, under decent work Q68). Both are already inside the Q68 classifier.
@@ -104,8 +104,25 @@ def esc(tok: str) -> str:
     return re.sub(r"([.^$*+?()\[\]{}|\\])", r"\\\1", tok)
 
 
+def plural(tok: str, lower: bool) -> str:
+    """Mirror make_suffix_flexible_regex: the token, or its English plural."""
+    if len(tok) < 3 or tok[-1].isdigit():
+        return esc(tok)
+    t = tok.lower()
+    s, es, ies = ("s", "es", "ies") if lower else ("[sS]", "[eE][sS]", "[iI][eE][sS]")
+    if t.endswith("y") and t[-2] not in "aeiou":
+        return f"{esc(tok[:-1])}({esc(tok[-1])}|{ies})"
+    if t.endswith(("s", "x", "z", "sh", "ch")):
+        return f"{esc(tok)}({es})?"
+    return f"{esc(tok)}{s}?"
+
+
 def trie_regex(labels: list[str], lower: bool) -> str:
-    """One regex for many labels, sharing common leading tokens (same matches, shorter)."""
+    """
+    One regex for many labels, sharing common leading tokens (same matches, shorter).
+
+    A token that ends a label also matches its plural, as KeywordClassifier does.
+    """
     root: dict = {}
     for lab in labels:
         node = root
@@ -119,9 +136,9 @@ def trie_regex(labels: list[str], lower: bool) -> str:
             child = node[tok]
             rest = {k: v for k, v in child.items() if k}
             if not rest:
-                alts.append(esc(tok))
+                alts.append(plural(tok, lower))
             elif "" in child:
-                alts.append(f"{esc(tok)}({SEP}{build(rest)})?")
+                alts.append(f"({plural(tok, lower)}|{esc(tok)}{SEP}{build(rest)})")
             else:
                 alts.append(f"{esc(tok)}{SEP}{build(rest)}")
         return alts[0] if len(alts) == 1 else "(" + "|".join(alts) + ")"

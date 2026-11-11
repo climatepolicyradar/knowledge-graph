@@ -73,11 +73,12 @@ entirely under people with limited assets, and only 11% of those passages are in
   labels). All of it sits inside decent work, and `Q54` inside social inclusion too.
 - **Protecting transition-industry workers** = every label in `Q1799` (4 concepts, 912
   labels), inside social protection.
-- A broader **workers** search (`Q1160` + `Q1799`, 1,016 labels) is available but no longer
-  charted, because `Q1160` sits outside the just transition tree.
+- Impacted workers (`Q1160`) sits outside the just transition tree, so it is not searched.
 
 Matching mirrors `KeywordClassifier`:
 - whole words, with flexible separators;
+- the last word of each label also matches its English plural ("social dialogues", "labor
+  councils"), the classifier's default since August 2026;
 - case-sensitive only when a label has capitals or non-ASCII characters;
 - no negative labels in these subtrees.
 
@@ -91,12 +92,24 @@ bare mention never counts as a sub-topic.
 **Common scope.** Five corpora:
 - laws and policies, excluding those tagged *only* with the Nature domain (those tagged
   Climate and Nature stay);
-- UNFCCC submissions, without CBD/UNCCD reports or emissions inventories;
+- UNFCCC submissions by Parties, without CBD/UNCCD reports or emissions inventories;
 - climate fund projects;
 - court documents.
 
 Paragraphs and list items of at least 20 characters, in documents with classifier output.
 Exploration ran on a 10% document sample first; it is not reproduced here.
+
+**Party submissions.** Each UNFCCC principal carries an `author_type` label, Party or
+Non-Party, which its documents inherit through `principal_id`. "UNFCCC submissions" in these
+charts means Party submissions only:
+- **In:** negotiating-group submissions such as the AGN, AOSIS or G77 and China.
+- **Out:** secretariat and expert-review reports, IPCC reports, and Global Stocktake inputs
+  from non-Party stakeholders (318 of the 397 in 2020–25).
+
+Seven technical analyses of BURs are labelled Party, although the other 95 reports of that type
+are Non-Party. They look mislabelled but are kept as labelled; four of them enter chart 7, all in
+the "never" group. The filter changes chart 7 the most (see there). Charts 1 and 3–6 move by
+tenths of a point, and chart 2b (NDCs only) not at all.
 
 ---
 
@@ -104,7 +117,7 @@ Exploration ran on a 10% document sample first; it is not reproduced here.
 
 ### 1. Just transition content over time
 
-![](figures/01_jt_by_year.png)
+![Share of passages carrying the just transition Topic per year, 2012–2025, one panel per corpus](figures/01_jt_by_year.png)
 
 **How to read it.** Each panel is one corpus. The line is the share of each year's passages
 that carry the Just Transition Topic, sub-topics included.
@@ -162,7 +175,7 @@ question. They were checked with one-off queries (not saved in `queries/`), on 1
 
 ### 2b. NDC rounds: just transition topics vs the term
 
-![](figures/02b_ndc_rounds_topic.png)
+![Share of countries whose NDCs carry the just transition Topic vs use the term, per NDC round](figures/02b_ndc_rounds_topic.png)
 
 **Method.** A wording comparison. Unit: countries (UNFCCC Parties as tagged in `geographies`,
 with the EU as one Party). All NDC files a country published in a round are pooled. Rounds are
@@ -185,7 +198,7 @@ transition, as much as making new ones.
 
 ### 3. Just transition sub-topics in NDC 3.0s
 
-![](figures/03_ndc_topics.png)
+![Share of NDC 3.0 countries carrying each just transition sub-topic](figures/03_ndc_topics.png)
 
 **How to read it.** One bar per sub-topic: the share of all 137 countries with an NDC 3.0
 whose NDC carries it at least once.
@@ -202,17 +215,17 @@ transition tree, shown because it matters for the ILO's agenda. Data:
 (65%) are the common just transition building blocks. Skills and green jobs reach about half
 (50%, 49%). The informal economy appears in 31%. The elements most specific to the ILO's just
 transition guidelines are the rarest:
-- social dialogue or trade unions appear in 24% of NDC 3.0s;
+- social dialogue or trade unions appear in 26% of NDC 3.0s;
 - explicit protection for workers in transition industries in 9%.
 
 ### 4. Work vs energy in just transition content
 
-![](figures/04_energy_vs_work.png)
+![Share of just transition passages about work vs touching an energy Topic](figures/04_energy_vs_work.png)
 
 **How to read it.** The base is every passage carrying the Just Transition Topic. Blue: the
 share whose sub-topic is about work. Beige: the share that also carries an energy Topic.
 
-**Method.** Unit: passages with the Just Transition Topic, five corpora, 2020–2025 (108,225).
+**Method.** Unit: passages with the Just Transition Topic, five corpora, 2020–2025 (106,161).
 "Any work sub-topic" is decent work, aligning skills or green jobs. Energy Topics are
 validated classifiers from the mitigation and energy trees:
 - fossil fuel `Q638`, which includes coal `Q661`;
@@ -230,7 +243,7 @@ Topic. Fund projects are the exception, with less of both: work 18%, energy 8%. 
 transition content is dominated by generic safeguard language (see chart 1). The
 other four corpora, as work vs energy:
 - policies: 37% vs 19%;
-- UNFCCC submissions: 29% vs 20%;
+- UNFCCC submissions: 29% vs 17%;
 - court documents: 24% vs 18%;
 - laws: 24% vs 11%.
 
@@ -241,7 +254,7 @@ framing, while the substance sits in social policy.
 
 ### 5. Which sectors just transition content talks about
 
-![](figures/05_sector_mix.png)
+![Economic sectors in just transition passages, observed vs expected share of sector mentions](figures/05_sector_mix.png)
 
 **How to read it.** For passages with the Just Transition Topic that mention an economic
 sector: blue is the share of sector mentions going to each sector, and beige is the share
@@ -251,7 +264,7 @@ their corpora would predict. The right-hand column is the ratio.
 Mining, oil and gas is the extractive sector `Q760`. Expected mentions apply each corpus's own
 sector rate to that corpus's just transition passages, which holds the corpus mix fixed. Both
 sides are then shown as shares of all sector mentions. That divides out how many sectors a
-passage mentions at all (just transition passages carry 1.75 times as many sector tags as
+passage mentions at all (just transition passages carry 1.73 times as many sector tags as
 expected). Unit: passages, five corpora, 2020–2025. Data: `queries/05_sector_lift.sql`.
 
 **What it shows.**
@@ -266,7 +279,7 @@ being transformed.
 
 ### 6. Just transition content by region
 
-![](figures/06_regions.png)
+![Share of each region's passages carrying the just transition Topic, split by sub-topic group](figures/06_regions.png)
 
 **How to read it.** Each bar is the share of a region's passages that carry the Just
 Transition Topic, split by sub-topic group. The groups are exclusive:
@@ -286,7 +299,7 @@ counts once however many sub-topics it carries. Data: `queries/03_topic_flags.sq
 `region`.
 
 **What it shows.** South Asia and Sub-Saharan Africa carry the most just transition content
-(5.4% of passages), Latin America the least (3.4%). That is a narrower spread than the term
+(5.5% and 5.4% of passages), Latin America the least (3.5%). That is a narrower spread than the term
 alone suggested. Across all regions, just transition content splits:
 - work 28%;
 - social protection 26%;
@@ -312,32 +325,43 @@ inclusion passages that are just transition content too.
 
 ### 7. Does using the term go with more just transition sub-topics?
 
-![](figures/07_term_vs_topics.png)
+![Ratio of Topic shares in submissions using the term 3+ times vs never, with 95% intervals](figures/07_term_vs_topics.png)
 
-**How to read it.** A wording comparison. UNFCCC submissions from 2020–2025 are split by how
-many of their passages say "just transition": never (770 documents) or 3+ times (280). The 230
-documents that use it once or twice sit between the two and are not drawn. Each bar shows how
-much more common a Topic is in the "3+ times" documents than in the "never" documents. ×1
-(dashed) means no difference. Blue bars are the just transition sub-topics. Beige bars are
-other Topics, with net-zero targets picked out in mustard, there to show whether frequent users
-simply say more about everything.
+**How to read it.** A wording comparison. Party submissions to the UNFCCC from 2020–2025 are
+split by how many of their passages say "just transition": never (603 documents) or 3+ times
+(197). The 181 documents that use it once or twice sit between the two and are not drawn. Each
+bar shows how much more common a Topic is in the "3+ times" documents than in the "never"
+documents. ×1 (dashed) means no difference. Blue bars are the just transition sub-topics. Beige
+bars are other Topics, with net-zero targets picked out in mustard, there to show whether
+frequent users simply say more about everything. An interval that runs past the axis ends in
+an arrow.
 
-**Method.** Unit: UNFCCC submissions (no CBD/UNCCD, no inventories), 2020–2025, with at least
-30 paragraphs and list items (1,280). This covers NDCs, national communications, BURs, BTRs,
-long-term strategies, NAPs, Global Stocktake inputs and UNFCCC reports. For each document we
-take the share of its passages that carry each Topic, counting only passages that don't use
-the term, so the term itself can't create the correlation. The comparison Topics are validated
-classifiers: adaptation, renewable energy, fossil fuels, drought, early warning systems,
-net-zero targets, and women & minority genders.
+**Method.** Unit: Party submissions to the UNFCCC (no CBD/UNCCD, no inventories), 2020–2025,
+with at least 30 paragraphs and list items (981). This covers NDCs, national communications,
+BURs, BTRs, biennial reports, long-term strategies, NAPs, adaptation communications and
+Parties' Global Stocktake inputs. For each document we take the share of its passages that
+carry each Topic, counting only passages that don't use the term, so the term itself can't
+create the correlation. The comparison Topics are validated classifiers: adaptation, renewable
+energy, fossil fuels, drought, early warning systems, net-zero targets, and women & minority
+genders.
+
+An earlier version also counted secretariat and IPCC reports and non-Party Global Stocktake
+inputs (1,280 documents). Non-Party documents were 83 of its 280 "3+ times" documents, about
+half of them Global Stocktake inputs from NGOs, businesses and international bodies. That
+version also showed small but significant rises for fossil fuels and renewable energy, which
+disappear with Parties only.
 
 **Compared within document type.** Long-term strategies and NDCs use the term most, and they
 differ from national communications and adaptation plans in what else they cover. So each
 document's share is divided by the average for its document type before the groups are
-compared. Without that adjustment the ratios are larger: any sub-topic ×1.7, net-zero ×3.0.
-Within every main type (NDC, BTR, national communication, LT-LEDS, Global Stocktake
-submission, BUR), frequent users still carry more sub-topics (×1.15 to ×1.75). The ratio is
-of mean shares, so rare Topics have a defined value. Legal safeguards appear in about 0.1% of
-passages, so treat its bar as noisy. Data: `queries/07_term_vs_topics.sql`.
+compared. Without that adjustment the ratios are larger: any sub-topic ×1.7, net-zero ×3.1.
+Within every main type (NDC, BTR, national communication, LT-LEDS, BUR, biennial report, NAP),
+frequent users still carry more sub-topics (×1.15 to ×2.1). If no document of a type carries a
+Topic, that type's scaled shares are 0 ÷ 0, and its documents drop out of that Topic's
+comparison. This removes at most 10 of the 603 "never" documents and none of the 197 "3+ times"
+ones; the CSV gives the counts used per Topic. The ratio is of mean shares, so rare Topics have
+a defined value. Legal safeguards appear in about 0.05% of passages, so treat its bar as noisy.
+Data: `queries/07_term_vs_topics.sql`.
 
 **The statistic, exactly.** The bars are not correlation coefficients. For each document *d*
 and Topic *T*:
@@ -346,8 +370,8 @@ and Topic *T*:
    that don't use the term.
 2. *scaled(d, T)* = *share(d, T)* ÷ the mean *share* of *T* across all documents of the
    same type (NDC, BTR, national communication…).
-3. The bar = mean *scaled* over the 280 documents using the term 3+ times ÷ mean *scaled*
-   over the 770 that never use it.
+3. The bar = mean *scaled* over the 197 documents using the term 3+ times ÷ mean *scaled*
+   over the 603 that never use it.
 
 ×1 means no difference.
 
@@ -360,30 +384,31 @@ and Topic *T*:
   term rate (passages using the term ÷ all passages) and its *share* of each Topic, with no
   document-type scaling.
 
-All three are saved in `figures/07_term_vs_topics.csv`.
+Intervals and tests are saved in `figures/07_term_vs_topics.csv`. The correlations, for all 14
+Topics, are in `figures/07_correlations.csv`.
 
 **What it shows.** Submissions that use the term often carry more just transition
-sub-topics elsewhere: ×1.4 for any sub-topic (95% interval 1.22–1.62). The work-related ones
+sub-topics elsewhere: ×1.4 for any sub-topic (95% interval 1.25–1.57). The work-related ones
 rise most:
-- aligning skills ×1.9 (1.41–2.60);
-- green jobs ×1.8 (1.29–2.42);
-- social protection ×1.6 (1.23–2.17);
-- decent work ×1.6 (1.25–1.98).
+- aligning skills ×2.3 (1.75–3.04);
+- green jobs ×1.9 (1.40–2.57);
+- decent work ×1.6 (1.32–1.97).
 
-Social inclusion, broad language that appears everywhere, rises least (×1.3, 1.09–1.51).
-Legal safeguards (×1.4) is too rare to call: its interval runs from 0.78 to 2.40.
+Social protection rises ×1.5 (1.22–1.85). Social inclusion, broad language that appears
+everywhere, rises least (×1.3, 1.13–1.53). Legal safeguards (×2.2) is rare, and its interval
+runs from 1.20 to 4.03.
 
 Among the comparison Topics:
-- **No difference:** women & minority genders, adaptation and drought. Their intervals include
-  ×1, and they are not significant after correction.
-- **Small but significant rises:** fossil fuels (×1.24, 1.09–1.40) and renewable energy (×1.20,
-  1.07–1.35). Early warning (×1.18) is borderline: its interval crosses ×1.
-- **The exception:** net-zero targets (×2.0, 1.61–2.44), as large as the strongest sub-topic.
-  Documents that lean on the term also lean on long-term mitigation goals, which fits the
-  wording note under chart 4.
+- **No difference:** fossil fuels (×0.98), renewable energy (×1.01), adaptation, drought,
+  early warning systems and women & minority genders. None is significant after correction.
+  Women & minority genders (×1.22, 1.01–1.47) comes closest.
+- **The exception:** net-zero targets (×1.8, 1.46–2.32), in the range of the work-related
+  sub-topics. Documents that lean on the term also lean on long-term mitigation goals, which
+  fits the wording note under chart 4.
 
-The intervals for "any sub-topic" and fossil fuels overlap. So the robust claim is that the
-work-related sub-topics rise more than most comparison Topics, not that every sub-topic does.
+Every sub-topic's interval sits above ×1 and above the intervals for fossil fuels and renewable
+energy. So frequent users of the term are not simply saying more about everything, or more
+about energy. They say more about the social side of the transition, and about net-zero.
 
 The correlations, with p-values:
 
@@ -391,11 +416,13 @@ The correlations, with p-values:
 |---|---|---|
 | NDC 3.0s (127 documents) | ρ = 0.42, p < 10⁻⁶ | ρ = 0.23, p = 0.01 |
 | Updated NDCs, 2020–24 (144) | ρ = 0.03, p = 0.76 | ρ = 0.25, p = 0.002 |
-| All UNFCCC submissions, 2020–25 (1,280) | ρ = 0.25, p < 10⁻¹⁹ | ρ = 0.41, p < 10⁻⁵² |
-| Countries' whole policy records (197) | ρ = 0.05, p = 0.50 | ρ = 0.50, p < 10⁻¹³ |
+| All Party submissions to the UNFCCC, 2020–25 (981) | ρ = 0.27, p < 10⁻¹⁶ | ρ = 0.44, p < 10⁻⁴⁷ |
+| Countries' whole climate records (196) | ρ = 0.05, p = 0.48 | ρ = 0.50, p < 10⁻¹³ |
 
-So the link to sub-topics is significant in NDC 3.0s and across UN submissions, but absent in
-updated NDCs and at country level. The link to net-zero is significant everywhere.
+A country's whole record is its climate laws and policies (nature-only excluded) and its Party
+submissions, any year, for countries with 1,000+ passages. The link to sub-topics is
+significant in NDC 3.0s and across Party submissions, but absent in updated NDCs and at
+country level. The link to net-zero is significant everywhere.
 
 This is co-occurrence in documents, not evidence that naming the just transition causes more
 substantive policy.
