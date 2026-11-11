@@ -339,6 +339,20 @@ submission, BUR), frequent users still carry more sub-topics (×1.15 to ×1.75).
 of mean shares, so rare Topics have a defined value. Legal safeguards appear in about 0.1% of
 passages, so treat its bar as noisy. Data: `queries/07_term_vs_topics.sql`.
 
+**The statistic, exactly.** The bars are not correlation coefficients. For each document *d*
+and Topic *T*:
+
+1. *share(d, T)* = passages in *d* that carry *T* but don't use the term ÷ passages in *d*
+   that don't use the term.
+2. *scaled(d, T)* = *share(d, T)* ÷ the mean *share* of *T* across all documents of the
+   same type (NDC, BTR, national communication…).
+3. The bar = mean *scaled* over the 280 documents using the term 3+ times ÷ mean *scaled*
+   over the 770 that never use it.
+
+×1 means no difference. The correlations quoted below are Spearman rank correlations (ρ)
+between a document's term rate (passages using the term ÷ all passages) and its *share* of
+each Topic, with no document-type scaling.
+
 **What it shows.** Submissions that use the term often carry more just transition
 sub-topics elsewhere: ×1.4 for any sub-topic. The work-related ones rise most:
 - aligning skills ×1.9;

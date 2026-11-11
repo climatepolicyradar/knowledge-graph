@@ -735,10 +735,10 @@ def chart_term_vs_topics() -> None:
             (" too", cpr.INK),
         ],
         "Relative to documents which never explicitly mention Just Transition, how much more likely are Topics "
-        "to also occur anywhere in the same document?",
+        "to also occur anywhere in the same document? Ratio of mean Topic shares, 3+ mentions vs none.",
         cpr.footer(
-            f"{len(u):,} UNFCCC submissions, 2020–25 (30+ passages): {n_often} use the term 3+ times, "
-            f"{n_never} never. Topics counted in the other passages; compared within document type.",
+            f"{len(u):,} UNFCCC submissions, 2020–25: {n_often} use the term 3+ times, {n_never} never. "
+            "Topic shares exclude term passages and are scaled within document type.",
             accessed=ACCESSED,
             source=SOURCE,
         ),
