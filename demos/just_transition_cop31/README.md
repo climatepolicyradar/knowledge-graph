@@ -120,6 +120,46 @@ social safeguard and co-benefit reporting. In national policies it has been flat
 throughout: social protection and inclusion language was already there before the label
 arrived (see chart 2b). Laws drift up from about 2% to 3.6%. Court documents stay low (1–2%).
 
+**Read the climate fund line with care: it is mostly safeguard language.** Eighteen concepts
+under just transition have no classifier and no classified parent, so their labels count only
+towards the root Topic. Several of them are standard project-safeguard terms:
+- grievance redress mechanisms ("GRM");
+- environmental & social management plans, systems and impact assessments ("ESMP", "ESMS",
+  "ESIA");
+- environmental & social standards ("ESS");
+- social action plans, which include gender, biodiversity, resettlement and labour management
+  plans.
+
+Fund project templates are full of these. Comparing 2012–15 with 2016–19, the Topic's share of
+fund passages rose from 6.2% to 11.0%. Nearly four of those five points are generic mentions,
+which went from 1.5% to 5.2% of all fund passages. Social inclusion added about one point, and
+work (about 1.5%) and social protection (about 0.8%) stayed flat.
+
+Of those generic fund passages:
+- about 35% match social action plans;
+- 20% grievance mechanisms;
+- 16–22% management plans;
+- 17–19% safeguard standards;
+- only 0.3–2.6% the root's own labels ("just transition", "leave no one behind").
+
+Two things drove the rise:
+- **Fund mix.** The Green Climate Fund went from 11% of fund passages (2012–15) to 65%
+  (2016–19), and its funding proposals and annual performance reports carry the most safeguard
+  sections.
+- **Safeguard reporting spread across funds.** For example, the Adaptation Fund rose from 5.5%
+  to 12.7%.
+
+The Green Climate Fund's standalone gender action plans and assessments are not the driver:
+leaving them out moves 2020–25 only from 11.9% to 11.4%.
+
+National documents are different. In laws, policies and UNFCCC submissions (2020–25), 55% of
+generic passages use the root's own labels and 8% name a "Just Transition Fund". Safeguard
+terms make up only about 10–20%. So generic mentions in charts 4 and 6 are mostly just
+transition language, while in fund projects they are mostly safeguards.
+
+Whether these safeguards belong under just transition in the concept store is an open modelling
+question. They were checked with one-off queries (not saved in `queries/`), on 11 Nov 2026.
+
 ### 2b. NDC rounds: just transition topics vs the term
 
 ![](figures/02b_ndc_rounds_topic.png)
@@ -186,7 +226,8 @@ For context, the rest of the Topic splits into social protection or inclusion on
 groups (4%) and generic mentions (25%). Data: `queries/03_topic_flags.sql`, section `corpus`.
 
 **What it shows.** 26% of just transition passages are about work, while 14% touch an energy
-Topic. Fund projects are the exception, with less of both: work 18%, energy 8%. The
+Topic. Fund projects are the exception, with less of both: work 18%, energy 8%. Their just
+transition content is dominated by generic safeguard language (see chart 1). The
 other four corpora, as work vs energy:
 - policies: 37% vs 19%;
 - UNFCCC submissions: 29% vs 20%;
