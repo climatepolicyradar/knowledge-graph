@@ -524,9 +524,10 @@ def chart_sector_mix() -> None:
 # ---------------------------------------------------------------------------------
 # (column, legend label, colour)
 SEGMENTS = [
-    ("g_work", "work (decent work, skills, green jobs)", cpr.INKY_BLUE),
-    ("g_protect", "social protection or inclusion", cpr.MID_BLUE),
-    ("g_both", "both", cpr.LIGHT_BLUE),
+    ("c_work", "work (decent work, skills, green jobs)", cpr.MUSTARD),
+    ("c_protect", "social protection", cpr.INKY_BLUE),
+    ("c_include", "social inclusion & safeguards", cpr.MID_BLUE),
+    ("c_multiple", "multiple", cpr.LIGHT_BLUE),
     ("g_generic", "generic mention", cpr.CONTEXT),
 ]
 
@@ -597,7 +598,7 @@ def chart_regions() -> None:
         x0 = lab.get_window_extent().transformed(ax.transData.inverted()).x1 + 0.002
     cpr.titled(
         fig,
-        "Everywhere, just transition content is mostly social protection and inclusion",
+        "South Asia and Sub-Saharan Africa documents mention just transition the most",
         "What share of each region’s passages carry a Just Transition Topic, and which of its sub-topics?",
         cpr.footer(
             f"{int(a.loc['All regions', 'passages']):,} paragraphs and list items in national climate laws and "

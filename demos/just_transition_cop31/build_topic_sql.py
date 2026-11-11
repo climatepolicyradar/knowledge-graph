@@ -55,6 +55,12 @@ def has(q: str) -> str:
 
 work = " or ".join(has(SUB[k]) for k in ("decent", "skills", "greenjobs"))
 protect = " or ".join(has(SUB[k]) for k in ("socprot", "inclusion", "legal"))
+# Three exclusive groups for chart 6: work / social protection / social inclusion & safeguards
+# (legal safeguards sits with social inclusion under justice-informed governance, Q1733).
+g_work = f"iff({work}, 1, 0)"
+g_prot = f"iff({has(SUB['socprot'])}, 1, 0)"
+g_incl = f"iff({has(SUB['inclusion'])} or {has(SUB['legal'])}, 1, 0)"
+n_groups = f"({g_work} + {g_prot} + {g_incl})"
 flag_cols = ",\n         ".join(
     ["iff(" + has("Q47") + ", 1, 0) as jt"]
     + [f"iff({has(q)}, 1, 0) as {k}" for k, q in {**SUB, **ENERGY, **OTHER}.items()]
@@ -68,6 +74,11 @@ flag_cols = ",\n         ".join(
         f"iff(({protect}) and not ({work}), 1, 0) as g_protect",
         f"iff(({work}) and ({protect}), 1, 0) as g_both",
         f"iff({has('Q47')} and not ({work}) and not ({protect}), 1, 0) as g_generic",
+        f"{g_work} as any_work",
+        f"iff({n_groups} = 1 and {g_work} = 1, 1, 0) as c_work",
+        f"iff({n_groups} = 1 and {g_prot} = 1, 1, 0) as c_protect",
+        f"iff({n_groups} = 1 and {g_incl} = 1, 1, 0) as c_include",
+        f"iff({n_groups} >= 2, 1, 0) as c_multiple",
         "iff("
         + " or ".join(
             has(ENERGY[k])
@@ -83,6 +94,7 @@ FLAGS = (
     + list(OTHER)
     + list(KEYWORD)
     + ["g_work", "g_protect", "g_both", "g_generic", "any_energy"]
+    + ["any_work", "c_work", "c_protect", "c_include", "c_multiple"]
 )
 # Co-occurrence counts are only wanted inside the Topic, so sum them on Q47 passages.
 jt_sums = ", ".join(

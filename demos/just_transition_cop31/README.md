@@ -229,24 +229,41 @@ being transformed.
 
 **How to read it.** Each bar is the share of a region's passages that carry the Just
 Transition Topic, split by sub-topic group. The groups are exclusive:
-- work;
-- social protection or inclusion;
-- both: at least one sub-topic from each group. Several sub-topics from the same group still
-  count once;
-- generic mention.
+- work (mustard): decent work, aligning skills or green jobs;
+- social protection;
+- social inclusion & safeguards: social inclusion or legal safeguards for vulnerable groups.
+  Both sit under justice-informed governance (`Q1733`) in the concept tree;
+- multiple: sub-topics from more than one of the three groups above. Several sub-topics from
+  the same group (say decent work and skills) still count as that group;
+- generic mention: the Topic with none of the six sub-topics.
 
 **Method.** Unit: passages in national climate laws and policies and UNFCCC submissions,
 2020–2025, in documents tagged with exactly one World Bank region (1.29 million passages).
 Regions are as stored in our data, which put Pakistan with the Middle East & North Africa. One
-source spelling, "East Asia and Pacific", is merged into "East Asia & Pacific". A passage counts
-once however many sub-topics it carries. Data: `queries/03_topic_flags.sql`, section `region`.
+source spelling, "East Asia and Pacific", is merged into "East Asia & Pacific". A passage
+counts once however many sub-topics it carries. Data: `queries/03_topic_flags.sql`, section
+`region`.
 
 **What it shows.** South Asia and Sub-Saharan Africa carry the most just transition content
 (5.4% of passages), Latin America the least (3.4%). That is a narrower spread than the term
-alone suggested. The composition is strikingly similar everywhere. Social protection or
-inclusion, on its own or with work, makes up 53–63% of the content in every region. Work-only
-passages are 20–38%, highest in North America. Generic mentions are a minority: 9% (North
-America) to 22% (Latin America).
+alone suggested. Across all regions, just transition content splits:
+- work 28%;
+- social protection 26%;
+- social inclusion & safeguards 22%;
+- multiple groups 6%;
+- generic mentions 17%.
+
+The mix shifts by region:
+- North America leans on work (38%) and social protection (32%);
+- Europe & Central Asia on social protection (29%) and work (30%);
+- Latin America on social inclusion (35%);
+- the Middle East & North Africa on work (32%) and inclusion (30%);
+- Sub-Saharan Africa and South Asia spread more evenly across the three groups.
+
+Passages combining several groups are 3–8% everywhere, highest (8%) in South Asia, Sub-Saharan
+Africa and Europe & Central Asia.
+
+Generic mentions are a minority everywhere: 9% (North America) to 22% (Latin America).
 
 An earlier version used the term as the base, which made generic mentions look like 70–80% of
 everything. That counted only the explicit label and missed the social protection and
