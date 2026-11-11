@@ -5,14 +5,13 @@ from pathlib import Path
 import polars as pl
 from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow, task
-from prefect.cache_policies import NONE
 from pydantic import AnyHttpUrl, SecretStr
 
 from flows.utils import (
     S3Uri,
     SlackNotify,
 )
-from knowledge_graph.cloud import AwsEnv, get_async_session
+from knowledge_graph.cloud import AwsEnv
 from knowledge_graph.concept import Concept
 from knowledge_graph.utils import get_logger
 from knowledge_graph.wikibase import WikibaseAuth, WikibaseSession
@@ -72,50 +71,6 @@ def concepts_to_dataframe(concepts: list[Concept]) -> pl.DataFrame:
     return df
 
 
-async def s3_prefix_has_objects(s3_uri: S3Uri, region: str, aws_env: AwsEnv) -> bool:
-    """
-    Check if an S3 prefix has any objects.
-
-    I found the Polars errors to be misleading, about the remote state
-    of the data. This explicit check is not misleading.
-
-    Returns `False` if the prefix has no objects.
-    """
-    session = get_async_session(
-        region_name=region,
-        aws_env=aws_env,
-    )
-    async with session.client("s3") as s3:
-        response = await s3.list_objects_v2(
-            Bucket=s3_uri.bucket,
-            Prefix=s3_uri.key,
-            MaxKeys=1,
-        )
-        # Empty prefix returns successfully with no Contents key
-        return "Contents" in response and len(response["Contents"]) > 0
-
-
-@task(cache_policy=NONE)
-async def get_new_versions(
-    current_df: pl.LazyFrame,
-    existing_ids: pl.LazyFrame | None,
-) -> pl.DataFrame:
-    """
-    Get new versions not yet synced.
-
-    Concepts whose content-based ID doesn't exist in previous state.
-    The ID is a hash of the concept's content, so any change creates a new ID.
-    """
-    if existing_ids is None:
-        return current_df.collect()
-
-    return current_df.join(
-        existing_ids,
-        on="id",
-        how="anti",  # Anti-join: rows in current DF NOT in existing IDs
-    ).collect()
-
-
 @task(persist_result=False)
 async def load_concepts(
     wikibase_auth: WikibaseAuth,
@@ -173,12 +128,18 @@ async def sync_concepts(
     concepts_archive_path: Path | S3Uri | None = None,
 ):
     """
-    Sync new, or all, concepts' versions from Wikibase to S3.
+    Sync all concepts from Wikibase to S3, as a full snapshot.
 
-    The sync state is stored in data frames in S3. If there's no state
-    so far, a new data frame is written, and all concepts are synced.
-    If there is existing state, then only the new concepts or new
-    versions of existing concepts are synced.
+    Each run writes every concept currently in Wikibase to a timestamped
+    Parquet file in a snapshots location, then overwrites `latest.parquet`
+    in the archive location with the same data. Downstream (Snowflake)
+    only reads the archive location, so it only ever sees concepts that
+    currently exist. Snapshots are never deleted by this flow, so
+    they can be used to recover from failures and to debug; expire them
+    with a lifecycle policy instead.
+
+    The snapshots location is the archive location with a `_snapshots`
+    suffix, e.g. `wikibase_concepts` and `wikibase_concepts_snapshots`.
 
     The side-effects are data frames in S3.
 
@@ -219,7 +180,7 @@ async def sync_concepts(
     )
 
     logger.info("converting to dataframe")
-    current_df = concepts_to_dataframe(concepts).lazy()
+    current_df = concepts_to_dataframe(concepts)
     logger.info("converted to dataframe")
 
     region = "eu-west-2" if aws_env == AwsEnv.sandbox else "eu-west-1"
@@ -233,67 +194,41 @@ async def sync_concepts(
             "default-region": region,
         }
 
-    # Check if archive(s) exists before trying to scan it
-    logger.info("checking for existing archive(s)")
-    match concepts_archive_path:
-        case S3Uri():
-            archives_exist = await s3_prefix_has_objects(
-                concepts_archive_path,
-                region,
-                aws_env,
-            )
-        case Path():
-            archives_exist = concepts_archive_path.exists()
-    logger.info(f"found existing archive(s): {archives_exist}")
+    if not concepts:
+        # Don't replace latest with nothing if Wikibase returned no concepts
+        raise ValueError("no concepts returned, refusing to replace latest")
 
-    # Load previous state from all Parquet files if archive exists
-    existing_ids: pl.LazyFrame | None = None
-    if archives_exist:
-        logger.info("loading existing ID(s) from archive(s)")
-        parquet_pattern = f"{concepts_archive_path}/*.parquet"
-        existing_ids = (
-            pl.scan_parquet(
-                parquet_pattern,
-                credential_provider=credential_provider,
-                storage_options=storage_options,
-                # Only `id` is needed here, so tolerate schema drift between
-                # archive files written by different versions of
-                # concepts_to_dataframe (e.g. a column that's since been
-                # excluded, like classifier_ids) instead of failing the scan.
-                extra_columns="ignore",
-                missing_columns="insert",
-            )
-            .select("id")
-            .unique()
-        )
-
-    logger.info("getting new versions")
-    new_versions = await get_new_versions(
-        current_df,
-        existing_ids,
-    )
-
-    logger.info(f"new versions found: {new_versions}")
-
-    if not len(new_versions):
-        return
-
-    append_path: str | Path | None = None
-
-    # Append new versions of concepts with timestamp-based filename
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    obj_name = f"concepts_{timestamp}.parquet"
 
     match concepts_archive_path:
         case S3Uri():
-            append_path = f"{concepts_archive_path}/{obj_name}"
+            snapshots_dir = S3Uri(
+                bucket=concepts_archive_path.bucket,
+                key=f"{concepts_archive_path.key}_snapshots",
+            )
         case Path():
-            append_path = concepts_archive_path / obj_name
+            snapshots_dir = concepts_archive_path.with_name(
+                f"{concepts_archive_path.name}_snapshots"
+            )
+            snapshots_dir.mkdir(parents=True, exist_ok=True)
+            concepts_archive_path.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"appending {len(new_versions)} new versions to {append_path}")
-    new_versions.write_parquet(
-        append_path,
+    snapshot_path = f"{snapshots_dir}/concepts_{timestamp}.parquet"
+    latest_path = f"{concepts_archive_path}/latest.parquet"
+
+    # Write the snapshot first, so if overwriting latest fails the
+    # snapshot is kept and latest still holds the previous export.
+    logger.info(f"writing snapshot of {len(current_df)} rows to {snapshot_path}")
+    current_df.write_parquet(
+        snapshot_path,
         credential_provider=credential_provider,
         storage_options=storage_options,
     )
-    logger.info(f"successfully appended {len(new_versions)} rows to dataframe")
+
+    logger.info(f"overwriting {latest_path} with {len(current_df)} rows")
+    current_df.write_parquet(
+        latest_path,
+        credential_provider=credential_provider,
+        storage_options=storage_options,
+    )
+    logger.info(f"successfully wrote {len(current_df)} rows to {latest_path}")
