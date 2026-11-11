@@ -622,7 +622,7 @@ TERM_VS = [
     ("child_greenjobs", "Green jobs", "jt"),
     ("child_socprot", "Social protection", "jt"),
     ("child_decent", "Decent work", "jt"),
-    ("child_legal", "Legal safeguards (rare)", "jt"),
+    ("child_legal", "Legal safeguards", "jt"),
     ("child_inclusion", "Social inclusion", "jt"),
     ("ctl_netzero", "Net-zero targets", "other"),
     ("ctl_fossil", "Fossil fuels", "other"),
@@ -635,7 +635,7 @@ TERM_VS = [
 
 
 def chart_term_vs_topics() -> None:
-    s = cpr.apply("slide")
+    cpr.apply("slide")
     raw = pd.read_csv(DATA / "07_term_vs_topics.csv")
     u = raw[
         (raw.section == "unfccc_doc")
@@ -696,7 +696,6 @@ def chart_term_vs_topics() -> None:
         ignore_index=True,
     )
     colour = {"jt": cpr.HIGHLIGHT, "other": cpr.CONTEXT}
-    text = {"jt": cpr.INKY_BLUE, "other": cpr.text_colour(cpr.CONTEXT)}
 
     fig, ax = cpr.figure()
     y, ypos = 0.0, []
@@ -709,13 +708,6 @@ def chart_term_vs_topics() -> None:
 
     def fill(row):  # net-zero is the one comparison topic the title calls out
         return cpr.MUSTARD if row.column == "ctl_netzero" else colour[row.group]
-
-    def ink(row):
-        return (
-            cpr.text_colour(cpr.MUSTARD)
-            if row.column == "ctl_netzero"
-            else text[row.group]
-        )
 
     ax.barh(y, d.ratio, height=0.66, color=[fill(r) for r in d.itertuples()], zorder=2)
     ax.axvline(1, color=cpr.INK3, lw=0.8, ls=(0, (2, 2)), zorder=3)
@@ -734,32 +726,17 @@ def chart_term_vs_topics() -> None:
         zorder=4,
         path_effects=halo,
     )
-    for yi, row in zip(y, d.itertuples()):
-        ax.text(
-            max(row.ratio, row.ci_high) + 0.04,
-            yi,
-            f"×{row.ratio:.1f}",
-            va="center",
-            fontsize=s["body"],
-            weight="semibold"
-            if row.column in ("child_any", "ctl_netzero")
-            else "normal",
-            color=ink(row),
-        )
     ax.set_yticks(y, d.topic, color=cpr.INK)
     ax.get_yticklabels()[0].set_fontweight("semibold")
-    ax.text(
-        1,
-        y[-1] + 0.55,
-        "no difference",
-        ha="center",
-        va="top",
-        fontsize=s["small"],
-        color=cpr.INK3,
-    )
-    ax.set_ylim(y[-1] + 1.0, -0.6)
-    ax.set_xlim(0, 2.85)
+    ax.set_ylim(y[-1] + 0.6, -0.6)
+    ax.set_xlim(0, 2.7)
     bar_frame(ax)
+    # Reference ticks instead of value labels: x0.5, x1 (no difference) and x1.5.
+    ax.xaxis.set_visible(True)
+    ax.set_xticks([0.5, 1, 1.5], ["×0.5", "×1\nno difference", "×1.5"], color=cpr.INK2)
+    ax.tick_params(axis="x", length=0)
+    for xv in (0.5, 1.5):
+        ax.axvline(xv, color=cpr.GRID, lw=0.8, zorder=1)
 
     n_never, n_often = d.docs_never.iloc[0], d.docs_often.iloc[0]
     cpr.titled(
