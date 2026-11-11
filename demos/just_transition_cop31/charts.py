@@ -22,8 +22,10 @@ Run from the repo root:  uv run python demos/just_transition_cop31/charts.py
 import sys
 from pathlib import Path
 
+import matplotlib.patheffects as pe
 import numpy as np
 import pandas as pd
+from scipy.stats import mannwhitneyu
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1] / ".claude" / "skills" / "cpr-charts"))
@@ -641,6 +643,7 @@ def chart_term_vs_topics() -> None:
         & (raw.passages >= 30)
     ].copy()
     u["group"] = np.select([u.jt == 0, u.jt >= 3], ["never", "often"], "sometimes")
+    rng = np.random.default_rng(7)  # fixed seed: the intervals are reproducible
     rows = []
     for col, label, grp in TERM_VS:
         share = u[col] / u.nonjt
@@ -649,12 +652,24 @@ def chart_term_vs_topics() -> None:
         rel = share / share.groupby(u.entity_type).transform("mean").replace(0, np.nan)
         m = rel.groupby(u.group).mean()
         raw_m = share.groupby(u.group).mean()
+        # 95% bootstrap interval for the ratio (resampling documents within each group) and a
+        # Mann-Whitney test of the two groups' scaled shares.
+        often = rel[u.group == "often"].dropna().to_numpy()
+        never = rel[u.group == "never"].dropna().to_numpy()
+        boot = [
+            rng.choice(often, often.size).mean() / rng.choice(never, never.size).mean()
+            for _ in range(4000)
+        ]
+        lo, hi = np.percentile(boot, [2.5, 97.5])
         rows.append(
             {
                 "topic": label,
                 "column": col,
                 "group": grp,
                 "ratio": m["often"] / m["never"],
+                "ci_low": lo,
+                "ci_high": hi,
+                "p_mann_whitney": mannwhitneyu(often, never).pvalue,
                 "ratio_without_type_adjustment": raw_m["often"] / raw_m["never"],
                 "mean_share_never": raw_m["never"],
                 "mean_share_often": raw_m["often"],
@@ -663,6 +678,13 @@ def chart_term_vs_topics() -> None:
             }
         )
     d = pd.DataFrame(rows)
+    # Holm correction across the topics tested
+    order = d.p_mann_whitney.sort_values().index
+    running, holm = 0.0, {}
+    for i, idx in enumerate(order):
+        running = max(running, min(1.0, (len(d) - i) * d.p_mann_whitney[idx]))
+        holm[idx] = running
+    d["p_holm"] = pd.Series(holm)
     d = pd.concat(
         [
             d[d.column == "child_any"],
@@ -697,9 +719,24 @@ def chart_term_vs_topics() -> None:
 
     ax.barh(y, d.ratio, height=0.66, color=[fill(r) for r in d.itertuples()], zorder=2)
     ax.axvline(1, color=cpr.INK3, lw=0.8, ls=(0, (2, 2)), zorder=3)
+    halo = [
+        pe.withStroke(linewidth=3, foreground=cpr.SURFACE)
+    ]  # keeps the lines visible on dark bars
+    ax.hlines(
+        y, d.ci_low, d.ci_high, color=cpr.INK2, lw=1.1, zorder=4, path_effects=halo
+    )
+    ax.vlines(
+        np.r_[d.ci_low, d.ci_high],
+        np.r_[y, y] - 0.16,
+        np.r_[y, y] + 0.16,
+        color=cpr.INK2,
+        lw=1.1,
+        zorder=4,
+        path_effects=halo,
+    )
     for yi, row in zip(y, d.itertuples()):
         ax.text(
-            row.ratio + 0.03,
+            max(row.ratio, row.ci_high) + 0.04,
             yi,
             f"×{row.ratio:.1f}",
             va="center",
@@ -721,7 +758,7 @@ def chart_term_vs_topics() -> None:
         color=cpr.INK3,
     )
     ax.set_ylim(y[-1] + 1.0, -0.6)
-    ax.set_xlim(0, 2.3)
+    ax.set_xlim(0, 2.85)
     bar_frame(ax)
 
     n_never, n_often = d.docs_never.iloc[0], d.docs_often.iloc[0]
@@ -735,7 +772,8 @@ def chart_term_vs_topics() -> None:
             (" too", cpr.INK),
         ],
         "Relative to documents which never explicitly mention Just Transition, how much more likely are Topics "
-        "to also occur anywhere in the same document? Ratio of mean Topic shares, 3+ mentions vs none.",
+        "to also occur anywhere in the same document? Ratio of mean Topic shares, 3+ mentions vs none; lines "
+        "show 95% intervals.",
         cpr.footer(
             f"{len(u):,} UNFCCC submissions, 2020–25: {n_often} use the term 3+ times, {n_never} never. "
             "Topic shares exclude term passages and are scaled within document type.",

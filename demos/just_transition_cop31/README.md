@@ -349,27 +349,53 @@ and Topic *T*:
 3. The bar = mean *scaled* over the 280 documents using the term 3+ times ÷ mean *scaled*
    over the 770 that never use it.
 
-×1 means no difference. The correlations quoted below are Spearman rank correlations (ρ)
-between a document's term rate (passages using the term ÷ all passages) and its *share* of
-each Topic, with no document-type scaling.
+×1 means no difference.
+
+**Uncertainty.**
+- **Intervals:** the lines on each bar are 95% bootstrap intervals for the ratio, from 4,000
+  resamples of documents within each group (fixed seed).
+- **Tests:** a Mann–Whitney test compares the two groups' *scaled* shares for each Topic, and
+  the 14 p-values are Holm-corrected.
+- **Correlations:** those quoted below are Spearman rank correlations (ρ) between a document's
+  term rate (passages using the term ÷ all passages) and its *share* of each Topic, with no
+  document-type scaling.
+
+All three are saved in `figures/07_term_vs_topics.csv`.
 
 **What it shows.** Submissions that use the term often carry more just transition
-sub-topics elsewhere: ×1.4 for any sub-topic. The work-related ones rise most:
-- aligning skills ×1.9;
-- green jobs ×1.8;
-- social protection ×1.6;
-- decent work ×1.6.
+sub-topics elsewhere: ×1.4 for any sub-topic (95% interval 1.22–1.62). The work-related ones
+rise most:
+- aligning skills ×1.9 (1.41–2.60);
+- green jobs ×1.8 (1.29–2.42);
+- social protection ×1.6 (1.23–2.17);
+- decent work ×1.6 (1.25–1.98).
 
-Social inclusion, broad language that appears everywhere, rises least (×1.3). Most other
-Topics barely move (×1.0–1.2), including women & minority genders (×1.1). The exception is
-net-zero targets (×2.0), the largest rise of all. Documents that lean on the term also lean on
-long-term mitigation goals, which fits the wording note under chart 4.
+Social inclusion, broad language that appears everywhere, rises least (×1.3, 1.09–1.51).
+Legal safeguards (×1.4) is too rare to call: its interval runs from 0.78 to 2.40.
 
-The link is weaker or absent in two places:
-- In NDC 3.0s alone (127 documents), the Spearman correlation between term rate and sub-topic
-  share is 0.42. In updated NDCs (2020–24), it is 0.03.
-- Across countries' whole policy records (197 countries), there is no link to sub-topics
-  (ρ = 0.05). What tracks the term is net-zero targets (ρ = 0.50).
+Among the comparison Topics:
+- **No difference:** women & minority genders, adaptation and drought. Their intervals include
+  ×1, and they are not significant after correction.
+- **Small but significant rises:** fossil fuels (×1.24, 1.09–1.40) and renewable energy (×1.20,
+  1.07–1.35). Early warning (×1.18) is borderline: its interval crosses ×1.
+- **The exception:** net-zero targets (×2.0, 1.61–2.44), as large as the strongest sub-topic.
+  Documents that lean on the term also lean on long-term mitigation goals, which fits the
+  wording note under chart 4.
+
+The intervals for "any sub-topic" and fossil fuels overlap. So the robust claim is that the
+work-related sub-topics rise more than most comparison Topics, not that every sub-topic does.
+
+The correlations, with p-values:
+
+| Set | Any sub-topic | Net-zero targets |
+|---|---|---|
+| NDC 3.0s (127 documents) | ρ = 0.42, p < 10⁻⁶ | ρ = 0.23, p = 0.01 |
+| Updated NDCs, 2020–24 (144) | ρ = 0.03, p = 0.76 | ρ = 0.25, p = 0.002 |
+| All UNFCCC submissions, 2020–25 (1,280) | ρ = 0.25, p < 10⁻¹⁹ | ρ = 0.41, p < 10⁻⁵² |
+| Countries' whole policy records (197) | ρ = 0.05, p = 0.50 | ρ = 0.50, p < 10⁻¹³ |
+
+So the link to sub-topics is significant in NDC 3.0s and across UN submissions, but absent in
+updated NDCs and at country level. The link to net-zero is significant everywhere.
 
 This is co-occurrence in documents, not evidence that naming the just transition causes more
 substantive policy.
