@@ -731,11 +731,15 @@ def chart_term_vs_topics() -> None:
     ax.set_ylim(y[-1] + 0.6, -0.6)
     ax.set_xlim(0, 2.7)
     bar_frame(ax)
-    # Reference ticks instead of value labels: x0.5, x1 (no difference) and x1.5.
+    # Reference ticks instead of value labels: x0.5 to x2.5, with x1 marked as no difference.
     ax.xaxis.set_visible(True)
-    ax.set_xticks([0.5, 1, 1.5], ["×0.5", "×1\nno difference", "×1.5"], color=cpr.INK2)
+    ax.set_xticks(
+        [0.5, 1, 1.5, 2, 2.5],
+        ["×0.5", "×1\nno difference", "×1.5", "×2", "×2.5"],
+        color=cpr.INK2,
+    )
     ax.tick_params(axis="x", length=0)
-    for xv in (0.5, 1.5):
+    for xv in (0.5, 1.5, 2, 2.5):
         ax.axvline(xv, color=cpr.GRID, lw=0.8, zorder=1)
 
     n_never, n_often = d.docs_never.iloc[0], d.docs_often.iloc[0]
