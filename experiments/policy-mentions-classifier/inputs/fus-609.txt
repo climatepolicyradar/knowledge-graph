@@ -1,0 +1,44 @@
+# 36 NDC/BTR families (23 NDCs, 13 BTRs): 36 main documents + 3 annexes.
+# To drop the annexes, comment out the three lines marked "(annex)".
+# Excluded: 18 unfccc.int/documents/NNNNNN landing-page stubs (0-3 passages each),
+# Congo cover letter i00006977, superseded Sao Tome NDC3.0 original i00004888,
+# superseded Costa Rica REDD annex i00004765 (replaced by i00007895).
+UNFCCC.document.i00006975.n0000  # Congo, NDC
+UNFCCC.document.i00006993.n0000  # Eritrea, NDC
+UNFCCC.document.i00007021.n0000  # Turkmenistan, BTR
+UNFCCC.document.i00000693.n0000  # Monaco, BTR
+UNFCCC.document.i00007255.n0000  # Central African Republic, NDC
+UNFCCC.document.i00007350.n0000  # Georgia, NDC
+UNFCCC.document.i00007357.n0000  # Madagascar, BTR
+UNFCCC.document.i00007370.n0000  # Comoros, NDC
+UNFCCC.document.i00000955.n0000  # Belize, BTR
+UNFCCC.document.i00007650.n0000  # Belize, BTR (annex)
+UNFCCC.document.i00007658.n0000  # India, NDC
+UNFCCC.document.i00007691.n0000  # India, BTR
+UNFCCC.document.i00000925.n0000  # Burkina Faso, BTR
+UNFCCC.document.i00007738.n0000  # Tuvalu, BTR
+UNFCCC.document.i00004003.n0000  # Seychelles, BTR
+UNFCCC.document.i00007751.n0000  # Benin, NDC
+UNFCCC.document.i00001037.n0000  # Israel, BTR
+UNFCCC.document.i00007767.n0000  # Dominican Republic, NDC
+UNFCCC.document.i00007764.n0000  # Timor-Leste, NDC
+UNFCCC.document.i00004804.n0000  # Cyprus, BTR
+UNFCCC.document.i00007803.n0000  # Cameroon, NDC
+UNFCCC.document.i00007812.n0000  # Algeria, NDC
+UNFCCC.document.i00007827.n0000  # Malawi, NDC
+UNFCCC.document.i00007830.n0000  # Guyana, NDC
+UNFCCC.document.i00007877.n0000  # Oman, NDC
+UNFCCC.document.i00000890.n0000  # Costa Rica, BTR
+UNFCCC.document.i00007895.n0000  # Costa Rica, BTR (annex)
+UNFCCC.document.i00007898.n0000  # Colombia, BTR
+UNFCCC.document.i00007939.n0000  # Palestine, State of, NDC
+UNFCCC.document.i00007946.n0000  # Gambia, NDC
+UNFCCC.document.i00007936.n0000  # Sao Tome and Principe, NDC
+UNFCCC.document.i00007949.n0000  # Togo, NDC
+UNFCCC.document.i00007956.n0000  # Philippines, NDC
+UNFCCC.document.i00007958.n0000  # Philippines, NDC (annex)
+UNFCCC.document.i00007953.n0000  # Madagascar, NDC
+UNFCCC.document.i00007974.n0000  # Qatar, BTR
+UNFCCC.document.i00007979.n0000  # Albania, NDC
+UNFCCC.document.i00008005.n0000  # Guinea-Bissau, NDC
+UNFCCC.document.i00008008.n0000  # Niger, NDC

@@ -3,7 +3,7 @@ CLI wrapper for the evaluate operation.
 
 The reusable logic lives in `knowledge_graph.operations.evaluate` (imported directly by
 `knowledge_graph.classifier.autollm`). This module only adds the Typer command used by
-`just evaluate`, which loads the classifier and concept, sets up W&B tracking, runs the
+`uv run evaluate`, which loads the classifier and concept, sets up W&B tracking, runs the
 evaluation and saves the metrics.
 """
 

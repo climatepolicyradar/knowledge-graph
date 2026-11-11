@@ -3,7 +3,7 @@ CLI wrapper for the sample operation.
 
 The reusable, Prefect-free logic (`run_sampling`) lives in
 `knowledge_graph.operations.sample` and is imported directly by the sampling flow. This
-module only adds the Typer command used by `just sample`, which loads the dataset from
+module only adds the Typer command run with `uv run python scripts/sample.py`, which loads the dataset from
 local disk and resolves the optional `--from-yaml-config` before calling `run_sampling`.
 """
 

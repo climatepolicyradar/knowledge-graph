@@ -32,7 +32,7 @@ def load_concept_local(wikibase_id: WikibaseID) -> Concept:
         raise typer.BadParameter(
             f"Data for {wikibase_id} not found. \n"
             "If you haven't already, you should run:\n"
-            f"  just get-concept {wikibase_id}\n"
+            f"  uv run python scripts/get_concept.py --wikibase-id {wikibase_id}\n"
         ) from e
 
 

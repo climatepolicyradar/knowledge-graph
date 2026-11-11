@@ -2,7 +2,7 @@
 CLI wrapper for the classifier deployment pipeline.
 
 The reusable train -> promote -> refresh logic lives in `flows.deploy`; this module
-only adds the Typer commands used by `just deploy-existing` / `just deploy-new`, plus
+only adds the Typer commands used by `uv run deploy existing` / `uv run deploy new`, plus
 the CLI-level argument validation and exit handling.
 """
 

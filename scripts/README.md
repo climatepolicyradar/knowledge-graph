@@ -17,7 +17,7 @@ _Note: You will need a profile in your `.aws/config` file with an active termina
 _Note: You control whether the model artifact  is tracked in W&B and uploaded to S3, with `--track-and-upload`._
 
 ```shell
-just train Q123 --track-and-upload --aws-env sandbox
+uv run train --wikibase-id Q123 --track-and-upload --aws-env sandbox
 ```
 
 > [!NOTE]

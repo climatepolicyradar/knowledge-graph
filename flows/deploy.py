@@ -57,7 +57,7 @@ def validate_classifiers_profiles(
 
 
 def _train_locally(wikibase_id: WikibaseID, aws_env: AwsEnv) -> Classifier:
-    """Train a classifier in-process and upload its artifact, mirroring `just train`."""
+    """Train a classifier in-process and upload its artifact, mirroring `uv run train`."""
     return asyncio.run(
         run_training(
             wikibase_id=wikibase_id,

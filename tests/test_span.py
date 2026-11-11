@@ -1,3 +1,5 @@
+import itertools
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -9,6 +11,7 @@ from knowledge_graph.span import (
     find_span_text_in_input_text,
     group_overlapping_spans,
     jaccard_similarity,
+    merge_overlapping_spans,
 )
 from tests.common_strategies import (
     labeller_strategy,
@@ -282,6 +285,42 @@ def test_whether_group_overlapping_spans_returns_correct_number_of_groups_with_f
         spans=[span for pair in fully_entailed_spans for span in pair]
     )
     assert len(groups) <= len(fully_entailed_spans)
+
+
+def test_whether_merge_overlapping_spans_merges_groups_bridged_by_a_later_span():
+    text = "a" * 40
+    concept_id = WikibaseID("Q1430")
+    span_a = Span(text=text, start_index=0, end_index=10, concept_id=concept_id)
+    span_b = Span(text=text, start_index=20, end_index=30, concept_id=concept_id)
+    span_c = Span(text=text, start_index=5, end_index=25, concept_id=concept_id)
+
+    merged = merge_overlapping_spans([span_a, span_b, span_c])
+
+    assert len(merged) == 1
+    assert (merged[0].start_index, merged[0].end_index) == (0, 30)
+
+
+@st.composite
+def span_bounds_strategy(draw, text_length):
+    start = draw(st.integers(min_value=0, max_value=text_length - 1))
+    end = draw(st.integers(min_value=start + 1, max_value=text_length))
+    return start, end
+
+
+@given(text=text_strategy, data=st.data())
+def test_whether_merge_overlapping_spans_returns_non_overlapping_spans(text, data):
+    bounds = data.draw(
+        st.lists(span_bounds_strategy(len(text)), min_size=1, max_size=10)
+    )
+    spans = [
+        Span(text=text, start_index=start, end_index=end, concept_id=WikibaseID("Q1"))
+        for start, end in bounds
+    ]
+
+    merged = merge_overlapping_spans(spans)
+
+    for span_a, span_b in itertools.combinations(merged, 2):
+        assert not span_a.overlaps(span_b)
 
 
 @given(text=text_strategy, spans=st.data())

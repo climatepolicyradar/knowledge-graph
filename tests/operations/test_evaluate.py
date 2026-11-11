@@ -106,7 +106,7 @@ def test_load_classifier_local_not_found(mock_classifier, tmp_path):
             load_classifier_local(wikibase_id)
 
         assert "Classifier for Q999 not found" in str(exc_info.value)
-        assert "just train Q999" in str(exc_info.value)
+        assert "uv run train --wikibase-id Q999" in str(exc_info.value)
 
 
 def test_calculate_performance_metrics(concept, snapshot: SnapshotAssertion):

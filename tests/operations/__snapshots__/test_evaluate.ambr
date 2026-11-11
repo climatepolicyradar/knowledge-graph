@@ -17,7 +17,7 @@
       'Group': 'all',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 318,
+      'Support': 317,
     }),
     dict({
       'Accuracy': 1.0,
@@ -26,7 +26,7 @@
       'Group': 'all',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 318,
+      'Support': 317,
     }),
     dict({
       'Accuracy': 1.0,
@@ -35,7 +35,7 @@
       'Group': 'all',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 318,
+      'Support': 317,
     }),
     dict({
       'Accuracy': 1.0,
@@ -44,7 +44,7 @@
       'Group': 'all',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 318,
+      'Support': 317,
     }),
     dict({
       'Accuracy': 1.0,
@@ -62,7 +62,7 @@
       'Group': 'document_metadata.corpus_type_name: UNFCCC',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 318,
+      'Support': 317,
     }),
     dict({
       'Accuracy': 1.0,
@@ -71,7 +71,7 @@
       'Group': 'document_metadata.corpus_type_name: UNFCCC',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 318,
+      'Support': 317,
     }),
     dict({
       'Accuracy': 1.0,
@@ -80,7 +80,7 @@
       'Group': 'document_metadata.corpus_type_name: UNFCCC',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 318,
+      'Support': 317,
     }),
     dict({
       'Accuracy': 1.0,
@@ -89,7 +89,7 @@
       'Group': 'document_metadata.corpus_type_name: UNFCCC',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 318,
+      'Support': 317,
     }),
     dict({
       'Accuracy': 1.0,
@@ -152,7 +152,7 @@
       'Group': 'translated: True',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 113,
+      'Support': 112,
     }),
     dict({
       'Accuracy': 1.0,
@@ -161,7 +161,7 @@
       'Group': 'translated: True',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 113,
+      'Support': 112,
     }),
     dict({
       'Accuracy': 1.0,
@@ -170,7 +170,7 @@
       'Group': 'translated: True',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 113,
+      'Support': 112,
     }),
     dict({
       'Accuracy': 1.0,
@@ -179,7 +179,7 @@
       'Group': 'translated: True',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 113,
+      'Support': 112,
     }),
     dict({
       'Accuracy': 1.0,
@@ -332,7 +332,7 @@
       'Group': 'world_bank_region: Latin America & Caribbean',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 45,
+      'Support': 44,
     }),
     dict({
       'Accuracy': 1.0,
@@ -341,7 +341,7 @@
       'Group': 'world_bank_region: Latin America & Caribbean',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 45,
+      'Support': 44,
     }),
     dict({
       'Accuracy': 1.0,
@@ -350,7 +350,7 @@
       'Group': 'world_bank_region: Latin America & Caribbean',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 45,
+      'Support': 44,
     }),
     dict({
       'Accuracy': 1.0,
@@ -359,7 +359,7 @@
       'Group': 'world_bank_region: Latin America & Caribbean',
       'Precision': 1.0,
       'Recall': 1.0,
-      'Support': 45,
+      'Support': 44,
     }),
     dict({
       'Accuracy': 1.0,

@@ -16,6 +16,11 @@ extend-ignore-re = [
   "(?s)(#|//)\\s*spellchecker:off.*?(#|//)\\s*spellchecker:on",
 ]
 
+[default.extend-identifiers]
+# Plural of NDC (nationally determined contribution). typos splits it into "ND" + "Cs"
+# and "corrects" ND to AND.
+NDCs = "NDCs"
+
 # Domain abbreviations which typos would otherwise "correct".
 [default.extend-words]
 fpr = "fpr"
@@ -24,11 +29,6 @@ FPR = "FPR"
 # analysis, not misspellings.
 allocat = "allocat"
 participat = "participat"
-
-# Nationally Determined Contributions. typos splits "NDCs" into "ND" + "Cs" and rewrites it
-# to "ANDCs", so it is listed as a whole identifier.
-[default.extend-identifiers]
-NDCs = "NDCs"
 
 # Verbatim concept-store snapshots: their labels include deliberate misspellings (so the
 # keyword classifiers catch them) and acronyms like "TOU", which typos would rewrite.

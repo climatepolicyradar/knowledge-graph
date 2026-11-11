@@ -56,7 +56,7 @@ def load_classifier_local(wikibase_id: WikibaseID) -> Classifier:
         raise typer.BadParameter(
             f"Classifier for {wikibase_id} not found. \n"
             "If you haven't already, you should run:\n"
-            f"  just train {wikibase_id}\n"
+            f"  uv run train --wikibase-id {wikibase_id}\n"
         )
 
     try:
@@ -68,7 +68,7 @@ def load_classifier_local(wikibase_id: WikibaseID) -> Classifier:
         raise typer.BadParameter(
             f"Classifier for {wikibase_id} not found. \n"
             "If you haven't already, you should run:\n"
-            f"  just train {wikibase_id}\n"
+            f"  uv run train --wikibase-id {wikibase_id}\n"
         ) from e
 
 

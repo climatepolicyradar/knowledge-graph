@@ -2,7 +2,7 @@
 CLI wrapper for the get-concept operation.
 
 The reusable logic lives in `knowledge_graph.operations.get_concept`; this module only
-adds the Typer command used by `just get-concept`.
+adds the Typer command run with `uv run python scripts/get_concept.py`.
 """
 
 import asyncio
