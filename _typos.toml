@@ -24,3 +24,13 @@ FPR = "FPR"
 # analysis, not misspellings.
 allocat = "allocat"
 participat = "participat"
+
+# Nationally Determined Contributions. typos splits "NDCs" into "ND" + "Cs" and rewrites it
+# to "ANDCs", so it is listed as a whole identifier.
+[default.extend-identifiers]
+NDCs = "NDCs"
+
+# Verbatim concept-store snapshots: their labels include deliberate misspellings (so the
+# keyword classifiers catch them) and acronyms like "TOU", which typos would rewrite.
+[files]
+extend-exclude = ["demos/just_transition_cop31/data/concepts.json"]

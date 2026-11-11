@@ -1,0 +1,13 @@
+topic,column,validated_classifier,group,summary,jt_passages,with_topic,share
+Any work sub-topic,any_work,True,work,True,108225,28296,0.26145530145530144
+Decent work,decent,True,work,False,108225,15827,0.14624162624162623
+Aligning skills,skills,True,work,False,108225,7842,0.07246015246015246
+Green jobs,greenjobs,True,work,False,108225,6052,0.05592053592053592
+Social dialogue & trade unions,dialogue,False,work,False,108225,2938,0.02714714714714715
+Any energy Topic,any_energy,True,energy,True,108225,15126,0.13976437976437978
+Energy supply mitigation,supplymit,True,energy,False,108225,9511,0.08788172788172788
+of which renewable energy,renew,True,energy,False,108225,8656,0.07998151998151998
+Energy supply sector,esector,True,energy,False,108225,6352,0.058692538692538695
+Fossil fuels,fossil,True,energy,False,108225,5814,0.05372141372141372
+of which coal,coal,True,energy,False,108225,1685,0.01556941556941557
+Electrification,electrif,True,energy,False,108225,2510,0.023192423192423192
