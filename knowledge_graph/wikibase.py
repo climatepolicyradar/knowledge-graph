@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Any, Final, NamedTuple
 
@@ -81,6 +82,8 @@ class WikibaseSession:
     HELP_NAMESPACE = 12
     ITEM_NAMESPACE = 120
     ITEM_PREFIX = "Item:"
+    PROPERTY_NAMESPACE = 122
+    PROPERTY_PREFIX = "Property:"
 
     # Property IDs
     has_subconcept_property_id: Final[str] = os.getenv(
@@ -341,6 +344,62 @@ class WikibaseSession:
             List of all WikibaseID strings for concepts in the instance
         """
         return await self.get_all_concept_ids_async()
+
+    async def get_all_entity_ids_async(self) -> tuple[list[str], list[str]]:
+        """Get the IDs of every item and every property, excluding redirects."""
+        item_pages = await self._get_pages(
+            extra_params={"apfilterredir": "nonredirects"}
+        )
+        property_pages = await self._get_pages(
+            extra_params={
+                "apfilterredir": "nonredirects",
+                "apnamespace": str(self.PROPERTY_NAMESPACE),
+            }
+        )
+        return (
+            [page["title"].removeprefix(self.ITEM_PREFIX) for page in item_pages],
+            [
+                page["title"].removeprefix(self.PROPERTY_PREFIX)
+                for page in property_pages
+            ],
+        )
+
+    async def get_raw_entities_async(self, ids: Sequence[str]) -> list[dict]:
+        """
+        Get entities exactly as Wikibase returns them, in the order requested.
+
+        Entities that no longer exist are left out.
+        """
+        client = await self._get_client()
+        entities: list[dict] = []
+
+        for batch in chunked(ids, self.DEFAULT_BATCH_SIZE):
+            response = await client.get(
+                url=self.api_url,
+                params={
+                    "action": "wbgetentities",
+                    "format": "json",
+                    "ids": "|".join(batch),
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            if "error" in data:
+                raise HTTPError(str(data["error"]))
+
+            for entity_id in batch:
+                entity = data["entities"][entity_id]
+                if "missing" in entity:
+                    logger.warning("Entity %s no longer exists, skipping", entity_id)
+                    continue
+                entities.append(entity)
+
+        return entities
+
+    async def get_redirects_async(self) -> dict[str, str]:
+        """Get every redirect, as a mapping of the old ID to the ID it points at."""
+        await self._get_client()
+        return {str(k): str(v) for k, v in (self._redirects or {}).items()}
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),

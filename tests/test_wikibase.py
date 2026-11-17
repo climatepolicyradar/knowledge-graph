@@ -567,3 +567,60 @@ def test_whether_wikibase_filters_out_only_overlapping_negative_labels_from_subc
             "bituminous coal",  # from subconcept_b
         }
         assert set(result.alternative_labels) == expected_positive_labels
+
+
+@pytest.mark.asyncio
+async def test_get_all_entity_ids_async(MockedWikibaseSession):
+    session = MockedWikibaseSession()
+    item_ids, property_ids = await session.get_all_entity_ids_async()
+    assert item_ids and all(i.startswith("Q") for i in item_ids)
+    assert property_ids == ["P1", "P10"]
+
+
+@pytest.mark.asyncio
+async def test_get_raw_entities_async_returns_untouched_json(
+    MockedWikibaseSession, mock_wikibase_raw_entity
+):
+    session = MockedWikibaseSession()
+    entities = await session.get_raw_entities_async(["Q10", "Q11", "P1"])
+    assert entities == [
+        mock_wikibase_raw_entity("Q10"),
+        mock_wikibase_raw_entity("Q11"),
+        mock_wikibase_raw_entity("P1"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_get_raw_entities_async_drops_missing(MockedWikibaseSession):
+    session = MockedWikibaseSession()
+    entities = await session.get_raw_entities_async(["Q10", "Q999"])
+    assert [e["id"] for e in entities] == ["Q10"]
+
+
+@pytest.mark.asyncio
+async def test_get_raw_entities_async_batches_by_50(MockedWikibaseSession):
+    session = MockedWikibaseSession()
+    client = await session._get_client()
+    original_get = client.get
+    calls = []
+
+    async def recording_get(*args, **kwargs):
+        params = kwargs.get("params", {})
+        if params.get("action") == "wbgetentities":
+            calls.append(len(params["ids"].split("|")))
+        return await original_get(*args, **kwargs)
+
+    client.get = recording_get
+    entities = await session.get_raw_entities_async(
+        [f"Q{i}" for i in range(1000, 1120)]
+    )
+    assert calls == [50, 50, 20]
+    assert len(entities) == 120
+
+
+@pytest.mark.asyncio
+async def test_get_redirects_async(MockedWikibaseSession):
+    session = MockedWikibaseSession()
+    await session._get_client()
+    session._redirects = {WikibaseID("Q15"): WikibaseID("Q16")}
+    assert await session.get_redirects_async() == {"Q15": "Q16"}
