@@ -33,10 +33,22 @@ async def crawl(session: WikibaseSession, now: datetime | None = None) -> Snapsh
     if not item_ids:
         raise IncompleteCrawlError("Wikibase listed no items")
 
+    items = await session.get_raw_entities_async(item_ids)
+    properties = await session.get_raw_entities_async(property_ids)
+
+    # A few entities can be deleted or merged mid-crawl. More than that
+    # means the snapshot can't be trusted.
+    listed = len(item_ids) + len(property_ids)
+    not_returned = listed - len(items) - len(properties)
+    if not_returned > max(1, listed // 100):
+        raise IncompleteCrawlError(
+            f"{not_returned} of {listed} listed entities were not returned"
+        )
+
     return Snapshot(
         timestamp=now.astimezone(timezone.utc).strftime(TIMESTAMP_FORMAT),
         wikibase_url=str(session.base_url),
-        items=await session.get_raw_entities_async(item_ids),
-        properties=await session.get_raw_entities_async(property_ids),
+        items=items,
+        properties=properties,
         redirects=await session.get_redirects_async(),
     )

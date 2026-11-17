@@ -125,7 +125,9 @@ async def wikibase_export(
         advanced = await advance_current(s3_client, bucket, snapshot, issues)
         logger.info(f"current pointer {'moved' if advanced else 'left in place'}")
 
-        if enable_slack_notifications:
+        # A failed rule's issues are absent, not resolved, so comparing
+        # against the last report would be wrong until the rule runs again
+        if enable_slack_notifications and not failed_rules:
             diff = diff_issues(await read_reported_issues(s3_client, bucket), issues)
             if diff.changed:
                 current = await read_current(s3_client, bucket)

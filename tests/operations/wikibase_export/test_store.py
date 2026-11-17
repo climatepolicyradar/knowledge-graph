@@ -145,3 +145,12 @@ async def test_reported_issues_round_trip(s3, bucket, snapshot):
     await mark_reported(s3, bucket, snapshot)
 
     assert await read_reported_issues(s3, bucket) == [WARNING]
+
+
+@pytest.mark.asyncio
+async def test_reported_issues_is_none_when_its_snapshot_has_expired(s3, bucket):
+    await put_json(
+        s3, bucket, f"{PREFIX}/reported.json", {"snapshot": "20200101T000000Z"}
+    )
+
+    assert await read_reported_issues(s3, bucket) is None

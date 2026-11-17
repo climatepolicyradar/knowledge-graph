@@ -8,6 +8,9 @@ from types_aiobotocore_s3.client import S3Client
 
 from knowledge_graph.operations.wikibase_export.rules import Issue
 from knowledge_graph.operations.wikibase_export.snapshot import Snapshot
+from knowledge_graph.utils import get_logger
+
+logger = get_logger(__name__)
 
 PREFIX = "pipelines/wikibase-export"
 FORMAT_VERSION = 1
@@ -153,10 +156,11 @@ async def read_reported_issues(s3_client: S3Client, bucket: str) -> list[Issue] 
         s3_client, bucket, f"{snapshot_prefix(reported.snapshot)}/issues.jsonl"
     )
     if issues is None:
-        raise FileNotFoundError(
-            f"reported.json names snapshot {reported.snapshot}, which has no issues file"
-        )
-    return [Issue.model_validate_json(line) for line in issues.splitlines()]
+        # The snapshot has expired, so report everything afresh
+        logger.warning("reported snapshot %s no longer exists", reported.snapshot)
+        return None
+    # Not splitlines(), which also splits on separators JSON leaves unescaped
+    return [Issue.model_validate_json(line) for line in issues.split("\n") if line]
 
 
 async def mark_reported(s3_client: S3Client, bucket: str, snapshot: Snapshot) -> None:

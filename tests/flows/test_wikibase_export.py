@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -223,3 +224,36 @@ async def test_flow_threads_every_rule_under_the_summary(
     _, first_reply, second_reply = slack.chat_postMessage.call_args_list
     assert first_reply.kwargs["thread_ts"] == "summary"
     assert second_reply.kwargs["thread_ts"] == "summary"
+
+
+@pytest.mark.asyncio
+async def test_flow_does_not_report_when_a_rule_raises(
+    MockedWikibaseSession, mock_s3_async_client, bucket, auth, slack
+):
+    def broken_rule(snapshot):
+        raise ValueError("boom")
+
+    with patch("flows.wikibase_export.RULES", [one_issue]):
+        await wikibase_export.fn(
+            aws_env=AwsEnv.sandbox,
+            wikibase_auth=auth,
+            bucket=bucket,
+            enable_slack_notifications=True,
+        )
+    reported = await read_reported_issues(mock_s3_async_client, bucket)
+    posts = slack.chat_postMessage.call_count
+    # Snapshots are named to the second, so let the next run get its own
+    await asyncio.sleep(1.1)
+
+    # one_issue's rule now fails, which must not read as its issue being fixed
+    with patch("flows.wikibase_export.RULES", [broken_rule]):
+        with pytest.raises(RuntimeError, match="broken_rule"):
+            await wikibase_export.fn(
+                aws_env=AwsEnv.sandbox,
+                wikibase_auth=auth,
+                bucket=bucket,
+                enable_slack_notifications=True,
+            )
+
+    assert slack.chat_postMessage.call_count == posts
+    assert await read_reported_issues(mock_s3_async_client, bucket) == reported

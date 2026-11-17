@@ -53,3 +53,38 @@ async def test_crawl_raises_when_nothing_listed(MockedWikibaseSession, monkeypat
 
     with pytest.raises(IncompleteCrawlError):
         await crawl(session)
+
+
+@pytest.mark.asyncio
+async def test_crawl_tolerates_a_few_entities_deleted_mid_crawl(
+    MockedWikibaseSession, monkeypatch
+):
+    session = MockedWikibaseSession()
+    ids = [f"Q{i}" for i in range(1000, 1099)] + ["Q999"]
+    monkeypatch.setattr(
+        session, "get_all_entity_ids_async", AsyncMock(return_value=(ids, ["P1"]))
+    )
+
+    snapshot = await crawl(session)
+
+    assert len(snapshot.items) == 99
+
+
+@pytest.mark.asyncio
+async def test_crawl_raises_when_many_listed_entities_are_not_returned(
+    MockedWikibaseSession, monkeypatch
+):
+    session = MockedWikibaseSession()
+    monkeypatch.setattr(
+        session,
+        "get_all_entity_ids_async",
+        AsyncMock(return_value=(["Q10", "Q11", "Q12"], [])),
+    )
+    monkeypatch.setattr(
+        session,
+        "get_raw_entities_async",
+        AsyncMock(side_effect=[[{"id": "Q10", "type": "item"}], []]),
+    )
+
+    with pytest.raises(IncompleteCrawlError, match="2 of 3"):
+        await crawl(session)

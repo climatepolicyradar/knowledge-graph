@@ -438,15 +438,21 @@ def MockedWikibaseSession(
                 if "props" not in request.url.params and (
                     "|" in ids_param or ids_param == "Q999"
                 ):
+                    follow_redirects = request.url.params.get("redirects") != "no"
+                    entities = {}
+                    for entity_id in ids_param.split("|"):
+                        # Q998 was merged into Q10. Wikibase follows the
+                        # redirect and returns the target unless told not to
+                        if entity_id == "Q998" and follow_redirects:
+                            entities[entity_id] = mock_wikibase_raw_entity("Q10") | {
+                                "redirects": {"from": "Q998", "to": "Q10"}
+                            }
+                        elif entity_id == "Q998":
+                            entities[entity_id] = {"id": entity_id, "missing": ""}
+                        else:
+                            entities[entity_id] = mock_wikibase_raw_entity(entity_id)
                     return httpx.Response(
-                        200,
-                        json={
-                            "entities": {
-                                entity_id: mock_wikibase_raw_entity(entity_id)
-                                for entity_id in ids_param.split("|")
-                            },
-                            "success": 1,
-                        },
+                        200, json={"entities": entities, "success": 1}
                     )
                 if "|" in ids_param:
                     # Handle batch requests - split the IDs and create response for each

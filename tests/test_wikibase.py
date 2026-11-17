@@ -624,3 +624,73 @@ async def test_get_redirects_async(MockedWikibaseSession):
     await session._get_client()
     session._redirects = {WikibaseID("Q15"): WikibaseID("Q16")}
     assert await session.get_redirects_async() == {"Q15": "Q16"}
+
+
+@pytest.mark.asyncio
+async def test_get_raw_entities_async_drops_items_merged_since_listing(
+    MockedWikibaseSession,
+):
+    session = MockedWikibaseSession()
+    entities = await session.get_raw_entities_async(["Q10", "Q998"])
+    assert [e["id"] for e in entities] == ["Q10"]
+
+
+def _fail_first_entities_request(client, failure):
+    """Make the first wbgetentities request fail, then behave normally."""
+    original_get = client.get
+    attempts = []
+
+    async def flaky_get(*args, **kwargs):
+        if kwargs.get("params", {}).get("action") == "wbgetentities":
+            attempts.append(1)
+            if len(attempts) == 1:
+                return failure()
+        return await original_get(*args, **kwargs)
+
+    client.get = flaky_get
+    return attempts
+
+
+@pytest.mark.asyncio
+async def test_get_raw_entities_async_retries_connection_errors(MockedWikibaseSession):
+    session = MockedWikibaseSession()
+    client = await session._get_client()
+
+    def failure():
+        raise httpx.ConnectError("connection reset")
+
+    attempts = _fail_first_entities_request(client, failure)
+
+    with (
+        patch("knowledge_graph.wikibase.RETRY_INITIAL_WAIT", 0),
+        patch("knowledge_graph.wikibase.RETRY_MAX_WAIT", 0),
+    ):
+        entities = await session.get_raw_entities_async(["Q10", "Q11"])
+
+    assert [e["id"] for e in entities] == ["Q10", "Q11"]
+    assert len(attempts) == 2
+
+
+@pytest.mark.asyncio
+async def test_get_raw_entities_async_retries_api_errors(MockedWikibaseSession):
+    session = MockedWikibaseSession()
+    client = await session._get_client()
+
+    def failure():
+        # MediaWiki reports rate limiting as a 200 with an error body
+        return httpx.Response(
+            200,
+            json={"error": {"code": "ratelimited"}},
+            request=httpx.Request("GET", session.api_url),
+        )
+
+    attempts = _fail_first_entities_request(client, failure)
+
+    with (
+        patch("knowledge_graph.wikibase.RETRY_INITIAL_WAIT", 0),
+        patch("knowledge_graph.wikibase.RETRY_MAX_WAIT", 0),
+    ):
+        entities = await session.get_raw_entities_async(["Q10", "Q11"])
+
+    assert [e["id"] for e in entities] == ["Q10", "Q11"]
+    assert len(attempts) == 2

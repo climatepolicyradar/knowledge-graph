@@ -368,13 +368,14 @@ class WikibaseSession:
         """
         Get entities exactly as Wikibase returns them, in the order requested.
 
-        Entities that no longer exist are left out.
+        Entities that no longer exist, or have been merged into another, are
+        left out.
         """
         client = await self._get_client()
         entities: list[dict] = []
 
         for batch in chunked(ids, self.DEFAULT_BATCH_SIZE):
-            response: httpx.Response | None = None
+            data: dict | None = None
 
             # Retry per batch, so one failure doesn't restart the whole crawl
             async for attempt in AsyncRetrying(
@@ -382,7 +383,7 @@ class WikibaseSession:
                 wait=wait_exponential_jitter(
                     initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT
                 ),
-                retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
+                retry=retry_if_exception_type(HTTPError),
                 before_sleep=before_sleep_log(get_logger(__name__), logging.WARNING),  # type: ignore[arg-type]
                 reraise=True,
             ):
@@ -393,15 +394,20 @@ class WikibaseSession:
                             "action": "wbgetentities",
                             "format": "json",
                             "ids": "|".join(batch),
+                            # Otherwise a merged item comes back as a copy
+                            # of the item it was merged into
+                            "redirects": "no",
                         },
                     )
                     response.raise_for_status()
+                    body: dict = response.json()
+                    # Rate limiting and read-only mode are a 200 with an error
+                    if "error" in body:
+                        raise HTTPError(str(body["error"]))
+                    data = body
 
-            if response is None:
+            if data is None:
                 raise RuntimeError("Entity batch request completed without a response")
-            data = response.json()
-            if "error" in data:
-                raise HTTPError(data["error"])
 
             for entity_id in batch:
                 entity = data["entities"][entity_id]
