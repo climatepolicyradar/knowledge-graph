@@ -154,3 +154,20 @@ async def test_reported_issues_is_none_when_its_snapshot_has_expired(s3, bucket)
     )
 
     assert await read_reported_issues(s3, bucket) is None
+
+
+@pytest.mark.asyncio
+async def test_write_snapshot_writes_the_manifest_last(s3, bucket, snapshot):
+    written = []
+    original_put_object = s3.put_object
+
+    async def recording_put_object(**kwargs):
+        written.append(kwargs["Key"].rsplit("/", 1)[1])
+        return await original_put_object(**kwargs)
+
+    s3.put_object = recording_put_object
+
+    await write_snapshot(s3, bucket, snapshot, [], [], None)
+
+    assert len(written) == 5
+    assert written[-1] == "manifest.json"

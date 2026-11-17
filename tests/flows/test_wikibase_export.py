@@ -77,10 +77,10 @@ async def test_flow_writes_snapshot_and_pointer(
 
 @pytest.mark.asyncio
 async def test_flow_requires_bucket_outside_staging_and_production(
-    MockedWikibaseSession, auth
+    MockedWikibaseSession,
 ):
-    with pytest.raises(ValueError, match="bucket"):
-        await wikibase_export.fn(aws_env=AwsEnv.sandbox, wikibase_auth=auth)
+    with pytest.raises(ValueError, match="no default bucket for sandbox"):
+        await wikibase_export.fn(aws_env=AwsEnv.sandbox)
 
 
 @pytest.mark.asyncio
@@ -257,3 +257,41 @@ async def test_flow_does_not_report_when_a_rule_raises(
 
     assert slack.chat_postMessage.call_count == posts
     assert await read_reported_issues(mock_s3_async_client, bucket) == reported
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bucket_name", [None, "cpr-cache", "cpr-staging-cache"])
+async def test_flow_refuses_another_wikibase_in_a_default_bucket(
+    MockedWikibaseSession, auth, bucket_name
+):
+    crawl = AsyncMock()
+
+    with patch("flows.wikibase_export.crawl", crawl):
+        with pytest.raises(ValueError, match="its own bucket"):
+            await wikibase_export.fn(
+                aws_env=AwsEnv.staging, wikibase_auth=auth, bucket=bucket_name
+            )
+
+    crawl.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_flow_holds_pointer_back_on_an_error_issue(
+    MockedWikibaseSession, mock_s3_async_client, bucket, auth, slack
+):
+    def error_rule(snapshot) -> list[Issue]:
+        return [
+            Issue(rule="error_rule", severity="error", entity_id="Q10", message="m")
+        ]
+
+    with patch("flows.wikibase_export.RULES", [error_rule]):
+        await wikibase_export.fn(
+            aws_env=AwsEnv.sandbox, wikibase_auth=auth, bucket=bucket
+        )
+
+    assert await read_current(mock_s3_async_client, bucket) is None
+    (timestamp,) = await snapshot_timestamps(mock_s3_async_client, bucket)
+    manifest = await get_json(
+        mock_s3_async_client, bucket, f"{PREFIX}/snapshots/{timestamp}/manifest.json"
+    )
+    assert manifest["issues"]["by_severity"] == {"error": 1}

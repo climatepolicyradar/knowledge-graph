@@ -52,20 +52,6 @@ def missing_english_label(snapshot: Snapshot) -> list[Issue]:
     ]
 
 
-def missing_english_description(snapshot: Snapshot) -> list[Issue]:
-    """Every item needs an English description."""
-    return [
-        Issue(
-            rule="missing_english_description",
-            severity="warning",
-            entity_id=item["id"],
-            message="has no English description",
-        )
-        for item in snapshot.items
-        if "en" not in item.get("descriptions", {})
-    ]
-
-
 def dangling_reference(snapshot: Snapshot) -> list[Issue]:
     """Statements must point at items that exist and are not redirects."""
     item_ids = snapshot.item_ids()
@@ -162,7 +148,6 @@ def duplicate_english_label(snapshot: Snapshot) -> list[Issue]:
 
 RULES: list[Rule] = [
     missing_english_label,
-    missing_english_description,
     dangling_reference,
     unmirrored_subconcept,
     duplicate_english_label,

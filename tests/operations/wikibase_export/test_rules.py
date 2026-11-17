@@ -3,7 +3,6 @@ from knowledge_graph.operations.wikibase_export.rules import (
     Issue,
     dangling_reference,
     duplicate_english_label,
-    missing_english_description,
     missing_english_label,
     run_rules,
     unmirrored_subconcept,
@@ -25,16 +24,6 @@ def test_missing_english_label():
             entity_id="Q1",
             message="has no English label",
         )
-    ]
-
-
-def test_missing_english_description():
-    snapshot = make_snapshot(make_item("Q1"), make_item("Q2", description="d"))
-
-    issues = missing_english_description(snapshot)
-
-    assert [(i.rule, i.entity_id) for i in issues] == [
-        ("missing_english_description", "Q1")
     ]
 
 
@@ -144,6 +133,11 @@ def test_all_starting_rules_are_warnings():
 
     issues, failed = run_rules(snapshot)
 
-    assert len(RULES) == 5
+    assert [rule.__name__ for rule in RULES] == [
+        "missing_english_label",
+        "dangling_reference",
+        "unmirrored_subconcept",
+        "duplicate_english_label",
+    ]
     assert failed == []
     assert issues and {i.severity for i in issues} == {"warning"}

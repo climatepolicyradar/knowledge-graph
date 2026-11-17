@@ -83,6 +83,13 @@ async def wikibase_export(
     if aws_env is None:
         aws_env = AwsEnv(os.environ["AWS_ENV"])
 
+    # The default buckets hold the live concept store, which downstream
+    # reads. Another Wikibase must never be written over it.
+    if wikibase_auth is not None and (
+        bucket is None or bucket in DEFAULT_BUCKETS.values()
+    ):
+        raise ValueError("a Wikibase passed in explicitly must be given its own bucket")
+
     if bucket is None:
         bucket = DEFAULT_BUCKETS.get(aws_env)
     if bucket is None:
