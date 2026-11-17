@@ -4,12 +4,20 @@ from cpr_sdk.ssm import get_aws_ssm_param
 from prefect import flow
 from pydantic import AnyHttpUrl, SecretStr
 
-from flows.utils import SlackNotify, get_run_name
+from flows.utils import SlackNotify, get_run_name, get_slack_client
 from knowledge_graph.cloud import AwsEnv, get_async_session
+from knowledge_graph.operations.wikibase_export.report import (
+    IssueDiff,
+    diff_issues,
+    summary_text,
+    thread_texts,
+)
 from knowledge_graph.operations.wikibase_export.rules import RULES, run_rules
 from knowledge_graph.operations.wikibase_export.snapshot import crawl
 from knowledge_graph.operations.wikibase_export.store import (
     advance_current,
+    mark_reported,
+    read_reported_issues,
     write_snapshot,
 )
 from knowledge_graph.utils import get_logger
@@ -19,10 +27,26 @@ WIKIBASE_PASSWORD_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Password"
 WIKIBASE_USERNAME_SSM_NAME = "/Wikibase/Cloud/ServiceAccount/Username"
 WIKIBASE_URL_SSM_NAME = "/Wikibase/Cloud/URL"
 
+SLACK_CHANNEL = "alerts-concept-store"
+
 DEFAULT_BUCKETS = {
     AwsEnv.production: "cpr-cache",
     AwsEnv.staging: "cpr-staging-cache",
 }
+
+
+async def post_issues_to_slack(diff: IssueDiff, snapshot_uri: str, advanced: bool):
+    """Post a summary of changed issues, with the new ones in a thread."""
+    slack_client = await get_slack_client()
+
+    # The client raises SlackApiError if a post fails
+    summary = await slack_client.chat_postMessage(
+        channel=SLACK_CHANNEL, text=summary_text(diff, snapshot_uri, advanced)
+    )
+    for text in thread_texts(diff, snapshot_uri):
+        await slack_client.chat_postMessage(
+            channel=SLACK_CHANNEL, thread_ts=summary["ts"], text=text
+        )
 
 
 @flow(
@@ -34,6 +58,7 @@ async def wikibase_export(
     aws_env: AwsEnv | None = None,
     wikibase_auth: WikibaseAuth | None = None,
     bucket: str | None = None,
+    enable_slack_notifications: bool = False,
 ) -> None:
     """Export everything in Wikibase to S3, as a raw timestamped snapshot."""
     logger = get_logger()
@@ -89,6 +114,14 @@ async def wikibase_export(
             s3_client, bucket, snapshot, issues, failed_rules
         )
         logger.info(f"current pointer {'moved' if advanced else 'left in place'}")
+
+        # A failed rule's issues would otherwise read as resolved
+        if enable_slack_notifications and not failed_rules:
+            diff = diff_issues(await read_reported_issues(s3_client, bucket), issues)
+            if diff.changed:
+                await post_issues_to_slack(diff, snapshot_uri, advanced)
+            # Only once posted, so a failed post is retried by the next run
+            await mark_reported(s3_client, bucket, issues)
 
     if failed_rules:
         raise RuntimeError(f"validation rules raised: {', '.join(failed_rules)}")
