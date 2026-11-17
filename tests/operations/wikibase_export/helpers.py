@@ -1,3 +1,5 @@
+import json
+
 from knowledge_graph.operations.wikibase_export.snapshot import Snapshot
 
 
@@ -49,3 +51,21 @@ def make_snapshot(*items: dict, redirects: dict[str, str] | None = None) -> Snap
         properties=[],
         redirects=redirects or {},
     )
+
+
+async def list_keys(s3, bucket: str, prefix: str) -> set[str]:
+    response = await s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+    return {obj["Key"] for obj in response.get("Contents", [])}
+
+
+async def get_text(s3, bucket: str, key: str) -> str:
+    response = await s3.get_object(Bucket=bucket, Key=key)
+    return (await response["Body"].read()).decode("utf-8")
+
+
+async def get_json(s3, bucket: str, key: str) -> dict:
+    return json.loads(await get_text(s3, bucket, key))
+
+
+async def put_json(s3, bucket: str, key: str, value: dict) -> None:
+    await s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(value).encode())
