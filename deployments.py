@@ -45,6 +45,7 @@ from flows.update_neo4j import update_concepts
 from flows.utils import Compute, JsonDict, get_prefect_job_variables
 from flows.vibe_check import vibe_check_inference
 from flows.vibe_check_generate_datasets import generate_vibe_checker_datasets
+from flows.wikibase_export import wikibase_export
 from flows.wikibase_to_s3 import wikibase_to_s3
 from knowledge_graph.cloud import (
     PROJECT_NAME,
@@ -383,6 +384,23 @@ async def main() -> None:
             AwsEnv.staging: "0 15 2 * *",
             AwsEnv.sandbox: "0 15 1 * *",
             # Not needed in labs
+        },
+    )
+
+    await create_deployment(
+        flow=wikibase_export,
+        description="Export a raw, validated snapshot of Wikibase to S3",
+        concurrency_limit=ConcurrencyLimitConfig(
+            limit=1,
+            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
+        ),
+        env_schedules={
+            AwsEnv.production: "0 7,11,15 * * MON-FRI",
+            AwsEnv.staging: "0 8 * * MON-FRI",
+        },
+        env_parameters={
+            AwsEnv.production: JsonDict({"enable_slack_notifications": True}),
+            AwsEnv.staging: JsonDict({"enable_slack_notifications": False}),
         },
     )
 
