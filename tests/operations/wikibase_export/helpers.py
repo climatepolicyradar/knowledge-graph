@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from knowledge_graph.operations.wikibase_export.snapshot import Snapshot
 
 
@@ -46,3 +48,26 @@ def make_snapshot(*items: dict, redirects: dict[str, str] | None = None) -> Snap
         properties=[],
         redirects=redirects or {},
     )
+
+
+async def list_keys(s3, bucket: str, prefix: str) -> set[str]:
+    response = await s3.list_objects_v2(Bucket=bucket, Prefix=prefix)
+    return {obj["Key"] for obj in response.get("Contents", [])}
+
+
+@asynccontextmanager
+async def temporary_bucket(s3, name: str):
+    await s3.create_bucket(
+        Bucket=name, CreateBucketConfiguration={"LocationConstraint": "eu-west-1"}
+    )
+    yield name
+    # The mock S3 server outlives each test
+    response = await s3.list_objects_v2(Bucket=name)
+    for obj in response.get("Contents", []):
+        await s3.delete_object(Bucket=name, Key=obj["Key"])
+    await s3.delete_bucket(Bucket=name)
+
+
+async def get_text(s3, bucket: str, key: str) -> str:
+    response = await s3.get_object(Bucket=bucket, Key=key)
+    return (await response["Body"].read()).decode("utf-8")
