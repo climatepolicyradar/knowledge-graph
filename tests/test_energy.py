@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 from pydantic_ai.usage import RunUsage
 
@@ -54,15 +56,18 @@ def test_track_energy_measures_local_and_estimates_llm():
     assert report.llm_requests_not_estimated == 1
 
 
-def test_unknown_model_warns_once(caplog):
-    with track_energy():
-        for _ in range(3):
-            track_llm(
-                "openrouter:mystery/model-x", RunUsage(requests=1, output_tokens=10)
-            )
+def test_unknown_model_warns_once():
+    with patch("knowledge_graph.energy.get_logger") as mock_get_logger:
+        with track_energy():
+            for _ in range(3):
+                track_llm(
+                    "openrouter:mystery/model-x", RunUsage(requests=1, output_tokens=10)
+                )
 
     warnings = [
-        r for r in caplog.records if "No EcoLogits energy estimate" in r.message
+        str(call.args[0])
+        for call in mock_get_logger().warning.call_args_list
+        if "No EcoLogits energy estimate" in str(call.args[0])
     ]
     assert len(warnings) == 1
 
