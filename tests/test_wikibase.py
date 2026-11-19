@@ -629,6 +629,10 @@ RETRYABLE_FAILURES = [
     ),
     pytest.param(httpx.Response(503, request=_REQUEST), id="server error"),
     pytest.param(httpx.ConnectError("connection reset"), id="connection error"),
+    pytest.param(
+        httpx.Response(200, text="<html>Maintenance</html>", request=_REQUEST),
+        id="maintenance page",
+    ),
 ]
 
 
@@ -638,15 +642,17 @@ def no_retry_wait(monkeypatch):
     monkeypatch.setattr("knowledge_graph.wikibase.RETRY_MAX_WAIT", 0)
 
 
-def _fail_first_entities_request(client, failure: httpx.Response | Exception) -> list:
-    """Fail the first wbgetentities call; the returned list grows by one per call."""
+def _fail_entities_request(
+    client, failure: httpx.Response | Exception, call: int = 1
+) -> list:
+    """Fail the nth wbgetentities call; the returned list grows by one per call."""
     original_get = client.get
     attempts = []
 
     async def flaky_get(*args, **kwargs):
         if kwargs["params"]["action"] == "wbgetentities":
             attempts.append(1)
-            if len(attempts) == 1:
+            if len(attempts) == call:
                 if isinstance(failure, Exception):
                     raise failure
                 return failure
@@ -662,12 +668,15 @@ async def test_get_raw_entities_async_retries_failed_batches(
     MockedWikibaseSession, no_retry_wait, failure
 ):
     session = MockedWikibaseSession()
-    attempts = _fail_first_entities_request(await session._get_client(), failure)
+    attempts = _fail_entities_request(await session._get_client(), failure, call=2)
 
-    entities = await session.get_raw_entities_async(["Q10", "Q11"])
+    entities = await session.get_raw_entities_async(
+        [f"Q{i}" for i in range(1000, 1060)]
+    )
 
-    assert [e["id"] for e in entities] == ["Q10", "Q11"]
-    assert len(attempts) == 2
+    assert len(entities) == 60
+    # Two batches, and only the second is fetched again
+    assert len(attempts) == 3
 
 
 @pytest.mark.asyncio
@@ -676,7 +685,7 @@ async def test_get_redirects_async_retries_failed_batches(
     MockedWikibaseSession, no_retry_wait, failure
 ):
     session = MockedWikibaseSession()
-    attempts = _fail_first_entities_request(await session._get_client(), failure)
+    attempts = _fail_entities_request(await session._get_client(), failure)
 
     assert await session.get_redirects_async() == {"Q15": "Q10"}
     assert len(attempts) == 2

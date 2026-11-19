@@ -277,7 +277,8 @@ class WikibaseSession:
             wait=wait_exponential_jitter(
                 initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT
             ),
-            retry=retry_if_exception_type(HTTPError),
+            # A maintenance page comes back as a 200 that isn't JSON
+            retry=retry_if_exception_type((HTTPError, json.JSONDecodeError)),
             before_sleep=before_sleep_log(get_logger(__name__), logging.WARNING),  # type: ignore[arg-type]
             reraise=True,
         ):
