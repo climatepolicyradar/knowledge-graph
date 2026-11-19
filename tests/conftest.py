@@ -310,6 +310,36 @@ def mock_wikibase_redirect_target_json():
     }
 
 
+@pytest.fixture
+def mock_wikibase_raw_entity():
+    """Full entity JSON as `wbgetentities` returns it."""
+
+    def get_raw_entity(entity_id: str) -> dict:
+        is_property = entity_id.startswith("P")
+        entity = {
+            "pageid": 14,
+            "ns": 122 if is_property else 120,
+            "title": f"{'Property' if is_property else 'Item'}:{entity_id}",
+            "lastrevid": 3785,
+            "modified": "2024-06-12T10:09:34Z",
+            "type": "property" if is_property else "item",
+            "id": entity_id,
+            "labels": {"en": {"language": "en", "value": f"label {entity_id}"}},
+            "descriptions": {
+                "en": {"language": "en", "value": f"description {entity_id}"}
+            },
+            "aliases": {},
+            "claims": {},
+        }
+        if is_property:
+            entity["datatype"] = "wikibase-item"
+        else:
+            entity["sitelinks"] = {}
+        return entity
+
+    return get_raw_entity
+
+
 class MockedWikibaseException(Exception):
     """
     Exception raised by the mocked Wikibase API.
@@ -332,6 +362,7 @@ def MockedWikibaseSession(
     mock_wikibase_entities_json,
     mock_wikibase_redirects_json,
     mock_wikibase_redirect_target_json,
+    mock_wikibase_raw_entity,
 ):
     def mock_request_handler(request):
         if not httpx.URL(mock_wikibase_url).host == request.url.host:
@@ -401,6 +432,17 @@ def MockedWikibaseSession(
                     return httpx.Response(200, json=mock_wikibase_redirect_target_json)
 
                 ids_param = request.url.params.get("ids")
+                if request.url.params.get("redirects") == "no":
+                    # Q998 was merged into another item and Q999 was deleted
+                    entities = {
+                        entity_id: {"id": entity_id, "missing": ""}
+                        if entity_id in {"Q998", "Q999"}
+                        else mock_wikibase_raw_entity(entity_id)
+                        for entity_id in ids_param.split("|")
+                    }
+                    return httpx.Response(
+                        200, json={"entities": entities, "success": 1}
+                    )
                 if "|" in ids_param:
                     # Handle batch requests - split the IDs and create response for each
                     ids = ids_param.split("|")
