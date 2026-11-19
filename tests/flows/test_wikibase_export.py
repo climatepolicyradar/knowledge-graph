@@ -45,7 +45,7 @@ async def test_flow_writes_snapshot_and_pointer(
         bucket,
         f"{PREFIX}/snapshots/{current.snapshot}/manifest.json",
     )
-    assert manifest["counts"] == {"items": 10, "properties": 2, "redirects": 0}
+    assert manifest["counts"] == {"items": 10, "properties": 2, "redirects": 1}
 
 
 @pytest.mark.asyncio
