@@ -35,13 +35,9 @@ async def test_crawl_keeps_entities_untouched(
 
 @pytest.mark.asyncio
 async def test_crawl_includes_redirects(MockedWikibaseSession):
-    session = MockedWikibaseSession()
-    await session._get_client()
-    session._redirects = {"Q15": "Q16"}
+    snapshot = await crawl(MockedWikibaseSession())
 
-    snapshot = await crawl(session)
-
-    assert snapshot.redirects == {"Q15": "Q16"}
+    assert snapshot.redirects == {"Q15": "Q10"}
 
 
 @pytest.mark.asyncio
