@@ -345,31 +345,23 @@ class WikibaseSession:
         """
         return await self.get_all_concept_ids_async()
 
-    async def get_all_entity_ids_async(self) -> tuple[list[str], list[str]]:
+    async def get_all_entity_ids_async(
+        self,
+    ) -> tuple[list[WikibaseID], list[str]]:
         """Get the IDs of every item and every property, excluding redirects."""
-        item_pages = await self._get_pages(
-            extra_params={"apfilterredir": "nonredirects"}
-        )
+        item_ids = await self.get_all_concept_ids_async()
         property_pages = await self._get_pages(
             extra_params={
                 "apfilterredir": "nonredirects",
                 "apnamespace": str(self.PROPERTY_NAMESPACE),
             }
         )
-        return (
-            [page["title"].removeprefix(self.ITEM_PREFIX) for page in item_pages],
-            [
-                page["title"].removeprefix(self.PROPERTY_PREFIX)
-                for page in property_pages
-            ],
-        )
+        return item_ids, [
+            page["title"].removeprefix(self.PROPERTY_PREFIX) for page in property_pages
+        ]
 
     async def get_raw_entities_async(self, ids: Sequence[str]) -> list[dict]:
-        """
-        Get entities exactly as Wikibase returns them, in the order requested.
-
-        Entities that no longer exist are left out.
-        """
+        """Get entities as Wikibase returns them, leaving out deleted or merged ones."""
         client = await self._get_client()
         entities: list[dict] = []
 
@@ -380,6 +372,9 @@ class WikibaseSession:
                     "action": "wbgetentities",
                     "format": "json",
                     "ids": "|".join(batch),
+                    # Otherwise a merged item comes back as a copy of the item
+                    # it was merged into
+                    "redirects": "no",
                 },
             )
             response.raise_for_status()
@@ -390,7 +385,9 @@ class WikibaseSession:
             for entity_id in batch:
                 entity = data["entities"][entity_id]
                 if "missing" in entity:
-                    logger.warning("Entity %s no longer exists, skipping", entity_id)
+                    logger.warning(
+                        "Entity %s was deleted or merged, skipping", entity_id
+                    )
                     continue
                 entities.append(entity)
 
@@ -398,7 +395,7 @@ class WikibaseSession:
 
     async def get_redirects_async(self) -> dict[str, str]:
         """Get every redirect, as a mapping of the old ID to the ID it points at."""
-        # Not the map loaded at login: it can be stale, or still loading
+        # Not the map loaded at login, which is stale by the end of a crawl
         redirects = await self._get_all_redirects()
         return {str(k): str(v) for k, v in redirects.items()}
 

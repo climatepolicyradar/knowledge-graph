@@ -312,11 +312,9 @@ def mock_wikibase_redirect_target_json():
 
 @pytest.fixture
 def mock_wikibase_raw_entity():
-    """Full entity JSON as `wbgetentities` returns it. Q999 is always missing."""
+    """Full entity JSON as `wbgetentities` returns it."""
 
     def get_raw_entity(entity_id: str) -> dict:
-        if entity_id == "Q999":
-            return {"id": entity_id, "missing": ""}
         is_property = entity_id.startswith("P")
         entity = {
             "pageid": 14,
@@ -434,19 +432,16 @@ def MockedWikibaseSession(
                     return httpx.Response(200, json=mock_wikibase_redirect_target_json)
 
                 ids_param = request.url.params.get("ids")
-                # Full entities are requested by leaving `props` out
-                if "props" not in request.url.params and (
-                    "|" in ids_param or ids_param == "Q999"
-                ):
+                if request.url.params.get("redirects") == "no":
+                    # Q998 was merged into another item and Q999 was deleted
+                    entities = {
+                        entity_id: {"id": entity_id, "missing": ""}
+                        if entity_id in {"Q998", "Q999"}
+                        else mock_wikibase_raw_entity(entity_id)
+                        for entity_id in ids_param.split("|")
+                    }
                     return httpx.Response(
-                        200,
-                        json={
-                            "entities": {
-                                entity_id: mock_wikibase_raw_entity(entity_id)
-                                for entity_id in ids_param.split("|")
-                            },
-                            "success": 1,
-                        },
+                        200, json={"entities": entities, "success": 1}
                     )
                 if "|" in ids_param:
                     # Handle batch requests - split the IDs and create response for each

@@ -591,9 +591,9 @@ async def test_get_raw_entities_async_returns_untouched_json(
 
 
 @pytest.mark.asyncio
-async def test_get_raw_entities_async_drops_missing(MockedWikibaseSession):
+async def test_get_raw_entities_async_drops_deleted_and_merged(MockedWikibaseSession):
     session = MockedWikibaseSession()
-    entities = await session.get_raw_entities_async(["Q10", "Q999"])
+    entities = await session.get_raw_entities_async(["Q10", "Q998", "Q999"])
     assert [e["id"] for e in entities] == ["Q10"]
 
 
@@ -601,20 +601,16 @@ async def test_get_raw_entities_async_drops_missing(MockedWikibaseSession):
 async def test_get_raw_entities_async_batches_by_50(MockedWikibaseSession):
     session = MockedWikibaseSession()
     client = await session._get_client()
-    original_get = client.get
-    calls = []
 
-    async def recording_get(*args, **kwargs):
-        params = kwargs.get("params", {})
-        if params.get("action") == "wbgetentities":
-            calls.append(len(params["ids"].split("|")))
-        return await original_get(*args, **kwargs)
+    with patch.object(client, "get", wraps=client.get) as spy:
+        entities = await session.get_raw_entities_async(
+            [f"Q{i}" for i in range(1000, 1120)]
+        )
 
-    client.get = recording_get
-    entities = await session.get_raw_entities_async(
-        [f"Q{i}" for i in range(1000, 1120)]
-    )
-    assert calls == [50, 50, 20]
+    batch_sizes = [
+        len(call.kwargs["params"]["ids"].split("|")) for call in spy.call_args_list
+    ]
+    assert batch_sizes == [50, 50, 20]
     assert len(entities) == 120
 
 
