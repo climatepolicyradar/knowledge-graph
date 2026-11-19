@@ -398,8 +398,9 @@ class WikibaseSession:
 
     async def get_redirects_async(self) -> dict[str, str]:
         """Get every redirect, as a mapping of the old ID to the ID it points at."""
-        await self._get_client()
-        return {str(k): str(v) for k, v in (self._redirects or {}).items()}
+        # Not the map loaded at login: it can be stale, or still loading
+        redirects = await self._get_all_redirects()
+        return {str(k): str(v) for k, v in redirects.items()}
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),

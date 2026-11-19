@@ -619,8 +619,7 @@ async def test_get_raw_entities_async_batches_by_50(MockedWikibaseSession):
 
 
 @pytest.mark.asyncio
-async def test_get_redirects_async(MockedWikibaseSession):
+async def test_get_redirects_async_fetches_current_redirects(MockedWikibaseSession):
     session = MockedWikibaseSession()
-    await session._get_client()
-    session._redirects = {WikibaseID("Q15"): WikibaseID("Q16")}
-    assert await session.get_redirects_async() == {"Q15": "Q16"}
+    # The map loaded at login is empty in tests, so this proves a fresh fetch
+    assert await session.get_redirects_async() == {"Q15": "Q10"}
