@@ -243,52 +243,64 @@ class WikibaseSession:
         if batch_size is None:
             batch_size = self.DEFAULT_BATCH_SIZE
 
-        client = await self._get_client()
         pages = await self._get_pages(extra_params={"apfilterredir": "redirects"})
         redirects = {}
 
-        # Process redirects in batches
         for batch in chunked(pages, batch_size):
             ids_to_fetch = [
                 page["title"].removeprefix(self.ITEM_PREFIX) for page in batch
             ]
-            response: httpx.Response | None = None
-
-            async for attempt in AsyncRetrying(
-                stop=stop_after_attempt(MAX_RETRIES),
-                wait=wait_exponential_jitter(
-                    initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT
-                ),
-                retry=retry_if_exception_type((HTTPStatusError, ReadTimeout)),
-                before_sleep=before_sleep_log(get_logger(__name__), logging.WARNING),  # type: ignore[arg-type]
-                reraise=True,
-            ):
-                with attempt:
-                    response = await client.get(
-                        url=self.api_url,
-                        params={
-                            "action": "wbgetentities",
-                            "format": "json",
-                            "ids": "|".join(ids_to_fetch),
-                            "props": "info",
-                        },
-                        timeout=self.REDIRECT_REQUEST_TIMEOUT,
-                    )
-
-            if response is None:
-                raise RuntimeError(
-                    "Redirect batch request completed without a response"
-                )
-            response.raise_for_status()
-            data = response.json()
-
-            for wikibase_id, entity in data.get("entities", {}).items():
+            entities = await self._get_entities_batch(
+                ids_to_fetch,
+                params={"props": "info"},
+                timeout=self.REDIRECT_REQUEST_TIMEOUT,
+            )
+            for wikibase_id, entity in entities.items():
                 if "redirects" in entity:
                     redirects[WikibaseID(wikibase_id)] = WikibaseID(
                         entity["redirects"]["to"]
                     )
 
         return redirects
+
+    async def _get_entities_batch(
+        self,
+        ids: Sequence[str],
+        params: dict[str, str],
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> dict[str, dict]:
+        """Get one batch of entities from `wbgetentities`, retrying failures."""
+        client = await self._get_client()
+
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(MAX_RETRIES),
+            wait=wait_exponential_jitter(
+                initial=RETRY_INITIAL_WAIT, max=RETRY_MAX_WAIT
+            ),
+            # A maintenance page comes back as a 200 that isn't JSON
+            retry=retry_if_exception_type((HTTPError, json.JSONDecodeError)),
+            before_sleep=before_sleep_log(get_logger(__name__), logging.WARNING),  # type: ignore[arg-type]
+            reraise=True,
+        ):
+            with attempt:
+                response = await client.get(
+                    url=self.api_url,
+                    params={
+                        "action": "wbgetentities",
+                        "format": "json",
+                        "ids": "|".join(ids),
+                        **params,
+                    },
+                    timeout=timeout,
+                )
+                response.raise_for_status()
+                body = response.json()
+                # MediaWiki reports rate limiting and read-only mode as a 200
+                if "error" in body:
+                    raise HTTPError(str(body["error"]))
+                return body["entities"]
+
+        raise RuntimeError("Entity batch request completed without a response")
 
     @retry(
         stop=stop_after_attempt(MAX_RETRIES),
@@ -362,28 +374,14 @@ class WikibaseSession:
 
     async def get_raw_entities_async(self, ids: Sequence[str]) -> list[dict]:
         """Get entities as Wikibase returns them, leaving out deleted or merged ones."""
-        client = await self._get_client()
         entities: list[dict] = []
 
         for batch in chunked(ids, self.DEFAULT_BATCH_SIZE):
-            response = await client.get(
-                url=self.api_url,
-                params={
-                    "action": "wbgetentities",
-                    "format": "json",
-                    "ids": "|".join(batch),
-                    # Otherwise a merged item comes back as a copy of the item
-                    # it was merged into
-                    "redirects": "no",
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            if "error" in data:
-                raise HTTPError(str(data["error"]))
-
+            # Otherwise a merged item comes back as a copy of the item it was
+            # merged into
+            returned = await self._get_entities_batch(batch, params={"redirects": "no"})
             for entity_id in batch:
-                entity = data["entities"][entity_id]
+                entity = returned[entity_id]
                 if "missing" in entity:
                     logger.warning(
                         "Entity %s was deleted or merged, skipping", entity_id
