@@ -20,10 +20,6 @@ class Snapshot(BaseModel):
     properties: list[dict]
     redirects: dict[str, str]
 
-    def item_ids(self) -> set[str]:
-        """The ID of every item in the snapshot."""
-        return {item["id"] for item in self.items}
-
 
 async def crawl(session: WikibaseSession, now: datetime | None = None) -> Snapshot:
     """Fetch every item and property from Wikibase, without parsing them."""
