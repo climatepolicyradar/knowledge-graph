@@ -10,7 +10,7 @@ from knowledge_graph.operations.wikibase_export.snapshot import (
 
 
 @pytest.mark.asyncio
-async def test_crawl_returns_all_items_and_properties(MockedWikibaseSession):
+async def test_crawl_returns_every_entity_and_redirect(MockedWikibaseSession):
     snapshot = await crawl(
         MockedWikibaseSession(),
         now=datetime(2026, 11, 17, 11, 0, tzinfo=timezone.utc),
@@ -21,7 +21,7 @@ async def test_crawl_returns_all_items_and_properties(MockedWikibaseSession):
     assert len(snapshot.items) == 10
     assert {e["type"] for e in snapshot.items} == {"item"}
     assert [e["id"] for e in snapshot.properties] == ["P1", "P10"]
-    assert snapshot.item_ids() == {e["id"] for e in snapshot.items}
+    assert snapshot.redirects == {"Q15": "Q10"}
 
 
 @pytest.mark.asyncio
@@ -31,13 +31,6 @@ async def test_crawl_keeps_entities_untouched(
     snapshot = await crawl(MockedWikibaseSession())
 
     assert snapshot.items[0] == mock_wikibase_raw_entity(snapshot.items[0]["id"])
-
-
-@pytest.mark.asyncio
-async def test_crawl_includes_redirects(MockedWikibaseSession):
-    snapshot = await crawl(MockedWikibaseSession())
-
-    assert snapshot.redirects == {"Q15": "Q10"}
 
 
 @pytest.mark.asyncio

@@ -1,1 +1,1 @@
-"""Export a raw, validated snapshot of Wikibase."""
+"""Export a raw snapshot of Wikibase."""
