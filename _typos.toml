@@ -29,3 +29,8 @@ FPR = "FPR"
 # analysis, not misspellings.
 allocat = "allocat"
 participat = "participat"
+
+# Verbatim concept-store snapshots: their labels include deliberate misspellings (so the
+# keyword classifiers catch them) and acronyms like "TOU", which typos would rewrite.
+[files]
+extend-exclude = ["demos/just_transition_cop31/data/concepts.json"]

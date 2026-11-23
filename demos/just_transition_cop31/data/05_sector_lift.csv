@@ -1,0 +1,96 @@
+corpus,qid,sector,passages,passages_sector,jt_passages,jt_sector
+Climate fund projects,Q757,Informal economy,372680,1714,44408,360
+Climate fund projects,Q760,Extractive,372680,1810,44408,223
+Climate fund projects,Q761,Manufacturing,372680,2903,44408,442
+Climate fund projects,Q762,Energy supply,372680,9643,44408,1272
+Climate fund projects,Q763,Environmental management,372680,6412,44408,1196
+Climate fund projects,Q764,Construction,372680,9539,44408,2046
+Climate fund projects,Q765,Trade,372680,3321,44408,441
+Climate fund projects,Q766,Transport and logistics,372680,8557,44408,1026
+Climate fund projects,Q767,Hospitality and tourism,372680,5884,44408,1268
+Climate fund projects,Q768,Media,372680,3849,44408,727
+Climate fund projects,Q769,ICT,372680,3025,44408,547
+Climate fund projects,Q774,Education,372680,11451,44408,3010
+Climate fund projects,Q775,Public sector,372680,14105,44408,2852
+Climate fund projects,Q779,Finance and insurance,372680,35049,44408,4820
+Climate fund projects,Q786,Agriculture,372680,33975,44408,6056
+Climate fund projects,Q787,Forestry,372680,9252,44408,1824
+Climate fund projects,Q788,Fishing,372680,9474,44408,1986
+Climate fund projects,Q818,Water management,372680,18524,44408,3221
+Climate fund projects,Q856,Healthcare,372680,1050,44408,234
+Court documents,Q757,Informal economy,829124,453,11711,35
+Court documents,Q760,Extractive,829124,11765,11711,435
+Court documents,Q761,Manufacturing,829124,6159,11711,141
+Court documents,Q762,Energy supply,829124,17039,11711,428
+Court documents,Q763,Environmental management,829124,4653,11711,203
+Court documents,Q764,Construction,829124,23720,11711,653
+Court documents,Q765,Trade,829124,11549,11711,167
+Court documents,Q766,Transport and logistics,829124,22229,11711,404
+Court documents,Q767,Hospitality and tourism,829124,1599,11711,61
+Court documents,Q768,Media,829124,13117,11711,139
+Court documents,Q769,ICT,829124,1843,11711,43
+Court documents,Q774,Education,829124,6670,11711,709
+Court documents,Q775,Public sector,829124,17245,11711,844
+Court documents,Q779,Finance and insurance,829124,10209,11711,351
+Court documents,Q786,Agriculture,829124,7203,11711,250
+Court documents,Q787,Forestry,829124,7084,11711,242
+Court documents,Q788,Fishing,829124,7598,11711,217
+Court documents,Q818,Water management,829124,5656,11711,228
+Court documents,Q856,Healthcare,829124,614,11711,73
+Laws,Q757,Informal economy,144665,56,4687,12
+Laws,Q760,Extractive,144665,1344,4687,79
+Laws,Q761,Manufacturing,144665,1318,4687,124
+Laws,Q762,Energy supply,144665,4806,4687,248
+Laws,Q763,Environmental management,144665,2092,4687,136
+Laws,Q764,Construction,144665,6097,4687,359
+Laws,Q765,Trade,144665,2510,4687,119
+Laws,Q766,Transport and logistics,144665,4971,4687,291
+Laws,Q767,Hospitality and tourism,144665,1061,4687,114
+Laws,Q768,Media,144665,2279,4687,97
+Laws,Q769,ICT,144665,1990,4687,180
+Laws,Q774,Education,144665,3742,4687,683
+Laws,Q775,Public sector,144665,4655,4687,546
+Laws,Q779,Finance and insurance,144665,6670,4687,593
+Laws,Q786,Agriculture,144665,2278,4687,215
+Laws,Q787,Forestry,144665,764,4687,45
+Laws,Q788,Fishing,144665,1226,4687,134
+Laws,Q818,Water management,144665,2263,4687,112
+Laws,Q856,Healthcare,144665,556,4687,106
+Policies,Q757,Informal economy,717287,1433,32354,228
+Policies,Q760,Extractive,717287,7604,32354,745
+Policies,Q761,Manufacturing,717287,15034,32354,1089
+Policies,Q762,Energy supply,717287,54735,32354,2906
+Policies,Q763,Environmental management,717287,19113,32354,1087
+Policies,Q764,Construction,717287,40072,32354,2953
+Policies,Q765,Trade,717287,20276,32354,1089
+Policies,Q766,Transport and logistics,717287,42546,32354,1901
+Policies,Q767,Hospitality and tourism,717287,11254,32354,1055
+Policies,Q768,Media,717287,7323,32354,524
+Policies,Q769,ICT,717287,18067,32354,1783
+Policies,Q774,Education,717287,26099,32354,6802
+Policies,Q775,Public sector,717287,28249,32354,3219
+Policies,Q779,Finance and insurance,717287,34082,32354,2995
+Policies,Q786,Agriculture,717287,43119,32354,2881
+Policies,Q787,Forestry,717287,11421,32354,571
+Policies,Q788,Fishing,717287,10033,32354,645
+Policies,Q818,Water management,717287,21821,32354,1248
+Policies,Q856,Healthcare,717287,4030,32354,621
+UNFCCC submissions,Q757,Informal economy,427014,835,13001,85
+UNFCCC submissions,Q760,Extractive,427014,5669,13001,253
+UNFCCC submissions,Q761,Manufacturing,427014,11861,13001,324
+UNFCCC submissions,Q762,Energy supply,427014,26262,13001,1172
+UNFCCC submissions,Q763,Environmental management,427014,20302,13001,793
+UNFCCC submissions,Q764,Construction,427014,16090,13001,955
+UNFCCC submissions,Q765,Trade,427014,9380,13001,319
+UNFCCC submissions,Q766,Transport and logistics,427014,22839,13001,671
+UNFCCC submissions,Q767,Hospitality and tourism,427014,7588,13001,530
+UNFCCC submissions,Q768,Media,427014,2791,13001,133
+UNFCCC submissions,Q769,ICT,427014,4772,13001,220
+UNFCCC submissions,Q774,Education,427014,12781,13001,2305
+UNFCCC submissions,Q775,Public sector,427014,14982,13001,1286
+UNFCCC submissions,Q779,Finance and insurance,427014,20006,13001,1466
+UNFCCC submissions,Q786,Agriculture,427014,40156,13001,1835
+UNFCCC submissions,Q787,Forestry,427014,11053,13001,439
+UNFCCC submissions,Q788,Fishing,427014,9157,13001,496
+UNFCCC submissions,Q818,Water management,427014,18874,13001,1004
+UNFCCC submissions,Q856,Healthcare,427014,2577,13001,282
