@@ -6,8 +6,8 @@ from pydantic_ai.usage import RunUsage
 from knowledge_graph.energy import (
     EnergyReport,
     to_ecologits_model,
-    track_energy,
-    track_llm,
+    track_compute_energy_usage,
+    track_llm_energy_usage,
 )
 
 
@@ -28,8 +28,10 @@ def test_to_ecologits_model(model_name, expected):
     assert to_ecologits_model(model_name) == expected
 
 
-def test_track_llm_is_a_no_op_without_tracker():
-    track_llm("openrouter:openai/gpt-5", RunUsage(requests=1, output_tokens=100))
+def test_track_llm_energy_usage_is_a_no_op_without_tracker():
+    track_llm_energy_usage(
+        "openrouter:openai/gpt-5", RunUsage(requests=1, output_tokens=100)
+    )
 
 
 def test_reports_add_up():
@@ -50,14 +52,16 @@ def test_reports_add_up():
     assert total.total_kgco2e == pytest.approx(0.6 + 0.2)
 
 
-def test_track_energy_measures_local_and_estimates_llm():
-    with track_energy() as report:
+def test_track_compute_energy_usage_usage_measures_local_and_estimates_llm():
+    with track_compute_energy_usage() as report:
         sum(i * i for i in range(1_000_000))  # some local work
-        track_llm(
+        track_llm_energy_usage(
             "openrouter:google/gemini-3-flash-preview",
             RunUsage(requests=1, output_tokens=500),
         )
-        track_llm("openrouter:unknown/model", RunUsage(requests=1, output_tokens=500))
+        track_llm_energy_usage(
+            "openrouter:unknown/model", RunUsage(requests=1, output_tokens=500)
+        )
 
     assert report.local_kwh > 0
     assert 0 < report.llm_kwh_min <= report.llm_kwh_max
@@ -70,9 +74,9 @@ def test_track_energy_measures_local_and_estimates_llm():
 
 def test_unknown_model_warns_once():
     with patch("knowledge_graph.energy.get_logger") as mock_get_logger:
-        with track_energy():
+        with track_compute_energy_usage():
             for _ in range(3):
-                track_llm(
+                track_llm_energy_usage(
                     "openrouter:mystery/model-x", RunUsage(requests=1, output_tokens=10)
                 )
 

@@ -1,5 +1,5 @@
 """
-Energy cost measurement for classifier training.
+Energy cost estimation for classifier training.
 
 - Local compute (CPU / GPU / RAM on this machine) is estimated with CodeCarbon. See https://docs.codecarbon.io/latest/explanation/methodology/ for methodology.
 - Remote LLM calls (via OpenRouter) are estimated with EcoLogits, from the
@@ -185,12 +185,18 @@ def _make_energy_tracker() -> BaseEmissionsTracker:
 
 
 @contextmanager
-def track_energy() -> Generator[EnergyReport, None, None]:
+def track_compute_energy_usage() -> Generator[EnergyReport, None, None]:
     """
     Measure the energy used by the code inside the `with` block.
 
-    Local compute is measured by CodeCarbon; LLM calls made inside the block are
-    added by `record_llm_usage`. The report is filled in when the block exits.
+    Local compute (and GPU) is estimated by CodeCarbon; LLM calls made inside the block are
+    added by `track_llm_energy_usage`. The report is filled in when the block exits.
+
+    Example::
+
+        with track_compute_energy_usage() as train_energy:
+            classifier.fit(...)  # any track_llm_energy_usage() calls in here are included
+        train_energy.log(wandb_run, phase="train")
     """
     global _active_report
     if _active_report is not None:
@@ -225,11 +231,11 @@ def track_energy() -> Generator[EnergyReport, None, None]:
                 get_logger().warning(f"CodeCarbon failed to stop: {exc}")
 
 
-def track_llm(model_name: str, usage: RunUsage) -> None:
+def track_llm_energy_usage(model_name: str, usage: RunUsage) -> None:
     """
     Add the estimated energy of a pydantic-ai agent run to the active tracker.
 
-    Does nothing if no EnergyTracker is active, so it's safe to call from
+    Does nothing outside a `track_compute_energy_usage`, so it's safe to call from
     classifier code that also runs outside of training.
 
     EcoLogits' automatic patching (EcoLogits.init(providers=["openai"])) does not work for us.

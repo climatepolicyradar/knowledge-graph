@@ -21,7 +21,7 @@ from knowledge_graph.classifier.classifier import (
     ZeroShotClassifier,
 )
 from knowledge_graph.concept import Concept
-from knowledge_graph.energy import track_llm
+from knowledge_graph.energy import track_llm_energy_usage
 from knowledge_graph.identifiers import ClassifierID
 from knowledge_graph.span import Span, SpanXMLConceptFormattingError
 from knowledge_graph.utils import get_logger
@@ -284,7 +284,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                     temperature=self.temperature,
                 ),  # type: ignore[arg-type]
             )
-            track_llm(self.model_name, response.usage())
+            track_llm_energy_usage(self.model_name, response.usage())
             if isinstance(response.output, str):
                 response.output = LLMResponse(  # type: ignore[assignment]
                     marked_up_text=response.output,
@@ -373,7 +373,7 @@ class BaseLLMClassifier(Classifier, ZeroShotClassifier, VariantEnabledClassifier
                     )
                 batch_spans.append([])
                 continue
-            track_llm(self.model_name, response.usage())
+            track_llm_energy_usage(self.model_name, response.usage())
             if isinstance(response.output, str):
                 response.output = LLMResponse(
                     marked_up_text=response.output,

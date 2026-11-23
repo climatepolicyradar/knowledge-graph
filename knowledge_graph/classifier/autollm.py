@@ -12,7 +12,7 @@ from knowledge_graph.classifier.large_language_model import (
     LLMClassifier,
     LLMClassifierPrompt,
 )
-from knowledge_graph.energy import track_llm
+from knowledge_graph.energy import track_llm_energy_usage
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.operations.evaluate import (
     create_gold_standard_labelled_passages,
@@ -281,7 +281,7 @@ class AutoLLMClassifier(LLMClassifier):
 
         optimiser_response = optimiser_agent.run_sync(formatted_meta_prompt)
 
-        track_llm(optimiser_model_name, optimiser_response.usage())
+        track_llm_energy_usage(optimiser_model_name, optimiser_response.usage())
 
         print(f"Optimiser analysis:\n{optimiser_response.output.analysis}")
 

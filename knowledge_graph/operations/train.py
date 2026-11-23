@@ -37,7 +37,7 @@ from knowledge_graph.cloud import (
 )
 from knowledge_graph.config import WANDB_ENTITY, wandb_model_artifact_filename
 from knowledge_graph.custom_classifier_config import CustomClassifierConfig
-from knowledge_graph.energy import EnergyReport, track_energy
+from knowledge_graph.energy import EnergyReport, track_compute_energy_usage
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
@@ -503,7 +503,7 @@ async def train_classifier(
 
         energy_reports: list[EnergyReport] = []
 
-        with track_energy() as train_energy:
+        with track_compute_energy_usage() as train_energy:
             classifier.fit(
                 labelled_passages=deduplicated_training_data,
                 enable_wandb=track_and_upload,
@@ -589,7 +589,7 @@ async def train_classifier(
             )
 
         if evaluate:
-            with track_energy() as eval_energy:
+            with track_compute_energy_usage() as eval_energy:
                 metrics_df, model_labelled_passages, _ = evaluate_classifier(
                     classifier=classifier,
                     labelled_passages=classifier.concept.labelled_passages,
