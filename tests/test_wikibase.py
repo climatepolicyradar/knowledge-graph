@@ -7,6 +7,7 @@ import pytest
 
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import ClassifierID, StatementRank, WikibaseID
+from knowledge_graph.wikibase import MAX_RETRIES
 
 
 def test_wikibase____init__(MockedWikibaseSession, monkeypatch, mock_wikibase_url):
@@ -677,6 +678,20 @@ async def test_get_raw_entities_async_retries_failed_batches(
     assert len(entities) == 60
     # Two batches, and only the second is fetched again
     assert len(attempts) == 3
+
+
+@pytest.mark.asyncio
+async def test_get_raw_entities_async_gives_up_after_max_retries(
+    MockedWikibaseSession, no_retry_wait
+):
+    session = MockedWikibaseSession()
+    client = await session._get_client()
+    client.get = AsyncMock(side_effect=httpx.ConnectError("connection reset"))
+
+    with pytest.raises(httpx.ConnectError):
+        await session.get_raw_entities_async(["Q10"])
+
+    assert client.get.await_count == MAX_RETRIES
 
 
 @pytest.mark.asyncio
