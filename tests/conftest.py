@@ -312,7 +312,12 @@ def mock_wikibase_redirect_target_json():
 
 @pytest.fixture
 def mock_wikibase_raw_entity():
-    """Full entity JSON as `wbgetentities` returns it."""
+    """
+    Full entity JSON as `wbgetentities` returns it.
+
+    Our Wikibase only has items and properties, so any id that doesn't start
+    with P is built as an item.
+    """
 
     def get_raw_entity(entity_id: str) -> dict:
         is_property = entity_id.startswith("P")
