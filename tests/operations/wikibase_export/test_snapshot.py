@@ -50,6 +50,7 @@ async def test_crawl_tolerates_a_few_entities_deleted_mid_crawl(
     MockedWikibaseSession, monkeypatch
 ):
     session = MockedWikibaseSession()
+    # The mocked session returns Q999 as deleted, so 99 of 100 come back
     ids = [f"Q{i}" for i in range(1000, 1099)] + ["Q999"]
     monkeypatch.setattr(
         session, "get_all_entity_ids_async", AsyncMock(return_value=(ids, ["P1"]))
@@ -70,6 +71,7 @@ async def test_crawl_raises_when_many_listed_entities_are_not_returned(
         "get_all_entity_ids_async",
         AsyncMock(return_value=(["Q10", "Q11", "Q12"], [])),
     )
+    # Only Q10 of the three listed items comes back
     monkeypatch.setattr(
         session,
         "get_raw_entities_async",
