@@ -33,12 +33,21 @@ def test_track_llm_is_a_no_op_without_tracker():
 
 
 def test_reports_add_up():
-    a = EnergyReport(local_kwh=1.0, llm_kwh_min=0.5, llm_kwh_max=1.5, llm_requests=2)
-    b = EnergyReport(local_kwh=2.0, llm_requests=1)
+    a = EnergyReport(
+        local_kwh=1.0,
+        llm_kwh_min=0.5,
+        llm_kwh_max=1.5,
+        llm_requests=2,
+        local_kgco2e=0.2,
+        llm_kgco2e_min=0.1,
+        llm_kgco2e_max=0.3,
+    )
+    b = EnergyReport(local_kwh=2.0, llm_requests=1, local_kgco2e=0.4)
     total = sum([a, b], EnergyReport())
     assert total.local_kwh == 3.0
     assert total.llm_requests == 3
     assert total.total_kwh == 3.0 + 1.0
+    assert total.total_kgco2e == pytest.approx(0.6 + 0.2)
 
 
 def test_track_energy_measures_local_and_estimates_llm():
@@ -54,6 +63,9 @@ def test_track_energy_measures_local_and_estimates_llm():
     assert 0 < report.llm_kwh_min <= report.llm_kwh_max
     assert report.llm_requests == 2
     assert report.llm_requests_not_estimated == 1
+    assert report.local_kgco2e > 0
+    assert 0 < report.llm_kgco2e_min <= report.llm_kgco2e_max
+    assert report.total_kgco2e == report.local_kgco2e + report.llm_kgco2e
 
 
 def test_unknown_model_warns_once():

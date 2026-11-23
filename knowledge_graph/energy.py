@@ -59,16 +59,23 @@ def to_ecologits_model(model_name: str) -> tuple[str, str] | None:
 
 @dataclass
 class EnergyReport:
-    """Energy used by one tracked block of work. All energy values are in kWh."""
+    """
+    Energy and emissions of one tracked block of work.
+
+    Energy values are in kWh; emissions are in kgCO2e.
+    """
 
     local_kwh: float = 0.0
     local_cpu_kwh: float = 0.0
     local_gpu_kwh: float = 0.0
     local_ram_kwh: float = 0.0
     duration_s: float = 0.0
+    local_kgco2e: float = 0.0
     # EcoLogits gives a range, as model sizes / hardware of closed models are uncertain
     llm_kwh_min: float = 0.0
     llm_kwh_max: float = 0.0
+    llm_kgco2e_min: float = 0.0
+    llm_kgco2e_max: float = 0.0
     llm_requests: int = 0
     llm_output_tokens: int = 0
     # LLM requests whose model EcoLogits doesn't know, so aren't in llm_kwh
@@ -84,6 +91,16 @@ class EnergyReport:
         """Measured local energy plus estimated remote LLM energy"""
         return self.local_kwh + self.llm_kwh
 
+    @property
+    def llm_kgco2e(self) -> float:
+        """Midpoint of the EcoLogits emissions estimate range"""
+        return (self.llm_kgco2e_min + self.llm_kgco2e_max) / 2
+
+    @property
+    def total_kgco2e(self) -> float:
+        """Measured local emissions plus estimated remote LLM emissions"""
+        return self.local_kgco2e + self.llm_kgco2e
+
     def __add__(self, other: "EnergyReport") -> "EnergyReport":
         """Add reports field by field"""
         return EnergyReport(
@@ -95,18 +112,27 @@ class EnergyReport:
 
     def to_dict(self) -> dict[str, float]:
         """All fields plus the derived totals"""
-        return asdict(self) | {"llm_kwh": self.llm_kwh, "total_kwh": self.total_kwh}
+        return asdict(self) | {
+            "llm_kwh": self.llm_kwh,
+            "total_kwh": self.total_kwh,
+            "llm_kgco2e": self.llm_kgco2e,
+            "total_kgco2e": self.total_kgco2e,
+        }
 
     def log(self, run: Run | None, phase: str, n_passages: int | None = None) -> None:
         """Log to the console, and to the W&B run summary if a run is given."""
         metrics = self.to_dict()
         if n_passages:
             metrics["total_kwh_per_passage"] = self.total_kwh / n_passages
+            metrics["total_kgco2e_per_passage"] = self.total_kgco2e / n_passages
 
         get_logger().info(
-            f"⚡ {phase} energy: {self.total_kwh:.6f} kWh "
-            f"(local {self.local_kwh:.6f} kWh over {self.duration_s:.1f}s, "
-            f"LLM {self.llm_kwh:.6f} kWh from {self.llm_requests} requests, "
+            f"⚡ {phase} energy: {self.total_kwh:.6f} kWh, "
+            f"{self.total_kgco2e:.6f} kgCO2e "
+            f"(local {self.local_kwh:.6f} kWh / {self.local_kgco2e:.6f} kgCO2e "
+            f"over {self.duration_s:.1f}s, "
+            f"LLM {self.llm_kwh:.6f} kWh / {self.llm_kgco2e:.6f} kgCO2e "
+            f"from {self.llm_requests} requests, "
             f"{self.llm_requests_not_estimated} not estimated)"
         )
         if run is not None:
@@ -194,6 +220,7 @@ def track_energy() -> Generator[EnergyReport, None, None]:
                     report.local_gpu_kwh = data.gpu_energy
                     report.local_ram_kwh = data.ram_energy
                     report.duration_s = data.duration
+                    report.local_kgco2e = data.emissions
             except Exception as exc:
                 get_logger().warning(f"CodeCarbon failed to stop: {exc}")
 
@@ -253,3 +280,11 @@ def track_llm(model_name: str, usage: RunUsage) -> None:
     else:
         report.llm_kwh_min += energy
         report.llm_kwh_max += energy
+    if impacts.usage is not None and impacts.usage.gwp is not None:
+        gwp = impacts.usage.gwp.value
+        if isinstance(gwp, RangeValue):
+            report.llm_kgco2e_min += gwp.min
+            report.llm_kgco2e_max += gwp.max
+        else:
+            report.llm_kgco2e_min += gwp
+            report.llm_kgco2e_max += gwp
