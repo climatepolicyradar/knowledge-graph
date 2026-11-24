@@ -29,9 +29,12 @@ def test_to_ecologits_model(model_name, expected):
 
 
 def test_track_llm_energy_usage_is_a_no_op_without_tracker():
-    track_llm_energy_usage(
-        "openrouter:openai/gpt-5", RunUsage(requests=1, output_tokens=100)
-    )
+    """Calling it outside a tracked block must not raise or estimate anything."""
+    with patch("knowledge_graph.energy.llm_impacts") as mock_llm_impacts:
+        track_llm_energy_usage(
+            "openrouter:openai/gpt-5", RunUsage(requests=1, output_tokens=100)
+        )
+    mock_llm_impacts.assert_not_called()
 
 
 def test_reports_add_up():
