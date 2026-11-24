@@ -44,15 +44,16 @@ deploy-classifiers ids aws_env +OPTS="":
         --promote \
         {{OPTS}}
 
-# just predict Q123 "climatepolicyradar/Q123/abc:v0" "climatepolicyradar/Q123/abc-labelled-passages:v0"
+# just predict Q123 "climatepolicyradar/Q123/abc:v0" "climatepolicyradar/Q123/abc-labelled-passages:v0" [limit] [aws_env]
 # find instances of a concept in passages from a W&B artifact (runs the operation directly, no Prefect)
-predict id classifier_wandb_path labelled_passages_wandb_path:
-    uv run python -c "import asyncio; from knowledge_graph.operations.predict import run_prediction; asyncio.run(run_prediction(wikibase_id='{{id}}', classifier_wandb_path='{{classifier_wandb_path}}', labelled_passages_wandb_path='{{labelled_passages_wandb_path}}'))"
+# aws_env must match the env the classifier was stored in (see its W&B artifact metadata)
+predict id classifier_wandb_path labelled_passages_wandb_path limit="None" aws_env="prod":
+    uv run python -c "import asyncio; from knowledge_graph.cloud import AwsEnv; from knowledge_graph.operations.predict import run_prediction; asyncio.run(run_prediction(wikibase_id='{{id}}', classifier_wandb_path='{{classifier_wandb_path}}', labelled_passages_wandb_path='{{labelled_passages_wandb_path}}', limit={{limit}}, aws_env=AwsEnv('{{aws_env}}')))"
 
-# just predict-documents Q123 "climatepolicyradar/Q123/abc:v0" "CCLW.executive.1.1 CCLW.executive.2.2"
+# just predict-documents Q123 "climatepolicyradar/Q123/abc:v0" "CCLW.executive.1.1 CCLW.executive.2.2" [limit]
 # find concept instances in passages for Snowflake document IDs (uses local ~/.snowflake/config.toml)
-predict-documents id classifier_wandb_path document_ids:
-    uv run python -c "import asyncio; from knowledge_graph.operations.predict import load_passages_from_snowflake, run_prediction; passages = load_passages_from_snowflake('{{document_ids}}'.split()); asyncio.run(run_prediction(wikibase_id='{{id}}', classifier_wandb_path='{{classifier_wandb_path}}', input_passages=passages))"
+predict-documents id classifier_wandb_path document_ids limit="None":
+    uv run python -c "import asyncio; from knowledge_graph.operations.predict import load_passages_from_snowflake, run_prediction; passages = load_passages_from_snowflake('{{document_ids}}'.split()); asyncio.run(run_prediction(wikibase_id='{{id}}', classifier_wandb_path='{{classifier_wandb_path}}', input_passages=passages, limit={{limit}}))"
 
 # Run inference over documents in a pipeline bucket
 infer +OPTS="":
