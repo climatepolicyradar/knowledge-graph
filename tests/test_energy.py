@@ -46,13 +46,17 @@ def test_reports_add_up():
         local_kgco2e=0.2,
         llm_kgco2e_min=0.1,
         llm_kgco2e_max=0.3,
+        local_water_l=0.5,
+        llm_water_l_min=1.0,
+        llm_water_l_max=3.0,
     )
-    b = EnergyReport(local_kwh=2.0, llm_requests=1, local_kgco2e=0.4)
+    b = EnergyReport(local_kwh=2.0, llm_requests=1, local_kgco2e=0.4, local_water_l=0.5)
     total = sum([a, b], EnergyReport())
     assert total.local_kwh == 3.0
     assert total.llm_requests == 3
     assert total.total_kwh == 3.0 + 1.0
     assert total.total_kgco2e == pytest.approx(0.6 + 0.2)
+    assert total.total_water_l == pytest.approx(1.0 + 2.0)
 
 
 def test_track_compute_energy_usage_usage_measures_local_and_estimates_llm():
@@ -73,6 +77,9 @@ def test_track_compute_energy_usage_usage_measures_local_and_estimates_llm():
     assert report.local_kgco2e > 0
     assert 0 < report.llm_kgco2e_min <= report.llm_kgco2e_max
     assert report.total_kgco2e == report.local_kgco2e + report.llm_kgco2e
+    assert report.local_water_l > 0
+    assert 0 < report.llm_water_l_min <= report.llm_water_l_max
+    assert report.total_water_l == report.local_water_l + report.llm_water_l
 
 
 def test_unknown_model_warns_once():
