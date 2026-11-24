@@ -308,9 +308,5 @@ class _BaseParserOutputFieldsMixin(BaseModel, Generic[PDFDataT, PDFTextBlockT]):
         )
 
 
-class BaseParserOutput(_BaseParserOutputFieldsMixin[PDFData, PDFTextBlock]):
-    """Base class for an output to a parser (v1)."""
-
-
 class BaseParserOutputV2(_BaseParserOutputFieldsMixin[PDFDataV2, PDFTextBlockV2]):
     """Base class for an output from a parser (v2)."""
