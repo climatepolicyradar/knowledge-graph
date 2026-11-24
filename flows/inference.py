@@ -39,7 +39,7 @@ from flows.classifier_specs.spec_interface import (
     should_skip_doc,
 )
 from flows.config import Config, validate_s3_prefix
-from flows.models import BaseParserOutput, BaseParserOutputV2, BlockType
+from flows.models import BaseParserOutputV2, BlockType
 from flows.utils import (
     DocumentImportId,
     DocumentStem,
@@ -98,8 +98,7 @@ FilterResult = NamedTuple(
     "FilterResult",
     [("removed", Sequence[DocumentStem]), ("accepted", Sequence[DocumentStem])],
 )
-ParserOutput: TypeAlias = BaseParserOutput | BaseParserOutputV2
-InputSchema: TypeAlias = Literal["v1", "v2"]
+ParserOutput: TypeAlias = BaseParserOutputV2
 
 
 class BatchInferenceResult(BaseModel):
@@ -530,25 +529,10 @@ def generate_document_source_key(config: Config, document_stem: DocumentStem) ->
     )
 
 
-def _stringify(text: list[str]) -> str:
-    return " ".join([line.strip() for line in text])
-
-
 def document_passages(
-    document: BaseParserOutput,
-) -> Generator[tuple[str, str, Optional[int]], None, None]:
-    """Yield the text block irrespective of content type."""
-    text_blocks = document.get_text_blocks()
-
-    for text_block in text_blocks:
-        if text_block.type not in BLOCKED_BLOCK_TYPES:  # pyright: ignore[reportAttributeAccessIssue]
-            yield _stringify(text_block.text), text_block.text_block_id, None  # pyright: ignore[reportAttributeAccessIssue]
-
-
-def document_passages_v2(
     document: BaseParserOutputV2,
 ) -> Generator[tuple[str, str, int], None, None]:
-    """Yield v2 text blocks as `(text, id)` tuples."""
+    """Yield non-blocked text blocks as `(text, id, idx)` tuples."""
     text_blocks = document.get_text_blocks()
 
     for text_block in text_blocks:
@@ -714,7 +698,6 @@ async def load_document(
     config: Config,
     document_result: SingleDocumentInferenceResult,
     s3_client: S3Client,
-    input_schema: InputSchema = "v1",
 ) -> SingleDocumentInferenceResult:
     """Download and opens a parser output based on a document ID."""
     file_key = generate_document_source_key(
@@ -723,12 +706,7 @@ async def load_document(
     ).key
     s3_file = await download_s3_file(config=config, key=file_key, s3_client=s3_client)
 
-    if input_schema == "v1":
-        document = BaseParserOutput.model_validate_json(s3_file.content)
-    elif input_schema == "v2":
-        document = BaseParserOutputV2.model_validate_json(s3_file.content)
-    else:
-        raise ValueError(f"Invalid input_schema: {input_schema}")
+    document = BaseParserOutputV2.model_validate_json(s3_file.content)
 
     if is_noop_document(document):
         document_result.noop = True
@@ -739,22 +717,9 @@ async def load_document(
     return document_result
 
 
-def should_store_labelled_passages(
-    input_schema: InputSchema, spans: list[Span]
-) -> bool:
-    """
-    Utility validating if labelled_passages should be stored for a passage.
-
-    For v1 we always store because we rely on positional ordering. For v2 we
-    only store if there are actually results.
-    """
-    return input_schema == "v1" or (input_schema == "v2" and bool(spans))
-
-
 async def run_classifier_inference_on_document(
     result: SingleDocumentInferenceResult,
     classifier: Classifier,
-    input_schema: InputSchema = "v1",
 ) -> SingleDocumentInferenceResult:
     """Run the classifier inference flow on a document."""
     logger = get_logger()
@@ -762,14 +727,8 @@ async def run_classifier_inference_on_document(
     assert result.document_last_modified  # For typing
     assert result.document_etag  # For typing
 
-    if input_schema == "v1":
-        document = cast(BaseParserOutput, result.document)
-        passages = list(document_passages(document))
-    elif input_schema == "v2":
-        document = cast(BaseParserOutputV2, result.document)
-        passages = list(document_passages_v2(document))
-    else:
-        raise ValueError(f"Invalid input_schema: {input_schema}")
+    document = cast(BaseParserOutputV2, result.document)
+    passages = list(document_passages(document))
 
     all_text = [text for text, _, _ in passages]
     all_spans: list[list[Span]] = classifier.predict(
@@ -780,13 +739,13 @@ async def run_classifier_inference_on_document(
     result.labelled_passages = []
 
     for spans, (text, block_id, block_idx) in zip(all_spans, passages):
-        if should_store_labelled_passages(input_schema, spans):
+        if spans:
             _validate_spans(spans)
             labelled_passage = _get_labelled_passage_from_prediction(
                 classifier,
                 spans,
                 block_id,
-                block_idx if input_schema == "v2" else None,
+                block_idx,
                 text,
                 result.classifier_spec,
                 result.document_etag,
@@ -907,7 +866,6 @@ async def _inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
-    input_schema: InputSchema = "v1",
 ) -> BatchInferenceResult | Fault:
     """
     Run classifier inference on a batch of documents.
@@ -969,7 +927,7 @@ async def _inference_batch_of_documents(
                 semaphore,
                 return_with(
                     document_result.document_stem,
-                    load_document(config, document_result, s3_client, input_schema),
+                    load_document(config, document_result, s3_client),
                 ),
             )
             for document_result in documents_results
@@ -1010,7 +968,6 @@ async def _inference_batch_of_documents(
                 run_classifier_inference_on_document(
                     result=load_result,
                     classifier=classifier,
-                    input_schema=input_schema,
                 ),
             ),
         )
@@ -1120,13 +1077,11 @@ async def inference_batch_of_documents_cpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
-    input_schema: InputSchema = "v1",
 ) -> BatchInferenceResult | Fault:
     return await _inference_batch_of_documents(
         batch,
         config_json,
         classifier_spec_json,
-        input_schema,
     )
 
 
@@ -1140,13 +1095,11 @@ async def inference_batch_of_documents_gpu(
     batch: list[DocumentStem],
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
-    input_schema: InputSchema = "v1",
 ) -> BatchInferenceResult | Fault:
     return await _inference_batch_of_documents(
         batch,
         config_json,
         classifier_spec_json,
-        input_schema,
     )
 
 
@@ -1313,7 +1266,6 @@ async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     document_ids_s3_path: str | None = None,
-    input_schema: InputSchema = "v1",
     inference_document_source_prefix: str | None = None,
     inference_document_target_prefix: str | None = None,
     config: Config | None = None,
@@ -1330,7 +1282,6 @@ async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     document_ids_s3_path: str | None = None,
-    input_schema: InputSchema = "v1",
     inference_document_source_prefix: str | None = None,
     inference_document_target_prefix: str | None = None,
     config: Config | None = None,
@@ -1350,7 +1301,6 @@ async def inference(
     classifier_specs: Sequence[ClassifierSpec] | None = None,
     document_ids: Sequence[DocumentImportId] | None = None,
     document_ids_s3_path: str | None = None,
-    input_schema: InputSchema = "v1",
     inference_document_source_prefix: str | None = None,
     inference_document_target_prefix: str | None = None,
     config: Config | None = None,
@@ -1373,8 +1323,6 @@ async def inference(
     - document_ids_s3_path: S3 path string (e.g., "s3://bucket/key") to a file
         containing document IDs (one per line). Mutually exclusive with document_ids
         parameter.
-    - input_schema: Schema version of parser output documents in the source prefix
-        v1 for legacy, v2 for chunked text.
     - inference_document_source_prefix: Optional source prefix override for reading
         input documents.
     - inference_document_target_prefix: Optional target prefix override for writing
@@ -1450,7 +1398,6 @@ async def inference(
             "batch": document_batch,
             "config_json": config.to_json(),
             "classifier_spec_json": classifier_spec.model_dump(),
-            "input_schema": input_schema,
         }
 
     # Prepare document batches based on classifier specs

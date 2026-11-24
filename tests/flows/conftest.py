@@ -21,15 +21,13 @@ from prefect_aws.s3 import S3Bucket
 from pydantic import SecretStr
 from types_aiobotocore_s3.client import S3Client
 
-from flows.config import Config
+from flows.config import INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT, Config
 from flows.inference import S3_BLOCK_RESULTS_CACHE
 from flows.models import (
-    BaseParserOutput,
+    BaseParserOutputV2,
     BlockType,
-    HTMLData,
-    HTMLTextBlock,
-    PDFData,
-    PDFTextBlock,
+    PDFDataV2,
+    PDFTextBlockV2,
 )
 from flows.utils import DocumentStem
 from flows.wikibase_to_s3 import Config as WikibaseToS3Config
@@ -195,7 +193,7 @@ async def mock_async_bucket_documents(mock_s3_async_client, mock_async_bucket):
     for file_name in fixture_files:
         data = load_fixture(file_name)
         body = BytesIO(data.encode("utf-8"))
-        key = os.path.join("embeddings_input", file_name)
+        key = os.path.join(INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT, file_name)
         await mock_s3_async_client.put_object(
             Bucket=mock_async_bucket, Key=key, Body=body, ContentType="application/json"
         )
@@ -211,7 +209,7 @@ async def mock_async_bucket_multiple_sources(mock_s3_async_client, mock_async_bu
     ]
     for file_name in fixture_files:
         body = BytesIO("".encode("utf-8"))
-        key = os.path.join("embeddings_input", file_name)
+        key = os.path.join(INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT, file_name)
         await mock_s3_async_client.put_object(
             Bucket=mock_async_bucket, Key=key, Body=body, ContentType="application/json"
         )
@@ -293,51 +291,41 @@ def local_classifier_id(mock_classifiers_dir):
     yield wikibase_id, classifier_id, wandb_registry_version
 
 
+def _pdf_text_block_v2(text: str, id: str, idx: int) -> PDFTextBlockV2:
+    unit_square = [
+        {"x": 0, "y": 0},
+        {"x": 1, "y": 0},
+        {"x": 1, "y": 1},
+        {"x": 0, "y": 1},
+    ]
+    return PDFTextBlockV2.model_validate(
+        {
+            "text": text,
+            "id": id,
+            "idx": idx,
+            "pages": [{"number": 1, "bounding_boxes": [{"coordinates": unit_square}]}],
+            "type": BlockType.TEXT,
+            "type_confidence": 0.5,
+        }
+    )
+
+
 @pytest.fixture
-def parser_output() -> Generator[BaseParserOutput, None, None]:
-    yield BaseParserOutput(
+def parser_output() -> Generator[BaseParserOutputV2, None, None]:
+    yield BaseParserOutputV2(
         document_id="test id",
     )
 
 
 @pytest.fixture
-def parser_output_html(parser_output) -> Generator[BaseParserOutput, None, None]:
+def parser_output_pdf(parser_output) -> Generator[BaseParserOutputV2, None, None]:
     parser_output = parser_output.model_copy()
-    parser_output.document_content_type = "text/html"
-    parser_output.html_data = HTMLData(
-        has_valid_text=True,
-        text_blocks=[
-            HTMLTextBlock(
-                text=["test html text"],
-                text_block_id="1",
-                type=BlockType.TEXT,
-                type_confidence=0.5,
-            )
-        ],
-    )
-    yield parser_output
-
-
-@pytest.fixture
-def parser_output_pdf(parser_output) -> Generator[BaseParserOutput, None, None]:
-    parser_output = parser_output.model_copy()
-    # When the content type is pdf
     parser_output.document_content_type = "application/pdf"
     parser_output.html_data = None
-    parser_output.pdf_data = PDFData(
+    parser_output.pdf_data = PDFDataV2(
         page_metadata=[],
         md5sum="",
-        text_blocks=[
-            PDFTextBlock(
-                text=["test pdf text"],
-                text_block_id="2",
-                page_number=1,
-                coords=[],
-                idx=1,
-                type=BlockType.TEXT,
-                type_confidence=0.5,
-            )
-        ],
+        text_blocks=[_pdf_text_block_v2(text="test pdf text", id="2", idx=1)],
     )
     yield parser_output
 
@@ -345,24 +333,15 @@ def parser_output_pdf(parser_output) -> Generator[BaseParserOutput, None, None]:
 @pytest.fixture
 def parser_output_html_converted_to_pdf(
     parser_output,
-) -> Generator[BaseParserOutput, None, None]:
+) -> Generator[BaseParserOutputV2, None, None]:
     """A parser output that has been converted from html to pdf."""
     parser_output = parser_output.model_copy()
     parser_output.document_content_type = "text/html"
     parser_output.html_data = None
-    parser_output.pdf_data = PDFData(
+    parser_output.pdf_data = PDFDataV2(
         page_metadata=[],
         md5sum="",
-        text_blocks=[
-            PDFTextBlock(
-                text=["test pdf text"],
-                text_block_id="2",
-                page_number=1,
-                coords=[],
-                type=BlockType.TEXT,
-                type_confidence=0.5,
-            )
-        ],
+        text_blocks=[_pdf_text_block_v2(text="test pdf text", id="2", idx=0)],
     )
     yield parser_output
 
