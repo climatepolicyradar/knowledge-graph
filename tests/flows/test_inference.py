@@ -15,6 +15,7 @@ from botocore.client import ClientError
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext
 from prefect.states import Completed, Running
+from pydantic import ValidationError
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
@@ -444,6 +445,65 @@ async def test_load_document(
         s3_client=mock_s3_async_client,
     )
     assert isinstance(result.document, BaseParserOutputV2)
+
+
+_HTML_DOCUMENT = {
+    "document_id": "HTML.document.0.1",
+    "document_content_type": "text/html",
+    "languages": ["en"],
+    "html_data": {
+        "has_valid_text": True,
+        "text_blocks": [
+            {
+                "text": ["Some valid English text"],
+                "text_block_id": "b0",
+                "type": "Text",
+                "type_confidence": 0.5,
+            }
+        ],
+    },
+    "pdf_data": None,
+}
+
+
+def test_parser_output_v2_rejects_html_data():
+    with pytest.raises(ValidationError, match="html_data isn't supported"):
+        BaseParserOutputV2.model_validate(_HTML_DOCUMENT)
+
+
+@pytest.mark.asyncio
+async def test_load_document__html_document_is_rejected(
+    test_config, mock_async_bucket, mock_s3_async_client
+):
+    """An English HTML document fails at load, rather than mid-extraction."""
+    document_stem = DocumentStem(_HTML_DOCUMENT["document_id"])
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
+        Key=os.path.join(
+            test_config.inference_document_source_prefix, f"{document_stem}.json"
+        ),
+        Body=BytesIO(json.dumps(_HTML_DOCUMENT).encode("utf-8")),
+        ContentType="application/json",
+    )
+    document_result = SingleDocumentInferenceResult(
+        document_stem=document_stem,
+        document=None,
+        labelled_passages=[],
+        document_etag=None,
+        document_last_modified=None,
+        classifier_spec=ClassifierSpec(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("testabcd"),
+            wandb_registry_version="v1",
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="html_data isn't supported"):
+        await load_document(
+            test_config,
+            document_result=document_result,
+            s3_client=mock_s3_async_client,
+        )
 
 
 def test_document_passages__blocked_types(parser_output_pdf):
