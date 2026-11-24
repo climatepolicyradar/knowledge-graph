@@ -677,15 +677,7 @@ def is_noop_document(document: ParserOutput) -> bool:
     This is a check on the text to ensure it is valid. If text is not valid then
     True will be returned to indicate that no operation should occur on the document.
     """
-    no_text_and_no_languages = (
-        not document.languages
-        and document.pdf_data is None
-        and document.html_data is None
-    )
-    html_and_invalid_text = (
-        document.html_data is not None and not document.html_data.has_valid_text
-    )
-    if no_text_and_no_languages or html_and_invalid_text:  # No valid text
+    if not document.languages and document.pdf_data is None:  # No valid text
         return True
 
     if document.languages != ["en"]:  # Non valid language
