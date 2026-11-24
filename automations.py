@@ -19,7 +19,6 @@ from prefect_slack.credentials import SlackWebhook
 
 from flows.classifiers_profiles import SYNC_FINISHED_EVENT_NAME, SYNC_RESOURCE_ID
 from flows.inference import inference
-from flows.topic_pipeline import topic_pipeline
 from knowledge_graph.cloud import AwsEnv, generate_deployment_name
 
 # Create logger
@@ -236,15 +235,7 @@ async def main() -> None:
     client = get_client()
     logger.info(
         "Loading deployment for sync classifiers profiles trigger: %s",
-        topic_pipeline.name,
-    )
-    topic_pipeline_deployment = await client.read_deployment_by_name(
-        name=flow_deployment_names_id(
-            topic_pipeline.name, generate_deployment_name(topic_pipeline.name, aws_env)
-        )
-    )
-    logger.info(
-        f"Loaded deployment: name={topic_pipeline_deployment.name}, flow_id={topic_pipeline_deployment.flow_id}",
+        inference.name,
     )
     inference_v2_deployment_name = (
         f"{generate_deployment_name(inference.name, aws_env)}-v2"
@@ -261,8 +252,8 @@ async def main() -> None:
     )
 
     sync_automation = Automation(
-        name=f"sync-classifiers-profiles-triggers-{topic_pipeline_deployment.name}",
-        description=f"Trigger topic pipeline and inference-v2 when syncing classifiers profiles finishes in {aws_env.value}.",
+        name=f"sync-classifiers-profiles-triggers-{inference_v2_deployment.name}",
+        description=f"Trigger inference-v2 when syncing classifiers profiles finishes in {aws_env.value}.",
         enabled=True,
         trigger=automations.EventTrigger(
             expect={SYNC_FINISHED_EVENT_NAME},

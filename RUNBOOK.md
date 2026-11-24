@@ -331,11 +331,6 @@ data in Argilla; see [Sample for evaluation set](#sample-for-evaluation-set).
 Also check AWS credentials are configured before starting the container, that `.env` has everything,
 and that the classifier specs directory is reachable from inside it.
 
-## Deploys and pipelines
-
-Inference → aggregation, individually or as `topic_pipeline`. Explained in the
-[root README](./README.md#pipelines). Indexing is a
-separate flow you run yourself.
 
 ### Check whether a deploy has landed
 
