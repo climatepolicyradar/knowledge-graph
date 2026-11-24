@@ -37,6 +37,7 @@ from knowledge_graph.cloud import (
 )
 from knowledge_graph.config import WANDB_ENTITY, wandb_model_artifact_filename
 from knowledge_graph.custom_classifier_config import CustomClassifierConfig
+from knowledge_graph.energy import EnergyReport, track_compute_energy_usage
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import ArgillaConfig
@@ -499,11 +500,17 @@ async def train_classifier(
         fit_kwargs: dict[str, Any] = {}
         if seed is not None:
             fit_kwargs["seed"] = seed
-        classifier.fit(
-            labelled_passages=deduplicated_training_data,
-            enable_wandb=track_and_upload,
-            **fit_kwargs,
-        )
+
+        energy_reports: list[EnergyReport] = []
+
+        with track_compute_energy_usage() as train_energy:
+            classifier.fit(
+                labelled_passages=deduplicated_training_data,
+                enable_wandb=track_and_upload,
+                **fit_kwargs,
+            )
+        train_energy.log(run, phase="train")
+        energy_reports.append(train_energy)
 
         # Log the final prompt to W&B. Useful for AutoLLMClassifier, which
         # optimises the prompt during fit, meaning the final prompt differs from the
@@ -582,12 +589,19 @@ async def train_classifier(
             )
 
         if evaluate:
-            metrics_df, model_labelled_passages, _ = evaluate_classifier(
-                classifier=classifier,
-                labelled_passages=classifier.concept.labelled_passages,
-                wandb_run=run,
-                batch_size=50,
+            with track_compute_energy_usage() as eval_energy:
+                metrics_df, model_labelled_passages, _ = evaluate_classifier(
+                    classifier=classifier,
+                    labelled_passages=classifier.concept.labelled_passages,
+                    wandb_run=run,
+                    batch_size=50,
+                )
+            eval_energy.log(
+                run,
+                phase="eval",
+                n_passages=len(classifier.concept.labelled_passages),
             )
+            energy_reports.append(eval_energy)
 
             if track_and_upload and run:
                 logger.info("📄 Creating labelled passages artifact")
@@ -599,6 +613,7 @@ async def train_classifier(
                 )
                 logger.info("✅ Labelled passages uploaded successfully")
 
+        sum(energy_reports, EnergyReport()).log(run, phase="total")
     return classifier
 
 

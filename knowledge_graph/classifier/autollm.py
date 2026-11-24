@@ -12,6 +12,7 @@ from knowledge_graph.classifier.large_language_model import (
     LLMClassifier,
     LLMClassifierPrompt,
 )
+from knowledge_graph.energy import track_llm_energy_usage
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.operations.evaluate import (
     create_gold_standard_labelled_passages,
@@ -158,6 +159,7 @@ class AutoLLMClassifier(LLMClassifier):
             # Create new guidelines and prompt using optimiser model
             new_guidelines = self._generate_new_labelling_guidelines(
                 optimiser_agent=optimiser_agent,
+                optimiser_model_name=optimiser_model_name,
                 meta_prompt=meta_prompt,
                 current_prompt=current_prompt,
                 predictions_df=current_predictions_df,
@@ -249,6 +251,7 @@ class AutoLLMClassifier(LLMClassifier):
     def _generate_new_labelling_guidelines(
         self,
         optimiser_agent: Agent[None, OptimiserResponse],
+        optimiser_model_name: str,
         meta_prompt: str,
         current_prompt: LLMClassifierPrompt,
         predictions_df: pd.DataFrame,
@@ -277,6 +280,8 @@ class AutoLLMClassifier(LLMClassifier):
         )
 
         optimiser_response = optimiser_agent.run_sync(formatted_meta_prompt)
+
+        track_llm_energy_usage(optimiser_model_name, optimiser_response.usage())
 
         print(f"Optimiser analysis:\n{optimiser_response.output.analysis}")
 

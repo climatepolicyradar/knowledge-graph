@@ -49,6 +49,8 @@ dependencies = [
   "scikit-learn>=1.6.1",
   "gitpython>=3.1.45",
   "snowflake-connector-python[secure-local-storage]>=4.4.0",
+  "codecarbon>=3.3.2",
+  "ecologits>=0.11.3",
 ]
 
 [project.optional-dependencies]
