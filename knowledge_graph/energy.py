@@ -16,7 +16,7 @@ from codecarbon import EmissionsTracker, OfflineEmissionsTracker
 from codecarbon.emissions_tracker import BaseEmissionsTracker
 from codecarbon.input import DataSource
 from ecologits.tracers.utils import llm_impacts
-from ecologits.utils.range_value import RangeValue
+from ecologits.utils.range_value import RangeValue, ValueOrRange
 from pydantic_ai.usage import RunUsage
 from wandb.sdk.wandb_run import Run
 
@@ -60,9 +60,9 @@ def to_ecologits_model(model_name: str) -> tuple[str, str] | None:
 @dataclass
 class EnergyReport:
     """
-    Energy and emissions of one tracked block of work.
+    Energy, emissions, and water of one tracked block of work.
 
-    Energy values are in kWh; emissions are in kgCO2e.
+    Energy values are in kWh, emissions are in kgCO2e, and water in litres.
     """
 
     local_kwh: float = 0.0
@@ -71,11 +71,14 @@ class EnergyReport:
     local_ram_kwh: float = 0.0
     duration_s: float = 0.0
     local_kgco2e: float = 0.0
+    local_water_l: float = 0.0
     # EcoLogits gives a range, as model sizes / hardware of closed models are uncertain
     llm_kwh_min: float = 0.0
     llm_kwh_max: float = 0.0
     llm_kgco2e_min: float = 0.0
     llm_kgco2e_max: float = 0.0
+    llm_water_l_min: float = 0.0
+    llm_water_l_max: float = 0.0
     llm_requests: int = 0
     llm_output_tokens: int = 0
     # LLM requests whose model EcoLogits doesn't know, so aren't in llm_kwh
@@ -101,6 +104,16 @@ class EnergyReport:
         """Measured local emissions plus estimated remote LLM emissions"""
         return self.local_kgco2e + self.llm_kgco2e
 
+    @property
+    def llm_water_l(self) -> float:
+        """Midpoint of the EcoLogits water estimate range"""
+        return (self.llm_water_l_min + self.llm_water_l_max) / 2
+
+    @property
+    def total_water_l(self) -> float:
+        """Local cooling water plus estimated remote LLM water"""
+        return self.local_water_l + self.llm_water_l
+
     def __add__(self, other: "EnergyReport") -> "EnergyReport":
         """Add reports field by field"""
         return EnergyReport(
@@ -117,6 +130,8 @@ class EnergyReport:
             "total_kwh": self.total_kwh,
             "llm_kgco2e": self.llm_kgco2e,
             "total_kgco2e": self.total_kgco2e,
+            "llm_water_l": self.llm_water_l,
+            "total_water_l": self.total_water_l,
         }
 
     def log(self, run: Run | None, phase: str, n_passages: int | None = None) -> None:
@@ -125,14 +140,17 @@ class EnergyReport:
         if n_passages:
             metrics["total_kwh_per_passage"] = self.total_kwh / n_passages
             metrics["total_kgco2e_per_passage"] = self.total_kgco2e / n_passages
+            metrics["total_water_l_per_passage"] = self.total_water_l / n_passages
 
         get_logger().info(
             f"⚡ {phase} energy: {self.total_kwh:.6f} kWh, "
+            f"{self.total_kgco2e:.6f} kgCO2e, {self.total_water_l:.6f} L water "
             f"{self.total_kgco2e:.6f} kgCO2e "
             f"(local {self.local_kwh:.6f} kWh / {self.local_kgco2e:.6f} kgCO2e "
             f"over {self.duration_s:.1f}s, "
             f"LLM {self.llm_kwh:.6f} kWh / {self.llm_kgco2e:.6f} kgCO2e "
             f"from {self.llm_requests} requests, "
+            f"{self.llm_water_l:.6f} L from {self.llm_requests} requests, "
             f"{self.llm_requests_not_estimated} not estimated)"
         )
         if run is not None:
@@ -144,6 +162,9 @@ class EnergyReport:
 # Country of the default AWS region our pipelines run in (eu-west-1 = Dublin), used when
 # CodeCarbon can't look up location i.e. OfflineEmissionsTracker.
 AWS_REGION_COUNTRY_ISO_CODE = "IRL"
+# Water Usage Effectiveness of AWS data centres (L/kWh). AWS Europe (Ireland) for 2025, from
+# https://sustainability.aboutamazon.com/aws-sustainability-fact-sheets/aws-fact-sheet-ireland.pdf.
+AWS_WUE_L_PER_KWH = 0.02
 
 
 _active_report: EnergyReport | None = None
@@ -169,7 +190,7 @@ def _make_energy_tracker() -> BaseEmissionsTracker:
     settings = {"save_to_file": False, "log_level": "error"}
     if _location_lookup_check():
         try:
-            return EmissionsTracker(**settings)
+            return EmissionsTracker(wue=AWS_WUE_L_PER_KWH, **settings)
         except Exception as e:
             get_logger().warning(
                 f"Online CodeCarbon tracker failed, using offline: {e}"
@@ -180,7 +201,9 @@ def _make_energy_tracker() -> BaseEmissionsTracker:
             f"with country {AWS_REGION_COUNTRY_ISO_CODE}"
         )
     return OfflineEmissionsTracker(
-        country_iso_code=AWS_REGION_COUNTRY_ISO_CODE, **settings
+        country_iso_code=AWS_REGION_COUNTRY_ISO_CODE,
+        wue=AWS_WUE_L_PER_KWH,
+        **settings,
     )
 
 
@@ -227,8 +250,16 @@ def track_compute_energy_usage() -> Generator[EnergyReport, None, None]:
                     report.local_ram_kwh = data.ram_energy
                     report.duration_s = data.duration
                     report.local_kgco2e = data.emissions
+                    report.local_water_l = data.water_consumed
             except Exception as exc:
                 get_logger().warning(f"CodeCarbon failed to stop: {exc}")
+
+
+def _min_max(value: ValueOrRange) -> tuple[float, float]:
+    """EcoLogits values are either a number or a RangeValue: return (min, max)."""
+    if isinstance(value, RangeValue):
+        return value.min, value.max
+    return value, value
 
 
 def track_llm_energy_usage(model_name: str, usage: RunUsage) -> None:
@@ -279,18 +310,16 @@ def track_llm_energy_usage(model_name: str, usage: RunUsage) -> None:
             )
         return
 
-    energy = impacts.energy.value
-    if isinstance(energy, RangeValue):
-        report.llm_kwh_min += energy.min
-        report.llm_kwh_max += energy.max
-    else:
-        report.llm_kwh_min += energy
-        report.llm_kwh_max += energy
+    kwh_min, kwh_max = _min_max(impacts.energy.value)
+    report.llm_kwh_min += kwh_min
+    report.llm_kwh_max += kwh_max
+
     if impacts.usage is not None and impacts.usage.gwp is not None:
-        gwp = impacts.usage.gwp.value
-        if isinstance(gwp, RangeValue):
-            report.llm_kgco2e_min += gwp.min
-            report.llm_kgco2e_max += gwp.max
-        else:
-            report.llm_kgco2e_min += gwp
-            report.llm_kgco2e_max += gwp
+        gwp_min, gwp_max = _min_max(impacts.usage.gwp.value)
+        report.llm_kgco2e_min += gwp_min
+        report.llm_kgco2e_max += gwp_max
+
+    if impacts.usage is not None and impacts.usage.wcf is not None:
+        water_min, water_max = _min_max(impacts.usage.wcf.value)
+        report.llm_water_l_min += water_min
+        report.llm_water_l_max += water_max
