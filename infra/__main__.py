@@ -65,6 +65,21 @@ if stack == "production":
     production_knowledge_graph_feather_files_bucket = aws.s3.Bucket(
         "production-knowledge-graph-feather-files-bucket",
         bucket="cpr-kg-feather-files",
+        versioning=aws.s3.BucketVersioningArgs(enabled=True),
+        lifecycle_rules=[
+            aws.s3.BucketLifecycleRuleArgs(
+                enabled=True,
+                id="noncurrent-version-cleanup-90d",
+                noncurrent_version_expiration=aws.s3.BucketLifecycleRuleNoncurrentVersionExpirationArgs(
+                    days=90,
+                ),
+            ),
+            aws.s3.BucketLifecycleRuleArgs(
+                enabled=True,
+                id="abort-incomplete-multipart-uploads",
+                abort_incomplete_multipart_upload_days=7,
+            ),
+        ],
         grants=[
             aws.s3.BucketGrantArgs(
                 id="0fedc730a2af259d90402b1197e87cf40c4014a20851f540cac4269c0156abb9",
@@ -119,4 +134,36 @@ if stack == "production":
         "production-knowledge-graph-feather-files-bucket-policy",
         bucket=production_knowledge_graph_feather_files_bucket.id,
         policy=labs_cross_account_policy.json,
+    )
+
+    policy_mentions_classifier_bucket = aws.s3.get_bucket(
+        bucket="policy-mentions-classifier"
+    )
+    policy_mentions_classifier_versioning = aws.s3.BucketVersioningV2(
+        "production-policy-mentions-classifier-versioning",
+        bucket=policy_mentions_classifier_bucket.bucket,
+        versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            status="Enabled",
+        ),
+    )
+    aws.s3.BucketLifecycleConfigurationV2(
+        "production-policy-mentions-classifier-lifecycle",
+        bucket=policy_mentions_classifier_bucket.bucket,
+        rules=[
+            aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                id="noncurrent-version-cleanup-90d",
+                status="Enabled",
+                filter=aws.s3.BucketLifecycleConfigurationV2RuleFilterArgs(),
+                noncurrent_version_expiration=aws.s3.BucketLifecycleConfigurationV2RuleNoncurrentVersionExpirationArgs(
+                    noncurrent_days=90,
+                ),
+                abort_incomplete_multipart_upload=aws.s3.BucketLifecycleConfigurationV2RuleAbortIncompleteMultipartUploadArgs(
+                    days_after_initiation=7,
+                ),
+                expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(
+                    expired_object_delete_marker=True,
+                ),
+            ),
+        ],
+        opts=pulumi.ResourceOptions(depends_on=[policy_mentions_classifier_versioning]),
     )
