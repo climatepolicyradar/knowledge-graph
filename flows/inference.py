@@ -566,6 +566,7 @@ class SingleDocumentInferenceResult(BaseModel):
     document_last_modified: Optional[datetime]
     classifier_spec: ClassifierSpec
     noop: bool = False  # Flag nothing was done / needs doing
+    n_passages: int = 0
 
 
 def generate_s3_uri_output(
@@ -771,6 +772,7 @@ async def run_classifier_inference_on_document(
     else:
         raise ValueError(f"Invalid input_schema: {input_schema}")
 
+    result.n_passages = len(passages)
     all_text = [text for text, _, _ in passages]
     all_spans: list[list[Span]] = classifier.predict(
         all_text, batch_size=CLASSIFIER_PREDICT_BATCH_SIZE
@@ -903,17 +905,33 @@ def is_total_batch_failure(
     return success_count == 0 and (runnable_count > 0 or failures_count > 0)
 
 
+def _current_flow_run() -> FlowRun | None:
+    """The Prefect flow run this code is running in, if any"""
+    # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
+    try:
+        run_context = get_run_context()
+    except MissingContextError:
+        return None
+    if isinstance(run_context, FlowRunContext) and run_context.flow_run is not None:
+        return run_context.flow_run
+    return None
+
+
 async def _inference_batch_of_documents(
     batch: list[DocumentStem],
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
     input_schema: InputSchema = "v1",
+    inference_group: str | None = None,
 ) -> BatchInferenceResult | Fault:
     """
     Run classifier inference on a batch of documents.
 
     This reflects the unit of work that should be run in one of many
     parallelised Docker containers.
+
+    :param inference_group: Identifies the parent inference run, shared by all its
+        batches. None when a batch is run on its own.
     """
     logger = get_logger()
 
@@ -1063,16 +1081,8 @@ async def _inference_batch_of_documents(
         + store_labels_unknown_failures
     )
 
-    # https://docs.prefect.io/v3/concepts/runtime-context#access-the-run-context-directly
-    try:
-        run_context = get_run_context()
-        flow_run_name: str | None
-        if isinstance(run_context, FlowRunContext) and run_context.flow_run is not None:
-            flow_run_name = str(run_context.flow_run.name)
-        else:
-            flow_run_name = None
-    except MissingContextError:
-        flow_run_name = None
+    flow_run = _current_flow_run()
+    flow_run_name = str(flow_run.name) if flow_run else None
 
     await create_inference_on_batch_summary_artifact(
         classifier_spec,
@@ -1121,12 +1131,14 @@ async def inference_batch_of_documents_cpu(
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
     input_schema: InputSchema = "v1",
+    inference_group: str | None = None,
 ) -> BatchInferenceResult | Fault:
     return await _inference_batch_of_documents(
         batch,
         config_json,
         classifier_spec_json,
         input_schema,
+        inference_group,
     )
 
 
@@ -1141,12 +1153,14 @@ async def inference_batch_of_documents_gpu(
     config_json: JsonDict,
     classifier_spec_json: JsonDict,
     input_schema: InputSchema = "v1",
+    inference_group: str | None = None,
 ) -> BatchInferenceResult | Fault:
     return await _inference_batch_of_documents(
         batch,
         config_json,
         classifier_spec_json,
         input_schema,
+        inference_group,
     )
 
 
@@ -1442,6 +1456,15 @@ async def inference(
         f"{len(classifier_specs)} classifiers"
     )
 
+    # Shared by all batches of this run, so their energy records can be found
+    # together. The id suffix keeps it unique, as Prefect's run names repeat.
+    flow_run = _current_flow_run()
+    inference_group = (
+        f"{flow_run.name}-{str(flow_run.id)[:8]}"
+        if flow_run
+        else f"local-{generate_slug(2)}"
+    )
+
     def parameters(
         classifier_spec: ClassifierSpec,
         document_batch: Sequence[DocumentStem],
@@ -1451,6 +1474,7 @@ async def inference(
             "config_json": config.to_json(),
             "classifier_spec_json": classifier_spec.model_dump(),
             "input_schema": input_schema,
+            "inference_group": inference_group,
         }
 
     # Prepare document batches based on classifier specs

@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 
 from knowledge_graph.cloud import AwsEnv, get_s3_client
 from knowledge_graph.config import WANDB_ENTITY, predictions_dir
+from knowledge_graph.energy import EnergyReport, track_compute_energy_usage
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.labelled_passage import LabelledPassage
 from knowledge_graph.labelling import label_passages_with_classifier
@@ -324,11 +325,12 @@ async def run_prediction(
         # 4. predict using model
         output_labelled_passages: list[LabelledPassage] = []
         prediction_exception: Exception | None = None
+        predict_energy: EnergyReport | None = None
+        passages_processed = 0
 
         try:
             # Process batch-by-batch to save partial results on failure
             positives_found = 0
-            passages_processed = 0
 
             if stop_after_n_positives is not None:
                 logger.info(
@@ -338,41 +340,43 @@ async def run_prediction(
             logger.info(
                 "You can end prediction early by pressing Ctrl+C or cancelling the Prefect flow. This will save passages predicted thus far."
             )
+            with track_compute_energy_usage() as predict_energy:
+                for i in range(0, len(labelled_passages), batch_size):
+                    batch = labelled_passages[i : i + batch_size]
 
-            for i in range(0, len(labelled_passages), batch_size):
-                batch = labelled_passages[i : i + batch_size]
-
-                batch_output = label_passages_with_classifier(
-                    classifier=classifier,
-                    labelled_passages=batch,
-                    batch_size=batch_size,
-                    show_progress=True,
-                    include_prediction_probabilities=True,
-                )
-
-                passages_processed += len(batch)
-                output_labelled_passages.extend(batch_output)
-
-                # Track positives if early stopping is enabled
-                if stop_after_n_positives is not None:
-                    batch_positives = sum(1 for p in batch_output if len(p.spans) > 0)
-                    positives_found += batch_positives
-
-                    logger.info(
-                        f"Processed {passages_processed}/{len(labelled_passages)} passages, "
-                        f"found {positives_found} positives ({batch_positives} in batch)"
+                    batch_output = label_passages_with_classifier(
+                        classifier=classifier,
+                        labelled_passages=batch,
+                        batch_size=batch_size,
+                        show_progress=True,
+                        include_prediction_probabilities=True,
                     )
 
-                    if positives_found >= stop_after_n_positives:
-                        logger.info(
-                            f"✓ Reached target of {stop_after_n_positives} positives. "
-                            f"Stopping early (skipped {len(labelled_passages) - passages_processed} passages)"
+                    passages_processed += len(batch)
+                    output_labelled_passages.extend(batch_output)
+
+                    # Track positives if early stopping is enabled
+                    if stop_after_n_positives is not None:
+                        batch_positives = sum(
+                            1 for p in batch_output if len(p.spans) > 0
                         )
-                        break
-                else:
-                    logger.info(
-                        f"Processed {passages_processed}/{len(labelled_passages)} passages"
-                    )
+                        positives_found += batch_positives
+
+                        logger.info(
+                            f"Processed {passages_processed}/{len(labelled_passages)} passages, "
+                            f"found {positives_found} positives ({batch_positives} in batch)"
+                        )
+
+                        if positives_found >= stop_after_n_positives:
+                            logger.info(
+                                f"✓ Reached target of {stop_after_n_positives} positives. "
+                                f"Stopping early (skipped {len(labelled_passages) - passages_processed} passages)"
+                            )
+                            break
+                    else:
+                        logger.info(
+                            f"Processed {passages_processed}/{len(labelled_passages)} passages"
+                        )
 
         except KeyboardInterrupt:
             logger.info(
@@ -410,6 +414,9 @@ async def run_prediction(
                     )
                     log_labelled_passages_table_to_wandb_run(all_passages, run=run)
                     logger.info(f"✓ Uploaded passages to W&B run {run.name}")
+
+            if predict_energy is not None:
+                predict_energy.log(run, phase="predict", n_passages=passages_processed)
 
         # Re-raise the exception after saving
         if prediction_exception:

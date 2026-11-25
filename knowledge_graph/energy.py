@@ -7,9 +7,10 @@ Energy cost estimation for classifier training.
 """
 
 import math
-from collections.abc import Generator
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, fields
+from typing import Any
 
 import httpx
 from codecarbon import EmissionsTracker, OfflineEmissionsTracker
@@ -133,6 +134,11 @@ class EnergyReport:
             "llm_water_l": self.llm_water_l,
             "total_water_l": self.total_water_l,
         }
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> "EnergyReport":
+        """Rebuild a report from a dict, ignoring extra keys; missing fields are 0"""
+        return cls(**{f.name: d.get(f.name, 0) for f in fields(cls)})
 
     def log(self, run: Run | None, phase: str, n_passages: int | None = None) -> None:
         """Log to the console, and to the W&B run summary if a run is given."""
