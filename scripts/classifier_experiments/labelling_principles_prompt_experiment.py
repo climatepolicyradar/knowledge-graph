@@ -9,6 +9,7 @@ Compare the hard-coded LLM system prompt with prompts built from Help:Labelling 
 
 import asyncio
 import os
+import random
 import shutil
 from pathlib import Path
 
@@ -26,6 +27,7 @@ from knowledge_graph.classifier.large_language_model import (
 )
 from knowledge_graph.cloud import AwsEnv, get_aws_ssm_param
 from knowledge_graph.config import WANDB_ENTITY
+from knowledge_graph.energy import track_compute_energy_usage
 from knowledge_graph.identifiers import WikibaseID
 from knowledge_graph.operations.evaluate import evaluate_classifier
 from knowledge_graph.operations.get_concept import get_concept_async
@@ -35,19 +37,13 @@ PAGE_DIR = Path(__file__).parent / "labelling_principles"
 ORIGINAL_WIKITEXT = PAGE_DIR / "original.wikitext"  # don't edit
 REWRITTEN_WIKITEXT = PAGE_DIR / "rewritten.wikitext"  # edit this one
 
-# Same concepts as scripts/benchmarks/eval_set_autolabelling_experiment/config.py.
-DEFAULT_CONCEPTS = [
-    "Q618",
-    "Q661",
-    "Q2029",
-    "Q47",
-    "Q1277",
-    "Q557",
-    "Q1837",
-    "Q912",
-    "Q1829",
-    "Q32",
-]
+# A subset of the concepts used in scripts/benchmarks/eval_set_autolabelling_experiment
+# Add additional concepts with --concept.
+DEFAULT_CONCEPTS = ["Q618", "Q2029", "Q1277", "Q1837", "Q32"]
+# Most eval sets are ~130 passages. Q2029 has 260, so it's capped to match. The same seeded
+# sample is used for every option, so options stay paired passage by passage.
+DEFAULT_MAX_PASSAGES = 130
+SAMPLE_SEED = 42
 MODEL_NAME = "openrouter:openai/gpt-5"  # the LLMClassifier default
 WANDB_GROUP = "labelling-principles-prompt"
 JOB_TYPE = "prompt_experiment"  # keeps these runs apart from train_model runs
@@ -125,6 +121,9 @@ def run(
     option: list[str] | None = typer.Option(
         None, help="Only run these options (default: all)"
     ),
+    max_passages: int = typer.Option(
+        DEFAULT_MAX_PASSAGES, help="Cap on eval passages per concept"
+    ),
 ) -> None:
     """Evaluate every option on every concept's eval set, one W&B run per concept × option."""
     os.environ["OPENROUTER_API_KEY"] = get_aws_ssm_param(
@@ -136,6 +135,9 @@ def run(
 
     for wikibase_id in concept:
         c = asyncio.run(get_concept_async(wikibase_id=WikibaseID(wikibase_id)))
+        passages = c.labelled_passages
+        if len(passages) > max_passages:
+            passages = random.Random(SAMPLE_SEED).sample(passages, max_passages)
         for option_name, prompt in options.items():
             classifier = LLMClassifier(
                 concept=c, model_name=MODEL_NAME, system_prompt_template=prompt
@@ -153,17 +155,20 @@ def run(
                     "classifier_id": str(classifier.id),
                     "concept_id": wikibase_id,
                     "model_name": MODEL_NAME,
+                    "n_eval_passages": len(passages),
+                    "eval_sample_seed": SAMPLE_SEED,
                 },
             ) as wandb_run:
                 # The exact prompt sent, so every run records which page text it used
                 wandb_run.summary["final_system_prompt"] = classifier.system_prompt
-                # Logs metrics, the validation predictions table and charts to the run
-                evaluate_classifier(
-                    classifier=classifier,
-                    labelled_passages=c.labelled_passages,
-                    wandb_run=wandb_run,
-                    batch_size=50,
-                )
+                with track_compute_energy_usage() as eval_energy:
+                    evaluate_classifier(
+                        classifier=classifier,
+                        labelled_passages=c.labelled_passages,
+                        wandb_run=wandb_run,
+                        batch_size=50,
+                    )
+                eval_energy.log(wandb_run, phase="eval", n_passages=len(passages))
 
 
 if __name__ == "__main__":
