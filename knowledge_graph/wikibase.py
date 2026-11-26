@@ -1501,6 +1501,99 @@ class WikibaseSession:
         """
         return await self.get_help_page_async(page_title)
 
+    @staticmethod
+    def _parsed_html_to_prompt_text(data: dict, source: str) -> str:
+        """Convert an action=parse JSON response into markdown for LLM prompts."""
+        if "error" in data:
+            raise ValueError(f"Couldn't parse {source!r}: {data['error'].get('info')}")
+        html_content = data["parse"]["text"]["*"]
+        markdown = html2text.html2text(html_content, bodywidth=0)
+        markdown = re.sub(r"^Since \d{4}-\d{2}-\d{2}.*\n", "", markdown, flags=re.M)
+        return re.sub(r"\n{3,}", "\n\n", markdown).strip()
+
+    async def get_help_page_text_async(self, page_title: str) -> str:
+        """
+        Get a help page as markdown, for use in LLM prompts.
+
+        Unlike get_help_page_async, this drops the table of contents and section edit
+        links, doesn't hard-wrap lines, strips "Since YYYY-MM-DD" provenance lines, and
+        raises if the page doesn't exist rather than returning an empty string.
+        """
+        client = await self._get_client()
+        response = await client.get(
+            url=self.api_url,
+            params={
+                "action": "parse",
+                "page": page_title,
+                "prop": "text",
+                "disableeditsection": 1,
+                "disabletoc": 1,
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+        return self._parsed_html_to_prompt_text(response.json(), page_title)
+
+    @async_to_sync
+    async def get_help_page_text(self, page_title: str) -> str:
+        """Get a help page as markdown, for use in LLM prompts."""
+        return await self.get_help_page_text_async(page_title)
+
+    async def get_help_page_wikitext_async(self, page_title: str) -> str:
+        """Get the raw wikitext source of a help page."""
+        client = await self._get_client()
+        response = await client.get(
+            url=self.api_url,
+            params={
+                "action": "parse",
+                "page": page_title,
+                "prop": "wikitext",
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+        if "error" in data:
+            raise ValueError(
+                f"Couldn't fetch {page_title!r}: {data['error'].get('info')}"
+            )
+        return data["parse"]["wikitext"]["*"]
+
+    @async_to_sync
+    async def get_help_page_wikitext(self, page_title: str) -> str:
+        """Get the raw wikitext source of a help page."""
+        return await self.get_help_page_wikitext_async(page_title)
+
+    async def render_wikitext_as_text_async(
+        self, wikitext: str, page_title: str
+    ) -> str:
+        """
+        Render wikitext that isn't saved anywhere, exactly as get_help_page_text would render it.
+
+        Useful for previewing the prompt a page edit would produce, before making the edit.
+        """
+        client = await self._get_client()
+        response = await client.post(
+            url=self.api_url,
+            data={
+                "action": "parse",
+                "text": wikitext,
+                "title": page_title,
+                "contentmodel": "wikitext",
+                "prop": "text",
+                "disableeditsection": 1,
+                "disabletoc": 1,
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+        return self._parsed_html_to_prompt_text(response.json(), page_title)
+
+    @async_to_sync
+    async def render_wikitext_as_text(self, wikitext: str, page_title: str) -> str:
+        """Render unsaved wikitext exactly as get_help_page_text would render it."""
+        return await self.render_wikitext_as_text_async(wikitext, page_title)
+
     async def search_concepts_async(
         self,
         search_term: str,

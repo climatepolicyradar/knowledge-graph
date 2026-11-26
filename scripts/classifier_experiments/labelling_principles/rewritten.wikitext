@@ -1,0 +1,97 @@
+This page is a live repository of labelling best practice for the CPR policy team. All new principles should have their applicable date recorded (as accurately as possible) so we know which previous concepts to re-label in future when appropriate. Any questions about this repository, please speak to the Programmes team.
+
+When labelling, read through the passage carefully, thinking about the concept and different ways it is used in documents, including acronyms, jargon and global differences. Identify any mentions of the concept, including direct references and indirect descriptions of the concept which match the definition. Apply the following principles.
+
+== Principles ==
+
+=== User needs over model capabilities ===
+
+Since 2024-12-05
+
+Labellers should add annotations according to their expectations of what would be most useful to the users of CPR’s tools in an ideal world, rather than assumptions about what our models will be able to deliver.
+
+In other words, we want the tests that we create to be expert-level, even if this means the test is extremely hard for the computer! “This classifier is not able to do X” is a ''useful'' outcome of the labelling process. For example, if you label the concept '''involving stakeholders''' in the sentence “The meaningful inclusion of stakeholders, including representation of organisations representing the views of youth, in this process is essential”, you might know that the classifier only picks up on “inclusion of stakeholders”, but the context directly following that is useful to an expert. So include it in the label. This will pay off later: when we move to an LLM-based classifier, it might be able to pick up on the extra nuance so the scores go up.
+
+=== Principle of liberality ===
+
+Since 2024-08-01; updated 2026-11-26
+
+When in doubt, err on the side of labelling the word / phrase rather than excluding it on the basis that a prototypical user will find results with more context, more useful, because it assists in scanning otherwise similar results.
+
+Some concepts may need a stricter approach to ensure the results returned are useful for the user. For example, for the climate justice classifiers, a description of a justice-related situation wasn't enough for a label, the text passage needed to include an action or a normative argument. This ensured that the classifier picked up mentions of where justice was being implemented, but excluded mentions describing inequities with no action to address them.
+
+=== Principle of comprehensiveness ===
+
+Since 2024-08-01
+
+Label longer phrases that articulate the intended concept in a more roundabout fashion e.g. '''impacts of future events on energy infrastructure''' as a reference to the concept “technological impact”. This includes misspelt terms, and sentences where the core concept is separated by superfluous terms or clauses, e.g. '''Water is extracted from rivers or wells for the benefit of human sanitation, drinking, irrigation, hydro power.''' in '''water management sector'''.
+
+=== Handling conceptual overlap (aka ‘nested concepts’) ===
+
+Since 2024-09-19
+
+Label the keyword that is nested within the longer, meaningfully distinct term if the original meaning is consistent across the term e.g. if labelling for the concept of “flood”, label the keyword '''flood''' in '''flood management''', as the word ‘flood’ is consistent here.
+
+Do not label the nested keyword if the additional terms that make the longer, meaningfully distinct concept sufficiently change the meaning such that the concept no longer fits underneath its parent or directly contradict the item’s definition e.g. do not label '''aviation fuel''' in the phrase '''sustainable aviation fuel'''
+
+=== Proper names of ministries and legislation ===
+
+Since 2024-08-01
+
+Label the full name of a government department or piece of legislation / policy relevant to the topic being labelled e.g. '''Oil Spill Liability Trust Fund''' or '''Water Resource Management Act'''
+
+=== Handling modifiers ===
+
+Since 2024-08-01
+
+When encountering terms that have slightly changed meaning and specificity e.g. '''religious education''' for the '''education sector''', apply principle of liberality and label on the basis that users will find results with more context, more useful, because it assists in scanning otherwise similar results; and we’re less concerned about false positives than false negatives.
+
+=== Context-dependent terms ===
+
+Since 2024-08-01; updated 2026-11-26
+
+Label only if the term is used in the context of the core concept, as defined in Concept Store (for LLM classifiers, this is the concept description provided) e.g. '''consulting''' only when in a '''professional services''' context. If the concept definition isn’t sufficiently clear to make a judgement, don’t label.
+
+Similarly, if the concept is mentioned in a context which is clearly not the core concept context, don't label. For example: label '''manure management''' generally as a type of agriculture mitigation but not when it's clearly framed only as a source of emissions with no mitigation action attached. 
+
+=== Negatives and needs ===
+
+Since 2025-10-09; updated 2026-11-19
+
+Sometimes a concept will appear in a negative sentence, for example: ''Nitrogen is not a greenhouse gas''. There are different gradations of this, for example ''Climate finance is lacking''. Because of these gradations and because of the unique needs of each concept/classifier combination, it is difficult to say categorically if negative instances should be labelled. 
+
+When starting to develop a new concept, use the expert consultations to ask explicitly about negative instances: when do users want to know about something being missing, disappearing or otherwise being discussed negatively? Labellers should then should use this expert feedback to have a discussion beforehand on how to handle negative instances.
+
+However, feedback from recent expert consultations indicates that it is generally useful for users to see negative as well as positive mentions of a concept. Therefore we encourage the principle of liberality and, if in doubt, to include negative mentions in labels where relevant. In essence, this boils down to asking: "If I were a user interested in this topic, would this mention still give meaningful information?" In the first example above, the answer is probably 'no' as people looking for greenhouse gasses are generally interested in emissions, but a lack of financing probably is important.
+
+=== Concepts with dual parents ===
+
+Since 2026-11-19
+
+A term that belongs to two parent concepts, for example, '''agroforestry''' is a subconcept of both the '''adaptation''' and '''mitigation''' concepts, should be labelled under both parent concepts, with equal weight.
+
+=== Lists, tables, headers and fragments ===
+
+Since 2026-11-26
+
+Take a liberal approach to labelling lists, headers and fragments. If a term is included in a list with no further context around it, for example '''irrigation''' for the '''adaptation/resilience''' concept, default to labelling it on the assumption that more is better than less and the user can filter through and narrow down the results later. 
+
+For some classifiers, you may want to take a stricter approach, for example, for the justice classifiers, we excluded fragmented headers, titles, citations and bibliographic references unless they formed a complete thought about the concept because we were dealing with more nebulous concepts that were not easily captured in shorter text fragments.
+
+=== Bibliographic references lists, citations and URLs ===
+
+Since 2026-11-19
+
+We tend not to label URLs and reference lists on the assumption that they are not useful to users and its unlikely that users will be searching for Topics within a reference list. 
+
+=== Instances of the same concept mentioned together ===
+
+Since 2026-11-19
+
+If multiple instances of the same concept are mentioned together in a paragraph or a list, label each individual instance of the concept separately. For example, in the text passages "Nepal is implementing a range of adaptation actions including establishing early warning systems, expanding green spaces in cities, and building public cool shelters", '''establishing early warning systems''', '''expanding green spaces in cities''', and '''building public cool shelters''' should all be labelled as separate instances of '''adaptation/resilience'''.
+
+=== Final check ===
+
+Since 2026-11-26
+
+Before finishing a passage, check that you have labelled every instance of the concept that matches its definition, and that each label contains enough of the text to show why it is relevant.
