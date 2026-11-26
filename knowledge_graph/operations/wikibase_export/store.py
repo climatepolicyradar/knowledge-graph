@@ -3,7 +3,7 @@ from collections import Counter
 from collections.abc import Iterable
 
 from botocore.exceptions import ClientError
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 from types_aiobotocore_s3.client import S3Client
 
 from knowledge_graph.operations.wikibase_export.rules import Issue
@@ -13,6 +13,8 @@ PREFIX = "pipelines/wikibase-export"
 REVISION_FIELDS = {"lastrevid", "modified"}
 
 CURRENT_KEY = f"{PREFIX}/current.json"
+REPORTED_KEY = f"{PREFIX}/reported.json"
+REPORTED_ISSUES = TypeAdapter(list[Issue])
 
 
 class Pointer(BaseModel):
@@ -147,3 +149,15 @@ async def advance_current(
         Pointer(snapshot=snapshot.timestamp).model_dump_json().encode("utf-8"),
     )
     return True
+
+
+async def read_reported_issues(s3_client: S3Client, bucket: str) -> list[Issue] | None:
+    """The issues last reported to Slack, or None if nothing has been reported."""
+    body = await _get(s3_client, bucket, REPORTED_KEY)
+    if body is None:
+        return None
+    return REPORTED_ISSUES.validate_json(body)
+
+
+async def mark_reported(s3_client: S3Client, bucket: str, issues: list[Issue]) -> None:
+    await _put(s3_client, bucket, REPORTED_KEY, REPORTED_ISSUES.dump_json(issues))

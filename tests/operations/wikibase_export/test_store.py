@@ -6,7 +6,9 @@ from knowledge_graph.operations.wikibase_export.rules import Issue
 from knowledge_graph.operations.wikibase_export.store import (
     PREFIX,
     advance_current,
+    mark_reported,
     read_current,
+    read_reported_issues,
     write_snapshot,
 )
 from tests.operations.wikibase_export.helpers import (
@@ -154,6 +156,15 @@ async def test_advance_current_held_back_keeps_previous_snapshot(
 
     current = await read_current(s3, bucket)
     assert current is not None and current.snapshot == "20260101T000000Z"
+
+
+@pytest.mark.asyncio
+async def test_reported_issues_round_trip(s3, bucket):
+    assert await read_reported_issues(s3, bucket) is None
+
+    await mark_reported(s3, bucket, [WARNING])
+
+    assert await read_reported_issues(s3, bucket) == [WARNING]
 
 
 @pytest.mark.asyncio
