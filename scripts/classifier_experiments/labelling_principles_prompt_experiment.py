@@ -2,9 +2,9 @@
 Compare the hard-coded LLM system prompt with prompts built from Help:Labelling principles.
 
     # 1. Save the live page's wikitext into the repo (original + a copy to edit)
-    uv run python scripts/classifier_experiments/labelling_principles_prompt_experiment.py snapshot
+    `uv run python scripts/classifier_experiments/labelling_principles_prompt_experiment.py snapshot`
     # 2. Edit labelling_principles/rewritten.wikitext, then run e.g.
-    uv run python scripts/classifier_experiments/labelling_principles_prompt_experiment.py run --concept Q618 --option D_page_rewritten
+    `uv run python scripts/classifier_experiments/labelling_principles_prompt_experiment.py run --concept Q618 --option D_page_rewritten`
 """
 
 import asyncio
