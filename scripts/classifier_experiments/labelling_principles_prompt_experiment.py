@@ -164,7 +164,7 @@ def run(
                 with track_compute_energy_usage() as eval_energy:
                     evaluate_classifier(
                         classifier=classifier,
-                        labelled_passages=c.labelled_passages,
+                        labelled_passages=passages,
                         wandb_run=wandb_run,
                         batch_size=50,
                     )
