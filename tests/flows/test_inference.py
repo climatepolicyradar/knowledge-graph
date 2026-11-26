@@ -15,6 +15,7 @@ from botocore.client import ClientError
 from prefect.client.schemas.objects import FlowRun
 from prefect.context import FlowRunContext
 from prefect.states import Completed, Running
+from pydantic import ValidationError
 
 from flows.classifier_specs.spec_interface import ClassifierSpec, DontRunOnEnum
 from flows.inference import (
@@ -26,7 +27,6 @@ from flows.inference import (
     SingleDocumentInferenceResult,
     _get_labelled_passage_from_prediction,
     _inference_batch_of_documents,
-    _stringify,
     _validate_spans,
     determine_file_stems,
     did_inference_fail,
@@ -49,11 +49,9 @@ from flows.inference import (
     store_metadata,
 )
 from flows.models import (
-    BaseParserOutput,
     BaseParserOutputV2,
     BlockType,
-    PDFData,
-    PDFTextBlock,
+    PDFDataV2,
 )
 from flows.utils import (
     DocumentImportId,
@@ -366,7 +364,7 @@ async def test_load_classifier__existing_classifier(
 _BASE_DOC_KWARGS = dict(
     document_id="test",
 )
-_STUB_PDF_DATA = PDFData(page_metadata=[], md5sum="", text_blocks=[])
+_STUB_PDF_DATA = PDFDataV2(page_metadata=[], md5sum="", text_blocks=[])
 
 
 @pytest.mark.parametrize(
@@ -398,7 +396,7 @@ _STUB_PDF_DATA = PDFData(page_metadata=[], md5sum="", text_blocks=[])
     ],
 )
 def test_is_noop_document(doc_overrides: dict, expected_result: bool):
-    doc = BaseParserOutput(**(_BASE_DOC_KWARGS | doc_overrides))
+    doc = BaseParserOutputV2(**(_BASE_DOC_KWARGS | doc_overrides))
     assert expected_result == is_noop_document(doc)
 
 
@@ -446,34 +444,86 @@ async def test_load_document(
         document_result=valid_document_result,
         s3_client=mock_s3_async_client,
     )
-    assert result.document is not None
+    assert isinstance(result.document, BaseParserOutputV2)
 
 
-def test_stringify():
-    text = ["a", " sequence", " of ", "text "]
-    result = _stringify(text)
-    assert result == "a sequence of text"
+_HTML_DOCUMENT = {
+    "document_id": "HTML.document.0.1",
+    "document_content_type": "text/html",
+    "languages": ["en"],
+    "html_data": {
+        "has_valid_text": True,
+        "text_blocks": [
+            {
+                "text": ["Some valid English text"],
+                "text_block_id": "b0",
+                "type": "Text",
+                "type_confidence": 0.5,
+            }
+        ],
+    },
+    "pdf_data": None,
+}
+
+
+def test_parser_output_v2_rejects_html_data():
+    with pytest.raises(ValidationError, match="html_data isn't supported"):
+        BaseParserOutputV2.model_validate(_HTML_DOCUMENT)
+
+
+@pytest.mark.asyncio
+async def test_load_document__html_document_is_rejected(
+    test_config, mock_async_bucket, mock_s3_async_client
+):
+    """An English HTML document fails at load, rather than mid-extraction."""
+    document_stem = DocumentStem(_HTML_DOCUMENT["document_id"])
+    await mock_s3_async_client.put_object(
+        Bucket=mock_async_bucket,
+        Key=os.path.join(
+            test_config.inference_document_source_prefix, f"{document_stem}.json"
+        ),
+        Body=BytesIO(json.dumps(_HTML_DOCUMENT).encode("utf-8")),
+        ContentType="application/json",
+    )
+    document_result = SingleDocumentInferenceResult(
+        document_stem=document_stem,
+        document=None,
+        labelled_passages=[],
+        document_etag=None,
+        document_last_modified=None,
+        classifier_spec=ClassifierSpec(
+            wikibase_id=WikibaseID("Q123"),
+            classifier_id=ClassifierID("testabcd"),
+            wandb_registry_version="v1",
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="html_data isn't supported"):
+        await load_document(
+            test_config,
+            document_result=document_result,
+            s3_client=mock_s3_async_client,
+        )
 
 
 def test_document_passages__blocked_types(parser_output_pdf):
     # Add a page number block that should be filtered out
-    from flows.models import TextBlock
-
-    parser_output_pdf.pdf_data.text_blocks.append(
-        TextBlock(
-            text=["Page 1"],
-            text_block_id="page_1",
-            type=BlockType.PAGE_NUMBER,
-            type_confidence=0.5,
-        )
+    page_number_block = parser_output_pdf.pdf_data.text_blocks[0].model_copy(
+        update={
+            "text": "Page 1",
+            "id": "page_1",
+            "idx": 2,
+            "type": BlockType.PAGE_NUMBER,
+        }
     )
+    parser_output_pdf.pdf_data.text_blocks.append(page_number_block)
 
     # Get all passages
     results = list(document_passages(parser_output_pdf))
 
     # Should only get the non-page-number block
     assert len(results) == 1
-    assert results[0] == ("test pdf text", "2", None)
+    assert results[0] == ("test pdf text", "2", 1)
     # Verify the page number block was filtered out
     assert not any(block_id == "page_1" for _, block_id, _ in results)
 
@@ -485,14 +535,9 @@ def test_document_passages__invalid_content_type(parser_output):
     assert result == []
 
 
-def test_document_passages__html(parser_output_html):
-    html_result = document_passages(parser_output_html).__next__()
-    assert html_result == ("test html text", "1", None)
-
-
 def test_document_passages__pdf(parser_output_pdf):
     pdf_result = document_passages(parser_output_pdf).__next__()
-    assert pdf_result == ("test pdf text", "2", None)
+    assert pdf_result == ("test pdf text", "2", 1)
 
 
 @pytest.mark.asyncio
@@ -663,6 +708,7 @@ async def test_run_classifier_inference_on_document(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
+    parser_output_pdf,
     snapshot,
 ):
     # Setup
@@ -681,34 +727,18 @@ async def test_run_classifier_inference_on_document(
         test_config,
         classifier_spec,
     )
-    document_stem = DocumentStem("HTML.document.0.1")
+    document_stem = DocumentStem("PDF.document.0.1")
+    document = parser_output_pdf
+    document.document_id = document_stem
+    document.pdf_data.text_blocks[
+        0
+    ].text = "Ministry of fishing, overfishing, seafood harvest and fisheries."
     store_result = SingleDocumentInferenceResult(
         document_stem=document_stem,
         labelled_passages=[],
         document_etag="abbaabba",
         document_last_modified=datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc),
-        document=BaseParserOutput(
-            document_id=document_stem,
-            document_content_type="text/html",
-            languages=None,
-            html_data=None,
-            pdf_data=PDFData(
-                page_metadata=[],
-                md5sum="",
-                text_blocks=[
-                    PDFTextBlock(
-                        text=[
-                            "Ministry of fishing, overfishing, seafood harvest and fisheries."
-                        ],
-                        text_block_id="2",
-                        page_number=1,
-                        coords=[],
-                        type=BlockType.TEXT,
-                        type_confidence=0.5,
-                    )
-                ],
-            ),
-        ),
+        document=document,
         classifier_spec=classifier_spec,
     )
 
@@ -717,10 +747,11 @@ async def test_run_classifier_inference_on_document(
         classifier=classifier,
     )
     assert result.labelled_passages == snapshot
+    assert result.labelled_passages[0].metadata["idx"] == 1
 
 
 @pytest.mark.asyncio
-async def test_run_classifier_inference_on_document_v2_schema():
+async def test_run_classifier_inference_on_document__mocked_classifier():
     classifier = MagicMock()
     classifier.predict.return_value = [
         [
@@ -760,7 +791,6 @@ async def test_run_classifier_inference_on_document_v2_schema():
     result = await run_classifier_inference_on_document(
         result=store_result,
         classifier=classifier,
-        input_schema="v2",
     )
 
     assert classifier.predict.call_count == 1
@@ -778,39 +808,17 @@ async def test_run_classifier_inference_on_document_v2_schema():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "input_schema,expected_span_counts",
-    [("v1", [1, 0]), ("v2", [1])],
-    ids=["v1_stores_empty_passage", "v2_drops_empty_passage"],
-)
-async def test_run_classifier_inference_on_document_passage_without_spans(
-    input_schema, expected_span_counts, parser_output_pdf
-):
-    """A passage the classifier finds nothing in is stored for v1, but not for v2."""
-    if input_schema == "v1":
-        document = parser_output_pdf
-        assert document.pdf_data
-        document.pdf_data.text_blocks.append(
-            PDFTextBlock(
-                text=["nothing of interest here"],
-                text_block_id="3",
-                page_number=1,
-                coords=[],
-                type=BlockType.TEXT,
-                type_confidence=0.5,
-            )
-        )
-        labelled_text = "test pdf text"
-    else:
-        document = BaseParserOutputV2.model_validate_json(
-            (
-                Path(__file__).parent
-                / "fixtures"
-                / "embeddings_input_v2"
-                / "AF.chunked.1.1.json"
-            ).read_text()
-        )
-        labelled_text = "ADAPTATION FUND\nPROJECT PROPOSAL TO THE ADAPTATION FUND"
+async def test_run_classifier_inference_on_document_passage_without_spans():
+    """A passage the classifier finds nothing in is not stored."""
+    document = BaseParserOutputV2.model_validate_json(
+        (
+            Path(__file__).parent
+            / "fixtures"
+            / "embeddings_input_v2"
+            / "AF.chunked.1.1.json"
+        ).read_text()
+    )
+    labelled_text = "ADAPTATION FUND\nPROJECT PROPOSAL TO THE ADAPTATION FUND"
 
     # The first passage gets a span, the second doesn't
     classifier = MagicMock()
@@ -843,10 +851,9 @@ async def test_run_classifier_inference_on_document_passage_without_spans(
     result = await run_classifier_inference_on_document(
         result=store_result,
         classifier=classifier,
-        input_schema=input_schema,
     )
 
-    assert [len(p.spans) for p in result.labelled_passages] == expected_span_counts
+    assert [len(p.spans) for p in result.labelled_passages] == [1]
 
 
 @pytest.mark.asyncio
@@ -931,7 +938,7 @@ async def test_inference_batch_of_documents_cpu(
         assert snapshot == (artifact.data, artifact.description)
 
     # Verify that inference outputs were stored in S3 using async s3 client
-    expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{batch[0]}.json"
+    expected_key = f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/{classifier_spec.classifier_id}/{batch[0]}.json"
 
     # Check that the S3 object exists
     response = await mock_s3_async_client.head_object(
@@ -964,7 +971,7 @@ async def test_inference_batch_of_documents_cpu(
 
 
 @pytest.mark.asyncio
-async def test_inference_batch_of_documents_cpu__v2_input(
+async def test_inference_batch_of_documents_cpu__prefix_overrides(
     test_config,
     mock_classifiers_dir,
     mock_wandb,
@@ -972,7 +979,7 @@ async def test_inference_batch_of_documents_cpu__v2_input(
     mock_async_bucket_documents_v2,
     mock_prefect_s3_block,
 ):
-    """Test that v2 embeddings input can run inference and produce outputs."""
+    """Test that overridden source/target prefixes are read from and written to."""
     mock_wandb_init, mock_run, _ = mock_wandb
     test_config.local_classifier_dir = mock_classifiers_dir
 
@@ -996,7 +1003,7 @@ async def test_inference_batch_of_documents_cpu__v2_input(
 
     # Should not raise any exceptions for successful processing
     inference_batch_of_documents_cpu.flow_run_name = (
-        "test-inference-batch-of-documents-cpu-v2"
+        "test-inference-batch-of-documents-cpu-prefix-overrides"
     )
     with patch(
         "flows.inference.get_aws_ssm_param", return_value="retrieved-wandb-api-key"
@@ -1005,7 +1012,6 @@ async def test_inference_batch_of_documents_cpu__v2_input(
             batch=batch,
             config_json=config_json,
             classifier_spec_json=JsonDict(classifier_spec.model_dump()),
-            input_schema="v2",
             return_state=True,
         )
 
@@ -1121,7 +1127,7 @@ async def test_inference_batch_of_documents_cpu_with_failures(
 
     # Check that no labels were stored for the non-existent documents
     for doc_stem in batch:
-        expected_key = f"labelled_passages/{classifier_spec.wikibase_id}/{classifier_spec.wandb_registry_version}/{doc_stem}.json"
+        expected_key = f"{test_config.inference_document_target_prefix}{classifier_spec.wikibase_id}/{classifier_spec.wandb_registry_version}/{doc_stem}.json"
         with pytest.raises(ClientError) as exc_info:
             await mock_s3_async_client.head_object(
                 Bucket=test_config.cache_bucket, Key=expected_key
@@ -1500,7 +1506,6 @@ def test_original_format_fallback():
 
 def test_document_passages(
     parser_output_pdf,
-    parser_output_html,
     parser_output_html_converted_to_pdf,
 ) -> None:
     """Test that the document_passages function works correctly."""
@@ -1508,10 +1513,6 @@ def test_document_passages(
     passages = list(document_passages(parser_output_pdf))
     assert parser_output_pdf.pdf_data is not None
     assert len(passages) == len(parser_output_pdf.pdf_data.text_blocks)
-
-    passages = list(document_passages(parser_output_html))
-    assert parser_output_html.html_data is not None
-    assert len(passages) == len(parser_output_html.html_data.text_blocks)
 
     passages = list(document_passages(parser_output_html_converted_to_pdf))
     assert parser_output_html_converted_to_pdf.pdf_data is not None

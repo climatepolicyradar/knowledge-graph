@@ -13,7 +13,7 @@ from typing import (
     Union,
 )
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class VerticalFlipError(Exception):
@@ -308,9 +308,17 @@ class _BaseParserOutputFieldsMixin(BaseModel, Generic[PDFDataT, PDFTextBlockT]):
         )
 
 
-class BaseParserOutput(_BaseParserOutputFieldsMixin[PDFData, PDFTextBlock]):
-    """Base class for an output to a parser (v1)."""
-
-
 class BaseParserOutputV2(_BaseParserOutputFieldsMixin[PDFDataV2, PDFTextBlockV2]):
-    """Base class for an output from a parser (v2)."""
+    """
+    Base class for an output from a parser (v2).
+
+    The v2 pipeline doesn't produce HTML content, so `html_data` must be
+    empty. Its text blocks have no `id` or `idx`, which v2 consumers rely on.
+    """
+
+    @field_validator("html_data")
+    @classmethod
+    def _reject_html_data(cls, value: Optional[HTMLData]) -> None:
+        if value is not None:
+            raise ValueError("html_data isn't supported for v2 parser outputs")
+        return None
