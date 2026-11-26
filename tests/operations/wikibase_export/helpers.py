@@ -1,3 +1,4 @@
+import json
 from contextlib import asynccontextmanager
 
 from knowledge_graph.operations.wikibase_export.snapshot import Snapshot
@@ -71,3 +72,11 @@ async def temporary_bucket(s3, name: str):
 async def get_text(s3, bucket: str, key: str) -> str:
     response = await s3.get_object(Bucket=bucket, Key=key)
     return (await response["Body"].read()).decode("utf-8")
+
+
+async def get_json(s3, bucket: str, key: str) -> dict:
+    return json.loads(await get_text(s3, bucket, key))
+
+
+async def put_json(s3, bucket: str, key: str, value: dict) -> None:
+    await s3.put_object(Bucket=bucket, Key=key, Body=json.dumps(value).encode())
