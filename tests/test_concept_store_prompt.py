@@ -1,6 +1,9 @@
 import pytest
 
-from knowledge_graph.classifier.concept_store_prompt import build_system_prompt_template
+from knowledge_graph.classifier.concept_store_prompt import (
+    build_system_prompt_template,
+    labelling_principles_version,
+)
 from knowledge_graph.classifier.large_language_model import LLMClassifierPrompt
 from knowledge_graph.concept import Concept
 from knowledge_graph.identifiers import WikibaseID
@@ -37,3 +40,11 @@ def test_parsed_html_to_prompt_text__raises_for_missing_page():
 
     with pytest.raises(ValueError, match="Help:Missing"):
         WikibaseSession._parsed_html_to_prompt_text(data, "Help:Missing")
+
+
+def test_labelling_principles_version__is_stable_and_changes_with_text():
+    version = labelling_principles_version("Label it.")
+
+    assert version == labelling_principles_version("Label it.")
+    assert version != labelling_principles_version("Label it!")
+    assert len(version) == 12

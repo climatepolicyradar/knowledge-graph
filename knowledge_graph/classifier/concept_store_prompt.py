@@ -5,6 +5,7 @@ The role preamble and the output-format rules stay in code because
 the response parser depends on them and are not relevant for human labellers.
 """
 
+import hashlib
 from typing import Sequence
 
 from knowledge_graph.classifier.large_language_model import LLMClassifierPrompt
@@ -43,6 +44,16 @@ Output format (required, so that your answer can be parsed):
 def _escape_braces(text: str) -> str:
     """Escape braces so wiki text survives str.format() in LLMClassifierPrompt.format."""
     return text.replace("{", "{{").replace("}", "}}")
+
+
+def labelling_principles_version(principles_text: str) -> str:
+    """
+    A short content hash identifying a version of the labelling principles.
+
+    Hashes the rendered text the LLM sees, so the same text always gives the same
+    version and any edit that changes the prompt gives a new one.
+    """
+    return hashlib.sha256(principles_text.encode()).hexdigest()[:12]
 
 
 def build_system_prompt_template(principles_pages: Sequence[str]) -> str:

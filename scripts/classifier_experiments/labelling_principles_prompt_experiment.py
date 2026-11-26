@@ -19,6 +19,7 @@ import wandb
 from knowledge_graph.classifier.concept_store_prompt import (
     LABELLING_PRINCIPLES_PAGE,
     build_system_prompt_template,
+    labelling_principles_version,
 )
 from knowledge_graph.classifier.large_language_model import (
     DEFAULT_LLM_CLASSIFIER_PROMPT,
@@ -89,7 +90,7 @@ def snapshot(overwrite: bool = False) -> None:
     )
 
 
-async def build_options() -> dict[str, LLMClassifierPrompt]:
+async def build_options() -> dict[str, tuple[LLMClassifierPrompt, str | None]]:
     """Render every page version through MediaWiki and build each option's prompt."""
     original = ORIGINAL_WIKITEXT.read_text()
     versions = {
@@ -100,18 +101,19 @@ async def build_options() -> dict[str, LLMClassifierPrompt]:
         + "\n",
         "D_page_rewritten": REWRITTEN_WIKITEXT.read_text(),
     }
-    options = {
-        "A_current": DEFAULT_LLM_CLASSIFIER_PROMPT,
-        "A2_current_rerun": DEFAULT_LLM_CLASSIFIER_PROMPT,
+    options: dict[str, tuple[LLMClassifierPrompt, str | None]] = {
+        "A_current": (DEFAULT_LLM_CLASSIFIER_PROMPT, None),
+        "A2_current_rerun": (DEFAULT_LLM_CLASSIFIER_PROMPT, None),
     }
     async with WikibaseSession() as wikibase:
         for name, wikitext in versions.items():
             text = await wikibase.render_wikitext_as_text_async(
                 wikitext, LABELLING_PRINCIPLES_PAGE
             )
-            options[name] = LLMClassifierPrompt(
+            prompt = LLMClassifierPrompt(
                 system_prompt_template=build_system_prompt_template([text])
             )
+            options[name] = (prompt, labelling_principles_version(text))
     return options
 
 
@@ -138,7 +140,7 @@ def run(
         passages = c.labelled_passages
         if len(passages) > max_passages:
             passages = random.Random(SAMPLE_SEED).sample(passages, max_passages)
-        for option_name, prompt in options.items():
+        for option_name, (prompt, page_version) in options.items():
             classifier = LLMClassifier(
                 concept=c, model_name=MODEL_NAME, system_prompt_template=prompt
             )
@@ -157,6 +159,7 @@ def run(
                     "model_name": MODEL_NAME,
                     "n_eval_passages": len(passages),
                     "eval_sample_seed": SAMPLE_SEED,
+                    "page_version": page_version,
                 },
             ) as wandb_run:
                 # The exact prompt sent, so every run records which page text it used
