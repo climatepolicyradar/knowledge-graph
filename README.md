@@ -111,22 +111,6 @@ If you experience test failures for target transformer tests in [test_targets.py
 
 `just test -v -m "'not transformers'"`
 
-## Pipelines
-
-Within this Knowledge Graph repo we have a full topic pipeline at [flows/topic_pipeline.py:topic_pipeline](./flows/topic_pipeline.py) that brings together three distinct steps into one parent pipeline. This is to enable a fully automated end to end run.
-
-This solution calls inference -> aggregation in series for all documents in the run as opposed to running single documents through concurrently. Eg. we wait for all inference jobs to complete before progressing. This was chosen for simplicity and to rely on the concurrency functionality and limits already integrated in to the sub flows / pipelines.
-
-All the sub pipelines (inference & aggregation) can be run individually as distinct steps.
-
-1. Inference
-
-This consists of running our classifiers over our documents to generate `LabelledPassages` which themselves contain `Spans` as listed above in this `README.md`.
-The list of classifiers  and rules under which they are run is defined in [classifier_spec yaml file for each environment](./flows/classifier_specs/v2) e.g. the [production.yaml](./flows/classifier_specs/v2/production.yaml)
-2. Aggregation
-
-This consists of aggregating (collating) the inference results for a document from different classifiers which are stored at multiple s3 paths into one object in s3.
-
 ## Deployment and flows with Prefect
 
 Prefect Deployments are defined in [deployments.py](./deployments.py)
@@ -147,10 +131,6 @@ which you can filter by name and date of last deployment.
 The name of the knowledge graph deployments all have the same prefix of `kg-` and they are programmatically generated following the format:
 
 `kg-<flow_name>-<environment>`
-
-**or**
-
-`kg-topic-pipeline-<env>`
 
 Flows can be run via in [/flows](./flows)
 

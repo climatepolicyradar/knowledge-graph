@@ -13,8 +13,8 @@ from knowledge_graph.utils import get_logger
 
 # Constant, s3 prefix for the aggregated results
 INFERENCE_RESULTS_PREFIX = "inference_results/"
-INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input/"
-INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "labelled_passages/"
+INFERENCE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "embeddings_input_v2/"
+INFERENCE_DOCUMENT_TARGET_PREFIX_DEFAULT: str = "inference_results_v2/"
 AGGREGATE_DOCUMENT_SOURCE_PREFIX_DEFAULT: str = "labelled_passages/"
 
 # SSM

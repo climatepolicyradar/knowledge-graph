@@ -20,7 +20,6 @@ from prefect.docker.docker_image import DockerImage
 from prefect.flows import Flow
 from prefect.schedules import Cron, Schedule
 
-from flows.aggregate import aggregate, aggregate_batch_of_documents
 from flows.build_dataset import build_dataset_flow
 from flows.classifiers_profiles import sync_classifiers_profiles
 from flows.create_evaluation_dataset_in_argilla import (
@@ -39,7 +38,6 @@ from flows.predict import predict_adhoc, predict_document_passages
 from flows.push_new_dataset import push_new_dataset
 from flows.sample import sample
 from flows.sync_concepts import sync_concepts
-from flows.topic_pipeline import topic_pipeline
 from flows.train import train_on_cpu, train_on_gpu
 from flows.update_neo4j import update_concepts
 from flows.utils import Compute, JsonDict, get_prefect_job_variables
@@ -266,13 +264,6 @@ async def main() -> None:
     )
 
     # Inference
-
-    await create_deployment(
-        flow=inference,
-        description="Run concept classifier inference on document passages",
-        extra_tags=["type:entry"],
-    )
-
     await create_deployment(
         flow=inference,
         description="Run concept classifier inference on v2 document passages",
@@ -280,7 +271,6 @@ async def main() -> None:
         deployment_name_suffix="v2",
         deployment_parameters=JsonDict(
             {
-                "input_schema": "v2",
                 "inference_document_source_prefix": "embeddings_input_v2/",
                 "inference_document_target_prefix": "inference_results_v2/",
             }
@@ -310,52 +300,6 @@ async def main() -> None:
             "memory": "32 GiB",
             "match_latest_revision_in_family": True,
         },
-    )
-
-    # Aggregate inference results
-
-    await create_deployment(
-        flow=aggregate_batch_of_documents,
-        description="Aggregate inference results for a batch of documents",
-        flow_variables={
-            "cpu": MEGABYTES_PER_GIGABYTE * 16,
-            "memory": MEGABYTES_PER_GIGABYTE * 64,
-            "match_latest_revision_in_family": True,
-        },
-        extra_tags=["type:sub"],
-    )
-
-    await create_deployment(
-        flow=aggregate,
-        description="Aggregate inference results, through coordinating batches of documents",
-        extra_tags=["type:entry"],
-    )
-
-    # Orchestrate topic pipeline
-
-    await create_deployment(
-        flow=topic_pipeline,
-        description="Run the Knowledge Graph Topic Pipeline",
-        extra_tags=["type:end_to_end"],
-        env_schedules={
-            # Run it daily, on work days, to validate it works, or to
-            # surface issues.
-            AwsEnv.staging: "0 7 * * MON-THU",
-        },
-        env_parameters={
-            AwsEnv.staging: JsonDict(
-                {
-                    "document_ids": [
-                        "AF.document.061MCLAR.n0000_translated_en",
-                        "CCLW.executive.10512.5360",
-                    ]
-                }
-            ),
-        },
-        concurrency_limit=ConcurrencyLimitConfig(
-            limit=1,
-            collision_strategy=ConcurrencyLimitStrategy.ENQUEUE,
-        ),
     )
 
     # Wikibase
